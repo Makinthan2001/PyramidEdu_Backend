@@ -1,15 +1,18 @@
 // ============================================================
-// schema.prisma
+// prisma/schema.prisma  (updated — adds RefreshToken model)
 // PyramidEdu — Smart Institute Management & Student Performance Prediction System
 // CST 394-2 | Group CST06 | Uva Wellassa University of Sri Lanka | 2026
 // ============================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================================
@@ -80,32 +83,35 @@ model User {
   email        String   @unique
   passwordHash String   @map("password_hash")
   role         UserRole
-  isActive     Boolean  @default(true)  @map("is_active")
+  isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt      @map("updated_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
   student       Student?
   teacher       Teacher?
   notifications Notification[]
-  refreshTokens RefreshToken[]
+  refreshTokens RefreshToken[]    // ← NEW: one user can have many active sessions
 
   @@index([email], name: "idx_users_email")
-  @@index([role],  name: "idx_users_role")
+  @@index([role], name: "idx_users_role")
   @@map("users")
 }
 
 // ------------------------------------------------------------
 // REFRESH TOKEN — stores hashed refresh tokens for each session
+// One row = one active login session.
+// Deleted on logout or password change.
 // ------------------------------------------------------------
 model RefreshToken {
   id          Int      @id @default(autoincrement())
   userId      Int      @map("user_id")
-  tokenHash   String   @unique @map("token_hash")
-  tokenFamily String   @map("token_family")
+  tokenHash   String   @unique @map("token_hash")   // SHA-256 hash of the actual JWT
+  tokenFamily String   @map("token_family")          // groups tokens from the same login session
   expiresAt   DateTime @map("expires_at")
   createdAt   DateTime @default(now()) @map("created_at")
 
+  // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId], name: "idx_refresh_user")
@@ -122,7 +128,6 @@ model Parent {
   email String  @unique
   phone String?
 
-  // Relations
   students Student[]
 
   @@map("parents")
@@ -144,9 +149,8 @@ model Student {
   enrolledAt  DateTime  @default(now()) @map("enrolled_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
-  // Relations
-  user           User              @relation(fields: [userId],   references: [id], onDelete: Cascade)
-  parent         Parent?           @relation(fields: [parentId], references: [id])
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent         Parent?             @relation(fields: [parentId], references: [id])
   enrollments    Enrollment[]
   attendance     Attendance[]
   feeInvoices    FeeInvoice[]
@@ -156,7 +160,7 @@ model Student {
   progressPoints ProgressPoint[]
   qrCode         QrCode?
 
-  @@index([userId],   name: "idx_students_user_id")
+  @@index([userId], name: "idx_students_user_id")
   @@index([parentId], name: "idx_students_parent")
   @@map("students")
 }
@@ -172,7 +176,6 @@ model Teacher {
   specialization String?
   salary         Decimal? @db.Decimal(10, 2)
 
-  // Relations
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   subjects       Subject[]
   studyMaterials StudyMaterial[]
@@ -184,16 +187,15 @@ model Teacher {
 // SUBJECT
 // ------------------------------------------------------------
 model Subject {
-  id           Int      @id @default(autoincrement())
-  name         String
-  code         String   @unique
-  teacherId    Int?     @map("teacher_id")
-  feePerMonth  Decimal  @default(0) @map("fee_per_month") @db.Decimal(10, 2)
-  description  String?
-  isActive     Boolean  @default(true)  @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id          Int      @id @default(autoincrement())
+  name        String
+  code        String   @unique
+  teacherId   Int?     @map("teacher_id")
+  feePerMonth Decimal  @default(0) @map("fee_per_month") @db.Decimal(10, 2)
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  // Relations
   teacher      Teacher?            @relation(fields: [teacherId], references: [id])
   enrollments  Enrollment[]
   attendance   Attendance[]
@@ -214,9 +216,8 @@ model Enrollment {
   studentId  Int      @map("student_id")
   subjectId  Int      @map("subject_id")
   enrolledAt DateTime @default(now()) @map("enrolled_at")
-  isActive   Boolean  @default(true)  @map("is_active")
+  isActive   Boolean  @default(true) @map("is_active")
 
-  // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
@@ -230,13 +231,12 @@ model Enrollment {
 // QR CODE — one permanent QR token per student
 // ------------------------------------------------------------
 model QrCode {
-  id        Int     @id @default(autoincrement())
-  studentId Int     @unique @map("student_id")
-  qrToken   String  @unique @map("qr_token")
-  isActive  Boolean @default(true) @map("is_active")
+  id        Int      @id @default(autoincrement())
+  studentId Int      @unique @map("student_id")
+  qrToken   String   @unique @map("qr_token")
+  isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@map("qr_codes")
@@ -254,13 +254,12 @@ model Attendance {
   method    AttendanceMethod @default(QR)
   markedAt  DateTime         @default(now()) @map("marked_at")
 
-  // Relations
   student Student @relation(fields: [studentId], references: [id])
   subject Subject @relation(fields: [subjectId], references: [id])
 
   @@unique([studentId, subjectId, date])
   @@index([studentId], name: "idx_attend_student")
-  @@index([date],      name: "idx_attend_date")
+  @@index([date], name: "idx_attend_date")
   @@map("attendance")
 }
 
@@ -268,8 +267,8 @@ model Attendance {
 // EXAM
 // ------------------------------------------------------------
 model Exam {
-  id           Int      @id @default(autoincrement())
-  subjectId    Int      @map("subject_id")
+  id           Int       @id @default(autoincrement())
+  subjectId    Int       @map("subject_id")
   title        String
   type         ExamType
   startTime    DateTime? @map("start_time")
@@ -278,7 +277,6 @@ model Exam {
   isPublished  Boolean   @default(false) @map("is_published")
   createdAt    DateTime  @default(now()) @map("created_at")
 
-  // Relations
   subject      Subject       @relation(fields: [subjectId], references: [id])
   questions    Question[]
   studentExams StudentExam[]
@@ -287,7 +285,7 @@ model Exam {
 }
 
 // ------------------------------------------------------------
-// QUESTION — belongs to an exam
+// QUESTION
 // ------------------------------------------------------------
 model Question {
   id            Int     @id @default(autoincrement())
@@ -297,10 +295,9 @@ model Question {
   optionB       String? @map("option_b")
   optionC       String? @map("option_c")
   optionD       String? @map("option_d")
-  correctOption String? @map("correct_option") // 'A' | 'B' | 'C' | 'D'
+  correctOption String? @map("correct_option")
   marks         Int     @default(1)
 
-  // Relations
   exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
 
   @@map("questions")
@@ -316,9 +313,8 @@ model StudentExam {
   score       Int?
   submittedAt DateTime @default(now()) @map("submitted_at")
 
-  // Relations
   student Student @relation(fields: [studentId], references: [id])
-  exam    Exam    @relation(fields: [examId],    references: [id])
+  exam    Exam    @relation(fields: [examId], references: [id])
 
   @@unique([studentId, examId])
   @@map("student_exams")
@@ -336,7 +332,6 @@ model Marks {
   maxScore       Decimal        @default(100) @map("max_score") @db.Decimal(6, 2)
   recordedAt     DateTime       @default(now()) @map("recorded_at") @db.Date
 
-  // Relations
   student Student @relation(fields: [studentId], references: [id])
   subject Subject @relation(fields: [subjectId], references: [id])
 
@@ -344,31 +339,30 @@ model Marks {
 }
 
 // ------------------------------------------------------------
-// FEE INVOICE — monthly invoice per student
+// FEE INVOICE
 // ------------------------------------------------------------
 model FeeInvoice {
   id          Int       @id @default(autoincrement())
   studentId   Int       @map("student_id")
   totalAmount Decimal   @map("total_amount") @db.Decimal(10, 2)
   paidAmount  Decimal   @default(0) @map("paid_amount") @db.Decimal(10, 2)
-  dueDate     DateTime? @map("due_date")  @db.Date
+  dueDate     DateTime? @map("due_date") @db.Date
   paidDate    DateTime? @map("paid_date") @db.Date
   status      FeeStatus @default(PENDING)
-  monthYear   String    @map("month_year") // e.g. '2026-05'
+  monthYear   String    @map("month_year")
   createdAt   DateTime  @default(now()) @map("created_at")
 
-  // Relations
   student  Student            @relation(fields: [studentId], references: [id])
   payments Payment[]
   subjects FeeInvoiceSubject[]
 
   @@index([studentId], name: "idx_invoice_student")
-  @@index([status],    name: "idx_invoice_status")
+  @@index([status], name: "idx_invoice_status")
   @@map("fee_invoices")
 }
 
 // ------------------------------------------------------------
-// PAYMENT — individual payment against an invoice
+// PAYMENT
 // ------------------------------------------------------------
 model Payment {
   id          Int           @id @default(autoincrement())
@@ -378,7 +372,6 @@ model Payment {
   referenceNo String?       @map("reference_no")
   paidAt      DateTime      @default(now()) @map("paid_at")
 
-  // Relations
   invoice FeeInvoice @relation(fields: [invoiceId], references: [id])
 
   @@map("payments")
@@ -392,7 +385,6 @@ model FeeInvoiceSubject {
   subjectId Int     @map("subject_id")
   amount    Decimal @db.Decimal(10, 2)
 
-  // Relations
   invoice FeeInvoice @relation(fields: [invoiceId], references: [id])
   subject Subject    @relation(fields: [subjectId], references: [id])
 
@@ -401,10 +393,7 @@ model FeeInvoiceSubject {
 }
 
 // ------------------------------------------------------------
-// PERFORMANCE RECORD — AI-calculated weighted score per student/subject
-// Weighted Score = (Attendance × 0.30) + (Quiz × 0.20) + (Assignment × 0.20) + (Exam × 0.30)
-// Categories: EXCELLENT (80–100) | GOOD (60–79) | AVERAGE (40–59) | AT_RISK (<40)
-// Trends: IMPROVING | STABLE (±5 pts) | DECLINING
+// PERFORMANCE RECORD
 // ------------------------------------------------------------
 model PerformanceRecord {
   id               Int                  @id @default(autoincrement())
@@ -416,17 +405,16 @@ model PerformanceRecord {
   aiRecommendation String?              @map("ai_recommendation")
   calculatedAt     DateTime             @default(now()) @map("calculated_at")
 
-  // Relations
   student Student  @relation(fields: [studentId], references: [id])
   subject Subject? @relation(fields: [subjectId], references: [id])
 
   @@index([studentId], name: "idx_perf_student")
-  @@index([category],  name: "idx_perf_category")
+  @@index([category], name: "idx_perf_category")
   @@map("performance_records")
 }
 
 // ------------------------------------------------------------
-// PROGRESS POINT — gamification / reward points for students
+// PROGRESS POINT
 // ------------------------------------------------------------
 model ProgressPoint {
   id        Int      @id @default(autoincrement())
@@ -435,14 +423,13 @@ model ProgressPoint {
   reason    String?
   awardedAt DateTime @default(now()) @map("awarded_at")
 
-  // Relations
   student Student @relation(fields: [studentId], references: [id])
 
   @@map("progress_points")
 }
 
 // ------------------------------------------------------------
-// NOTIFICATION — in-app notifications for all users
+// NOTIFICATION
 // ------------------------------------------------------------
 model Notification {
   id        Int      @id @default(autoincrement())
@@ -452,16 +439,15 @@ model Notification {
   isRead    Boolean  @default(false) @map("is_read")
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId],  name: "idx_notif_user")
-  @@index([isRead],  name: "idx_notif_read")
+  @@index([userId], name: "idx_notif_user")
+  @@index([isRead], name: "idx_notif_read")
   @@map("notifications")
 }
 
 // ------------------------------------------------------------
-// STUDY MATERIAL — uploaded by teachers per subject
+// STUDY MATERIAL
 // ------------------------------------------------------------
 model StudyMaterial {
   id         Int      @id @default(autoincrement())
@@ -471,7 +457,6 @@ model StudyMaterial {
   fileUrl    String   @map("file_url")
   uploadedAt DateTime @default(now()) @map("uploaded_at")
 
-  // Relations
   subject Subject @relation(fields: [subjectId], references: [id])
   teacher Teacher @relation(fields: [teacherId], references: [id])
 
