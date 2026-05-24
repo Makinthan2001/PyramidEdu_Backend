@@ -1,17 +1,28 @@
 import 'dotenv/config';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import morgan from 'morgan';
 import errorHandler from './middleware/errorHandler';
 import { validateEnv } from './utils/validateEnv';
+import authRouter from './modules/auth';
 
 validateEnv();
 
 const app = express();
 
-const corsOptions = { origin: process.env.CORS_ORIGIN || '*', optionsSuccessStatus: 200 };
+const corsOrigin = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : true;
+
+const corsOptions = {
+  origin: corsOrigin,
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
 
 app.use(cors(corsOptions));
+app.use(cookieParser());
 app.use(express.json());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
@@ -23,7 +34,7 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 app.get('/ready', (req, res) => res.status(200).json({ status: 'ready' }));
 
-// TODO: mount API routes here (e.g. app.use('/api', routes))
+app.use('/api/auth', authRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);
