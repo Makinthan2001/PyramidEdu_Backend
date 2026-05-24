@@ -18,6 +18,9 @@ export function authorize(...allowedRoles: UserRole[]) {
   };
 }
 
-export const adminOnly = authorize(UserRole.ADMIN);
-export const adminOrManager = authorize(UserRole.ADMIN, UserRole.MANAGER);
-export const staffOnly = authorize(UserRole.ADMIN, UserRole.MANAGER, UserRole.TEACHER);
+// Convenience middlewares for 4 roles
+export const adminOnly       = authorize(UserRole.ADMIN);
+export const adminOrManager  = authorize(UserRole.ADMIN, UserRole.MANAGER);
+export const staffOnly       = authorize(UserRole.ADMIN, UserRole.MANAGER, UserRole.TEACHER);
+export const teacherOnly     = authorize(UserRole.TEACHER);
+export const studentOnly     = authorize(UserRole.STUDENT);
