@@ -9,6 +9,7 @@ import errorHandler from './middleware/errorHandler';
 import { validateEnv } from './utils/validateEnv';
 import authRouter from './modules/auth';
 import healthRouter from './modules/health';
+import usersRouter from './modules/users';
 
 validateEnv();
 
@@ -58,6 +59,9 @@ app.use('/api/v1/health', healthRouter);
 
 // Authentication routes
 app.use('/api/auth', authRouter);
+
+// Users routes
+app.use('/api/v1/users', usersRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);
