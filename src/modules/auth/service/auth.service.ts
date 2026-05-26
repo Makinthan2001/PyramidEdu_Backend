@@ -12,13 +12,11 @@ import {
 import { generateTokenFamily, hashToken } from '../../../utils/crypto.util';
 import { AppError } from '../../../utils/AppError';
 import type { AuthTokens, LoginResult, SafeUser } from '../../../types/auth.types';
-import type {
-  RegisterDto,
-  LoginDto,
-  ChangePasswordDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
-} from '../validators/auth.validator';
+import type { RegisterDto } from '../validators/auth.validator';
+import type { LoginDto } from '../dto/login.dto';
+import type { ChangePasswordDto } from '../dto/change-password.dto';
+import type { ForgotPasswordDto } from '../dto/forgot-password.dto';
+import type { ResetPasswordDto } from '../dto/reset-password.dto';
 
 function toSafeUser(user: {
   id: number;

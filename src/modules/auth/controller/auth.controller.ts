@@ -1,12 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import * as authService from '../service/auth.service';
-import type {
-  RegisterDto,
-  LoginDto,
-  ChangePasswordDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
-} from '../validators/auth.validator';
+import type { RegisterDto } from '../validators/auth.validator';
+import type { LoginDto } from '../dto/login.dto';
+import type { ChangePasswordDto } from '../dto/change-password.dto';
+import type { ForgotPasswordDto } from '../dto/forgot-password.dto';
+import type { ResetPasswordDto } from '../dto/reset-password.dto';
 import { AppError } from '../../../utils/AppError';
 
 const REFRESH_COOKIE_OPTIONS = {
