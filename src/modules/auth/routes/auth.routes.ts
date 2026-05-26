@@ -2,13 +2,11 @@ import { Router } from 'express';
 import { validate } from '../../../middleware/validate';
 import { authenticate } from '../../../middleware/authenticate';
 import * as controller from '../controller/auth.controller';
-import {
-  registerSchema,
-  loginSchema,
-  changePasswordSchema,
-  forgotPasswordSchema,
-  resetPasswordSchema,
-} from '../validators/auth.validator';
+import { registerSchema } from '../validators/auth.validator';
+import { loginSchema } from '../dto/login.dto';
+import { changePasswordSchema } from '../dto/change-password.dto';
+import { forgotPasswordSchema } from '../dto/forgot-password.dto';
+import { resetPasswordSchema } from '../dto/reset-password.dto';
 
 const router = Router();
 

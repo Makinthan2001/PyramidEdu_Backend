@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { UserRole } from '@prisma/client';
+// Import DTOs
+export { LoginDto, loginSchema } from '../dto/login.dto';
+export { ForgotPasswordDto, forgotPasswordSchema } from '../dto/forgot-password.dto';
+export { ResetPasswordDto, resetPasswordSchema } from '../dto/reset-password.dto';
+export { ChangePasswordDto, changePasswordSchema } from '../dto/change-password.dto';
 
 const passwordField = z
   .string()
@@ -20,47 +25,4 @@ export const registerSchema = z.object({
 
 export type RegisterDto = z.infer<typeof registerSchema>;
 
-export const loginSchema = z.object({
-  email: emailField,
-  password: z.string().min(1, 'Password is required.'),
-});
-
-export type LoginDto = z.infer<typeof loginSchema>;
-
 export const refreshTokenSchema = z.object({});
-
-export const changePasswordSchema = z
-  .object({
-    currentPassword: z.string().min(1, 'Current password is required.'),
-    newPassword: passwordField,
-    confirmPassword: z.string().min(1, 'Please confirm your new password.'),
-  })
-  .refine((value: { newPassword: string; confirmPassword: string }) => value.newPassword === value.confirmPassword, {
-    message: 'New password and confirmation do not match.',
-    path: ['confirmPassword'],
-  })
-  .refine((value: { currentPassword: string; newPassword: string }) => value.currentPassword !== value.newPassword, {
-    message: 'New password must differ from the current password.',
-    path: ['newPassword'],
-  });
-
-export type ChangePasswordDto = z.infer<typeof changePasswordSchema>;
-
-export const forgotPasswordSchema = z.object({
-  email: emailField,
-});
-
-export type ForgotPasswordDto = z.infer<typeof forgotPasswordSchema>;
-
-export const resetPasswordSchema = z
-  .object({
-    token: z.string().min(1, 'Reset token is required.'),
-    newPassword: passwordField,
-    confirmPassword: z.string().min(1, 'Please confirm your new password.'),
-  })
-  .refine((value: { newPassword: string; confirmPassword: string }) => value.newPassword === value.confirmPassword, {
-    message: 'Passwords do not match.',
-    path: ['confirmPassword'],
-  });
-
-export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
