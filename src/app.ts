@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import errorHandler from './middleware/errorHandler';
 import { validateEnv } from './utils/validateEnv';
 import authRouter from './modules/auth';
+import healthRouter from './modules/health';
 
 validateEnv();
 
@@ -52,10 +53,10 @@ app.get('/', (req, res) => {
   res.send('PyramidEdu Backend Running');
 });
 
-// health and readiness endpoints
-app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
-app.get('/ready', (req, res) => res.status(200).json({ status: 'ready' }));
+// Health check routes
+app.use('/api/v1/health', healthRouter);
 
+// Authentication routes
 app.use('/api/auth', authRouter);
 
 // centralized error handler - must be last
