@@ -21,6 +21,7 @@ enum UserRole {
   MANAGER
   TEACHER
   STUDENT
+  SUPPORT_STAFF
 }
 
 enum FeeStatus {
@@ -87,6 +88,8 @@ model User {
   // Relations
   student       Student?
   teacher       Teacher?
+  manager       Manager?
+  supportStaff  SupportStaff?
   notifications Notification[]
   refreshTokens RefreshToken[]
 
@@ -178,6 +181,43 @@ model Teacher {
   studyMaterials StudyMaterial[]
 
   @@map("teachers")
+}
+
+// ------------------------------------------------------------
+// MANAGER
+// ------------------------------------------------------------
+model Manager {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @unique @map("user_id")
+  fullName   String   @map("full_name")
+  department String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt      @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], name: "idx_managers_user_id")
+  @@map("managers")
+}
+
+// ------------------------------------------------------------
+// SUPPORT STAFF
+// ------------------------------------------------------------
+model SupportStaff {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique @map("user_id")
+  fullName  String   @map("full_name")
+  roleType  String   @map("role_type")
+  salary    Decimal? @db.Decimal(10, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], name: "idx_support_staff_user_id")
+  @@map("support_staff")
 }
 
 // ------------------------------------------------------------
@@ -476,4 +516,25 @@ model StudyMaterial {
   teacher Teacher @relation(fields: [teacherId], references: [id])
 
   @@map("study_materials")
+}
+
+// ============================================================
+// AUDIT LOG — System-wide audit trail for compliance
+// ============================================================
+model AuditLog {
+  id            Int      @id @default(autoincrement())
+  action        String   // e.g., USER_CREATED, USER_UPDATED, USER_DELETED
+  userId        Int?     @map("user_id")
+  resourceType  String   @map("resource_type") // e.g., USER, SUBJECT, ENROLLMENT
+  resourceId    Int      @map("resource_id")   // ID of the affected resource
+  details       String?  // JSON string with change details
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId], name: "idx_audit_user")
+  @@index([action], name: "idx_audit_action")
+  @@index([resourceType, resourceId], name: "idx_audit_resource")
+  @@index([createdAt], name: "idx_audit_timestamp")
+  @@map("audit_logs")
 }

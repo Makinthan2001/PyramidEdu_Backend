@@ -1,0 +1,114 @@
+import { z } from 'zod';
+import { UserRole } from '@prisma/client';
+
+// Common password field validation
+const passwordField = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .max(72, 'Password must not exceed 72 characters')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one number')
+  .regex(/[@$!%*?&]/, 'Password must contain at least one special character (@$!%*?&)');
+
+const emailField = z
+  .string()
+  .email('Invalid email format')
+  .max(255, 'Email must not exceed 255 characters');
+
+// Manager DTO
+export const createManagerSchema = z.object({
+  role: z.literal('MANAGER'),
+  fullName: z.string().min(1, 'Full name is required').max(255),
+  department: z.string().min(1, 'Department is required').max(255),
+  email: emailField,
+  phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
+  password: passwordField,
+});
+
+export type CreateManagerDto = z.infer<typeof createManagerSchema>;
+
+// Teacher DTO
+export const createTeacherSchema = z.object({
+  role: z.literal('TEACHER'),
+  firstName: z.string().min(1, 'First name is required').max(255),
+  lastName: z.string().min(1, 'Last name is required').max(255),
+  subject: z.string().min(1, 'Subject is required').max(255),
+  email: emailField,
+  phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
+  salary: z.number().positive('Salary must be positive').optional(),
+  password: passwordField,
+});
+
+export type CreateTeacherDto = z.infer<typeof createTeacherSchema>;
+
+// Support Staff DTO
+export const createSupportStaffSchema = z.object({
+  role: z.literal('SUPPORT_STAFF'),
+  fullName: z.string().min(1, 'Full name is required').max(255),
+  roleType: z.string().min(1, 'Role type is required').max(255),
+  email: emailField,
+  phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
+  salary: z.number().positive('Salary must be positive').optional(),
+  password: passwordField,
+});
+
+export type CreateSupportStaffDto = z.infer<typeof createSupportStaffSchema>;
+
+// Student DTO
+export const createStudentSchema = z.object({
+  role: z.literal('STUDENT'),
+  firstName: z.string().min(1, 'First name is required').max(255),
+  lastName: z.string().min(1, 'Last name is required').max(255),
+  indexNumber: z.string().min(1, 'Index number is required').max(255),
+  parentName: z.string().min(1, 'Parent name is required').max(255),
+  parentPhone: z.string().min(10, 'Parent phone must be at least 10 digits'),
+  address: z.string().min(1, 'Address is required').max(500),
+  email: emailField,
+  phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
+  password: passwordField,
+});
+
+export type CreateStudentDto = z.infer<typeof createStudentSchema>;
+
+// Admin can create any role - flexible schema
+export const createAdminSchema = z.object({
+  role: z.enum(['ADMIN', 'MANAGER', 'TEACHER', 'STUDENT', 'SUPPORT_STAFF']),
+  // Common fields
+  email: emailField,
+  password: passwordField,
+  // Manager fields
+  fullName: z.string().max(255).optional(),
+  department: z.string().max(255).optional(),
+  // Teacher fields
+  firstName: z.string().max(255).optional(),
+  lastName: z.string().max(255).optional(),
+  subject: z.string().max(255).optional(),
+  // Student fields
+  indexNumber: z.string().max(255).optional(),
+  parentName: z.string().max(255).optional(),
+  parentPhone: z.string().optional(),
+  address: z.string().max(500).optional(),
+  // Support Staff fields
+  roleType: z.string().max(255).optional(),
+  // Common optional
+  phoneNumber: z.string().min(10).optional(),
+  salary: z.number().positive().optional(),
+});
+
+export type CreateAdminDto = z.infer<typeof createAdminSchema>;
+
+// Union of all create DTOs
+export type CreateUserDto =
+  | (CreateManagerDto & { role: 'MANAGER' })
+  | (CreateTeacherDto & { role: 'TEACHER' })
+  | (CreateStudentDto & { role: 'STUDENT' })
+  | (CreateSupportStaffDto & { role: 'SUPPORT_STAFF' })
+  | (CreateAdminDto & { role: 'ADMIN' });
+
+export default {
+  createManagerSchema,
+  createTeacherSchema,
+  createSupportStaffSchema,
+  createStudentSchema,
+  createAdminSchema,
+};
