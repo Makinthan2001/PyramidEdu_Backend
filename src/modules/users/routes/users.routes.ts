@@ -16,6 +16,7 @@ import {
   createAdminSchema,
   updateUserSchema,
 } from '../validators/users.validator';
+import { changePasswordSchema } from '../dto/change-password.dto';
 
 const router = Router();
 
@@ -78,6 +79,18 @@ router.post(
   canCreateRole,
   controller.createUser
 );
+
+/**
+ * PATCH /api/v1/users/change-password
+ * Change password for current authenticated user
+ */
+router.patch('/change-password', validate(changePasswordSchema), jwtGuard, controller.changeMyPassword);
+
+/**
+ * PATCH /api/v1/users/:id/reset-password
+ * Admin resets a user's password and receives a temporary password
+ */
+router.patch('/:id/reset-password', canManageUsers, controller.resetUserPassword);
 
 /**
  * PATCH /api/v1/users/:id

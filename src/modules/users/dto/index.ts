@@ -13,3 +13,5 @@ export {
 } from './create-user.dto';
 
 export { updateUserSchema, type UpdateUserDto } from './update-user.dto';
+
+export { changePasswordSchema, adminResetPasswordSchema, type ChangePasswordDto, type AdminResetPasswordDto } from './change-password.dto';

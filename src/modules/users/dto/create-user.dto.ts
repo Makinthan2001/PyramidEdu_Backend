@@ -1,15 +1,7 @@
 import { z } from 'zod';
 import { UserRole } from '@prisma/client';
 
-// Common password field validation
-const passwordField = z
-  .string()
-  .min(8, 'Password must be at least 8 characters')
-  .max(72, 'Password must not exceed 72 characters')
-  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-  .regex(/[0-9]/, 'Password must contain at least one number')
-  .regex(/[@$!%*?&]/, 'Password must contain at least one special character (@$!%*?&)');
-
+// Email field used across DTOs
 const emailField = z
   .string()
   .email('Invalid email format')
@@ -22,7 +14,6 @@ export const createManagerSchema = z.object({
   department: z.string().min(1, 'Department is required').max(255),
   email: emailField,
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
-  password: passwordField,
 });
 
 export type CreateManagerDto = z.infer<typeof createManagerSchema>;
@@ -36,7 +27,6 @@ export const createTeacherSchema = z.object({
   email: emailField,
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
   salary: z.number().positive('Salary must be positive').optional(),
-  password: passwordField,
 });
 
 export type CreateTeacherDto = z.infer<typeof createTeacherSchema>;
@@ -49,7 +39,6 @@ export const createSupportStaffSchema = z.object({
   email: emailField,
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
   salary: z.number().positive('Salary must be positive').optional(),
-  password: passwordField,
 });
 
 export type CreateSupportStaffDto = z.infer<typeof createSupportStaffSchema>;
@@ -65,7 +54,6 @@ export const createStudentSchema = z.object({
   address: z.string().min(1, 'Address is required').max(500),
   email: emailField,
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
-  password: passwordField,
 });
 
 export type CreateStudentDto = z.infer<typeof createStudentSchema>;
@@ -75,7 +63,6 @@ export const createAdminSchema = z.object({
   role: z.enum(['ADMIN', 'MANAGER', 'TEACHER', 'STUDENT', 'SUPPORT_STAFF']),
   // Common fields
   email: emailField,
-  password: passwordField,
   // Manager fields
   fullName: z.string().max(255).optional(),
   department: z.string().max(255).optional(),
