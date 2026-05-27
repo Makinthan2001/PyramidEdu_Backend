@@ -23,6 +23,7 @@ function toSafeUser(user: {
   email: string;
   role: UserRole;
   isActive: boolean;
+  forcePasswordChange: boolean;
   createdAt: Date;
 }): SafeUser {
   return {
@@ -30,6 +31,7 @@ function toSafeUser(user: {
     email: user.email,
     role: user.role,
     isActive: user.isActive,
+    forcePasswordChange: user.forcePasswordChange,
     createdAt: user.createdAt,
   };
 }
