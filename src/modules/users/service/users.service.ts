@@ -1,6 +1,6 @@
 import { UserRole, Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.config';
-import { hashPassword } from '../../../utils/password.util';
+import { hashPassword, generateTemporaryPassword, comparePasswords } from '../../../utils/password.util';
 import { AppError } from '../../../utils/AppError';
 import type { CreateUserDto, UpdateUserDto } from '../dto';
 
@@ -220,8 +220,11 @@ export class UsersService {
       throw new AppError('Email already in use.', 409);
     }
 
-    // Hash password
-    const hashedPassword = await hashPassword(dto.password);
+    // Generate a cryptographically secure temporary password (backend only)
+    const temporaryPassword = generateTemporaryPassword(12);
+
+    // Hash temporary password before saving
+    const hashedPassword = await hashPassword(temporaryPassword);
 
     // Prepare user data - only use fields that exist in User table
     const userData: any = {
@@ -229,6 +232,7 @@ export class UsersService {
       passwordHash: hashedPassword,
       role,
       isActive: true,
+      forcePasswordChange: true,
     };
 
     const user = await prisma.user.create({
@@ -315,7 +319,72 @@ export class UsersService {
       },
     });
 
-    return user;
+    // Return user and temporary password (temporaryPassword must be communicated securely by the admin)
+    return { user, temporaryPassword };
+  }
+
+  /**
+   * Change password for a user (self) — verifies current password
+   */
+  static async changePassword(userId: number, oldPassword: string, newPassword: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) throw new AppError('User not found.', 404);
+
+    // Verify old password
+    const match = await comparePasswords(oldPassword, user.passwordHash);
+    if (!match) throw new AppError('Current password is incorrect.', 401);
+
+    // Hash new password and update
+    const hashed = await hashPassword(newPassword);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: hashed, forcePasswordChange: false },
+    });
+
+    // Log audit
+    await prisma.auditLog.create({
+      data: {
+        action: 'PASSWORD_CHANGED',
+        userId,
+        resourceType: 'USER',
+        resourceId: userId,
+        details: 'User changed own password',
+      },
+    });
+
+    return true;
+  }
+
+  /**
+   * Admin resets a user's password; server generates temporary password and returns it
+   */
+  static async resetPassword(targetUserId: number) {
+    const user = await prisma.user.findUnique({ where: { id: targetUserId } });
+
+    if (!user) throw new AppError('User not found.', 404);
+
+    const temporaryPassword = generateTemporaryPassword(12);
+    const hashed = await hashPassword(temporaryPassword);
+
+    const updated = await prisma.user.update({
+      where: { id: targetUserId },
+      data: { passwordHash: hashed, forcePasswordChange: true },
+      select: { id: true, email: true, role: true, isActive: true, createdAt: true },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'PASSWORD_RESET',
+        userId: targetUserId,
+        resourceType: 'USER',
+        resourceId: targetUserId,
+        details: 'Admin reset user password',
+      },
+    });
+
+    return { user: updated, temporaryPassword };
   }
 
   /**

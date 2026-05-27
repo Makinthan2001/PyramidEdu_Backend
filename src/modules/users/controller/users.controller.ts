@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { UserRole } from '@prisma/client';
 import UsersService from '../service/users.service';
 import type { CreateUserDto, UpdateUserDto } from '../dto';
+import type { ChangePasswordDto } from '../dto/change-password.dto';
 
 /**
  * Users Controller - Handles user account operations
@@ -69,12 +70,54 @@ export async function createUser(req: Request, res: Response, next: NextFunction
     const dto: CreateUserDto = req.body;
     const role = dto.role as UserRole;
 
-    const user = await UsersService.createUser(dto, role);
+    const result = await UsersService.createUser(dto, role);
 
     res.status(201).json({
       success: true,
       message: 'User created successfully',
-      data: user,
+      data: result.user ?? result,
+      temporaryPassword: result.temporaryPassword ?? undefined,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PATCH /api/v1/users/change-password
+ * Change password for current user
+ */
+export async function changeMyPassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId as number;
+    const dto: ChangePasswordDto = req.body;
+
+    await UsersService.changePassword(userId, dto.oldPassword, dto.newPassword);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PATCH /api/v1/users/:id/reset-password
+ * Admin resets a user's password; server returns a temporary password
+ */
+export async function resetUserPassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    const targetUserId = parseInt(req.params.id as string);
+
+    const result = await UsersService.resetPassword(targetUserId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully',
+      data: result.user,
+      temporaryPassword: result.temporaryPassword,
     });
   } catch (error) {
     next(error);
