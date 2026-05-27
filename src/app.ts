@@ -45,9 +45,11 @@ const authRateLimiter = rateLimit({
   }
 });
 
+const authBasePaths = ['/api/v1/auth', '/api/auth'];
+
 // Apply rate limiter to auth routes
-app.use('/api/auth/login', authRateLimiter);
-app.use('/api/auth/register', authRateLimiter);
+app.use(['/api/v1/auth/login', '/api/auth/login'], authRateLimiter);
+app.use(['/api/v1/auth/register', '/api/auth/register'], authRateLimiter);
 
 
 app.get('/', (req, res) => {
@@ -58,6 +60,7 @@ app.get('/', (req, res) => {
 app.use('/api/v1/health', healthRouter);
 
 // Authentication routes
+app.use('/api/v1/auth', authRouter);
 app.use('/api/auth', authRouter);
 
 // Users routes

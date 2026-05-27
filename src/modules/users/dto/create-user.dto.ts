@@ -23,6 +23,9 @@ export const createTeacherSchema = z.object({
   role: z.literal('TEACHER'),
   firstName: z.string().min(1, 'First name is required').max(255),
   lastName: z.string().min(1, 'Last name is required').max(255),
+  nicNumber: z.string().min(10, 'NIC number is required').max(20),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
+  address: z.string().min(3, 'Address is required').max(500),
   subject: z.string().min(1, 'Subject is required').max(255),
   email: emailField,
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
@@ -69,6 +72,8 @@ export const createAdminSchema = z.object({
   // Teacher fields
   firstName: z.string().max(255).optional(),
   lastName: z.string().max(255).optional(),
+  nicNumber: z.string().max(20).optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
   subject: z.string().max(255).optional(),
   // Student fields
   indexNumber: z.string().max(255).optional(),
