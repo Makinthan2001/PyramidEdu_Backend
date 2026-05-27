@@ -69,6 +69,12 @@ enum PaymentMethod {
   ONLINE
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
 // ============================================================
 // MODELS
 // ============================================================
@@ -173,6 +179,10 @@ model Teacher {
   userId         Int      @unique @map("user_id")
   firstName      String   @map("first_name")
   lastName       String   @map("last_name")
+  nicNumber      String   @unique @map("nic_number")
+  gender         Gender
+  address        String
+  phone          String
   specialization String?
   salary         Decimal? @db.Decimal(10, 2)
 

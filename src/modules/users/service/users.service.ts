@@ -105,10 +105,16 @@ export class UsersService {
       }
 
       if (user.teacher) {
-        response.firstName = user.teacher.firstName;
-        response.lastName = user.teacher.lastName;
-        response.specialization = user.teacher.specialization;
-        response.salary = user.teacher.salary;
+        const teacher = user.teacher as any;
+        response.firstName = teacher.firstName;
+        response.lastName = teacher.lastName;
+        response.nicNumber = teacher.nicNumber;
+        response.gender = teacher.gender;
+        response.address = teacher.address;
+        response.phone = teacher.phone;
+        response.specialization = teacher.specialization;
+        response.subject = teacher.specialization;
+        response.salary = teacher.salary;
       }
 
       if (user.manager) {
@@ -172,10 +178,16 @@ export class UsersService {
     }
 
     if (user.teacher) {
-      response.firstName = user.teacher.firstName;
-      response.lastName = user.teacher.lastName;
-      response.specialization = user.teacher.specialization;
-      response.salary = user.teacher.salary;
+      const teacher = user.teacher as any;
+      response.firstName = teacher.firstName;
+      response.lastName = teacher.lastName;
+      response.nicNumber = teacher.nicNumber;
+      response.gender = teacher.gender;
+      response.address = teacher.address;
+      response.phone = teacher.phone;
+      response.specialization = teacher.specialization;
+      response.subject = teacher.specialization;
+      response.salary = teacher.salary;
     }
 
     if (user.manager) {
@@ -265,6 +277,10 @@ export class UsersService {
               userId: user.id,
               firstName: dto.firstName,
               lastName: dto.lastName,
+              nicNumber: dto.nicNumber,
+              gender: dto.gender,
+              address: dto.address,
+              phone: dto.phoneNumber,
               specialization: dto.subject,
               salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
             },
