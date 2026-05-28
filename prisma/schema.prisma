@@ -224,6 +224,12 @@ model Manager {
 model SupportStaff {
   id        Int      @id @default(autoincrement())
   userId    Int      @unique @map("user_id")
+  firstName String?  @map("first_name")
+  lastName  String?  @map("last_name")
+  nicNumber String?  @map("nic_number")
+  gender    Gender?
+  address   String?
+  phone     String?
   fullName  String   @map("full_name")
   roleType  String   @map("role_type")
   salary    Decimal? @db.Decimal(10, 2)

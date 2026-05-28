@@ -52,6 +52,12 @@ const userListSelect = {
   },
   supportStaff: {
     select: {
+      firstName: true,
+      lastName: true,
+      nicNumber: true,
+      gender: true,
+      address: true,
+      phone: true,
       fullName: true,
       roleType: true,
       salary: true,
@@ -90,6 +96,12 @@ function formatUserListItem(user: any) {
   }
 
   if (user.supportStaff) {
+    response.firstName = user.supportStaff.firstName;
+    response.lastName = user.supportStaff.lastName;
+    response.nicNumber = user.supportStaff.nicNumber;
+    response.gender = user.supportStaff.gender;
+    response.address = user.supportStaff.address;
+    response.phone = user.supportStaff.phone;
     response.fullName = user.supportStaff.fullName;
     response.roleType = user.supportStaff.roleType;
     response.salary = user.supportStaff.salary;
@@ -212,10 +224,10 @@ export class UsersService {
     }
 
     // Generate a cryptographically secure temporary password (backend only)
-    const temporaryPassword = generateTemporaryPassword(12);
+    const temporaryPassword = role === UserRole.SUPPORT_STAFF ? undefined : generateTemporaryPassword(12);
 
     // Hash temporary password before saving
-    const hashedPassword = await hashPassword(temporaryPassword);
+    const hashedPassword = await hashPassword(temporaryPassword ?? generateTemporaryPassword(12));
 
     // Prepare user data - only use fields that exist in User table
     const userData: any = {
@@ -290,7 +302,13 @@ export class UsersService {
           await prisma.supportStaff.create({
             data: {
               userId: user.id,
-              fullName: dto.fullName,
+              firstName: dto.firstName,
+              lastName: dto.lastName,
+              nicNumber: dto.nicNumber,
+              gender: dto.gender,
+              address: dto.address,
+              phone: dto.phoneNumber,
+              fullName: `${dto.firstName} ${dto.lastName}`.trim(),
               roleType: dto.roleType,
               salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
             },
@@ -487,11 +505,22 @@ export class UsersService {
           break;
 
         case UserRole.SUPPORT_STAFF:
-          if (dto.fullName || dto.subject) {
-            // Note: roleType is stored in subject field for support staff updates
+          if (dto.firstName || dto.lastName || dto.nicNumber || dto.gender || dto.address || dto.phoneNumber || dto.roleType || dto.salary) {
             const supportUpdateData: any = {};
-            if (dto.fullName) supportUpdateData.fullName = dto.fullName;
-            if (dto.subject) supportUpdateData.roleType = dto.subject;
+            if (dto.firstName) supportUpdateData.firstName = dto.firstName;
+            if (dto.lastName) supportUpdateData.lastName = dto.lastName;
+            if (dto.nicNumber) supportUpdateData.nicNumber = dto.nicNumber;
+            if (dto.gender) supportUpdateData.gender = dto.gender;
+            if (dto.address) supportUpdateData.address = dto.address;
+            if (dto.phoneNumber) supportUpdateData.phone = dto.phoneNumber;
+            if (dto.roleType) supportUpdateData.roleType = dto.roleType;
+            if (dto.firstName || dto.lastName) {
+              const supportRecord = user.supportStaff as any;
+              const existingFirstName = dto.firstName || supportRecord?.firstName || '';
+              const existingLastName = dto.lastName || supportRecord?.lastName || '';
+              supportUpdateData.fullName = `${existingFirstName} ${existingLastName}`.trim();
+            }
+            if (dto.salary !== undefined) supportUpdateData.salary = dto.salary ? new Prisma.Decimal(dto.salary) : null;
             await prisma.supportStaff.update({
               where: { userId },
               data: supportUpdateData,
@@ -555,8 +584,15 @@ export class UsersService {
     }
 
     if (updatedUserWithData.supportStaff) {
-      response.fullName = updatedUserWithData.supportStaff.fullName;
-      response.roleType = updatedUserWithData.supportStaff.roleType;
+      const supportStaff = updatedUserWithData.supportStaff as any;
+      response.firstName = supportStaff.firstName;
+      response.lastName = supportStaff.lastName;
+      response.nicNumber = supportStaff.nicNumber;
+      response.gender = supportStaff.gender;
+      response.address = supportStaff.address;
+      response.phone = supportStaff.phone;
+      response.fullName = supportStaff.fullName;
+      response.roleType = supportStaff.roleType;
     }
 
     // Log audit entry
