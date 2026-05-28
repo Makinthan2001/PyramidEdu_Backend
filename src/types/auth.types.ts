@@ -38,6 +38,7 @@ export interface SafeUser {
   email: string;
   role: UserRole;
   isActive: boolean;
+  forcePasswordChange: boolean;
   createdAt: Date;
 }
 

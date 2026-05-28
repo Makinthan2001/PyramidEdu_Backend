@@ -12,7 +12,7 @@ const REFRESH_COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'strict' as const,
   maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: '/api/auth',
+  path: '/api',
 };
 
 export async function register(req: Request, res: Response, next: NextFunction) {
@@ -80,7 +80,7 @@ export async function logout(req: Request, res: Response, next: NextFunction) {
       await authService.logoutUser(token, logoutAll);
     }
 
-    res.clearCookie('refreshToken', { path: '/api/auth' });
+    res.clearCookie('refreshToken', { path: '/api' });
 
     res.status(200).json({
       success: true,
@@ -112,7 +112,7 @@ export async function changePassword(req: Request, res: Response, next: NextFunc
 
     await authService.changePassword(userId, dto);
 
-    res.clearCookie('refreshToken', { path: '/api/auth' });
+    res.clearCookie('refreshToken', { path: '/api' });
 
     res.status(200).json({
       success: true,

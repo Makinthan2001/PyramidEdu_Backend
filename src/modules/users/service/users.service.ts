@@ -21,6 +21,83 @@ export interface PaginatedUsers {
   hasMore: boolean;
 }
 
+const userListSelect = {
+  id: true,
+  email: true,
+  role: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+  student: {
+    select: {
+      firstName: true,
+      lastName: true,
+      indexNumber: true,
+      phone: true,
+      address: true,
+    },
+  },
+  teacher: {
+    select: {
+      firstName: true,
+      lastName: true,
+      specialization: true,
+      salary: true,
+    },
+  },
+  manager: {
+    select: {
+      fullName: true,
+    },
+  },
+  supportStaff: {
+    select: {
+      fullName: true,
+      roleType: true,
+      salary: true,
+    },
+  },
+} as const;
+
+function formatUserListItem(user: any) {
+  const response: any = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    isActive: user.isActive,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+
+  if (user.student) {
+    response.firstName = user.student.firstName;
+    response.lastName = user.student.lastName;
+    response.indexNumber = user.student.indexNumber;
+    response.phone = user.student.phone;
+    response.address = user.student.address;
+  }
+
+  if (user.teacher) {
+    response.firstName = user.teacher.firstName;
+    response.lastName = user.teacher.lastName;
+    response.subject = user.teacher.specialization;
+    response.specialization = user.teacher.specialization;
+    response.salary = user.teacher.salary;
+  }
+
+  if (user.manager) {
+    response.fullName = user.manager.fullName;
+  }
+
+  if (user.supportStaff) {
+    response.fullName = user.supportStaff.fullName;
+    response.roleType = user.supportStaff.roleType;
+    response.salary = user.supportStaff.salary;
+  }
+
+  return response;
+}
+
 /**
  * Users Service - Manages user account operations
  */
@@ -74,56 +151,12 @@ export class UsersService {
         where,
         skip,
         take: limit,
-        include: {
-          student: true,
-          teacher: true,
-          manager: true,
-          supportStaff: true,
-        },
+        select: userListSelect,
       }),
       prisma.user.count({ where }),
     ]);
 
-    // Flatten responses - merge role-specific data into user objects
-    const formattedUsers = users.map((user: any) => {
-      const response: any = {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        isActive: user.isActive,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      };
-
-      // Merge role-specific data
-      if (user.student) {
-        response.firstName = user.student.firstName;
-        response.lastName = user.student.lastName;
-        response.indexNumber = user.student.indexNumber;
-        response.phone = user.student.phone;
-        response.address = user.student.address;
-      }
-
-      if (user.teacher) {
-        response.firstName = user.teacher.firstName;
-        response.lastName = user.teacher.lastName;
-        response.specialization = user.teacher.specialization;
-        response.salary = user.teacher.salary;
-      }
-
-      if (user.manager) {
-        response.fullName = user.manager.fullName;
-        response.department = user.manager.department;
-      }
-
-      if (user.supportStaff) {
-        response.fullName = user.supportStaff.fullName;
-        response.roleType = user.supportStaff.roleType;
-        response.salary = user.supportStaff.salary;
-      }
-
-      return response;
-    });
+    const formattedUsers = users.map(formatUserListItem);
 
     return {
       data: formattedUsers,
@@ -140,56 +173,14 @@ export class UsersService {
   static async getUserById(userId: number) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        student: true,
-        teacher: true,
-        manager: true,
-        supportStaff: true,
-      },
+      select: userListSelect,
     });
 
     if (!user) {
       throw new AppError('User not found.', 404);
     }
 
-    // Flatten response - return user with role-specific data merged
-    const response: any = {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      isActive: user.isActive,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
-
-    // Merge role-specific data
-    if (user.student) {
-      response.firstName = user.student.firstName;
-      response.lastName = user.student.lastName;
-      response.indexNumber = user.student.indexNumber;
-      response.phone = user.student.phone;
-      response.address = user.student.address;
-    }
-
-    if (user.teacher) {
-      response.firstName = user.teacher.firstName;
-      response.lastName = user.teacher.lastName;
-      response.specialization = user.teacher.specialization;
-      response.salary = user.teacher.salary;
-    }
-
-    if (user.manager) {
-      response.fullName = user.manager.fullName;
-      response.department = user.manager.department;
-    }
-
-    if (user.supportStaff) {
-      response.fullName = user.supportStaff.fullName;
-      response.roleType = user.supportStaff.roleType;
-      response.salary = user.supportStaff.salary;
-    }
-
-    return response;
+    return formatUserListItem(user);
   }
 
   /**
@@ -253,9 +244,15 @@ export class UsersService {
           await prisma.manager.create({
             data: {
               userId: user.id,
-              fullName: dto.fullName,
-              department: dto.department,
-            },
+              firstName: dto.firstName,
+              lastName: dto.lastName,
+              nicNumber: dto.nicNumber,
+              gender: dto.gender,
+              address: dto.address,
+              phone: dto.phoneNumber,
+              salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
+              fullName: `${dto.firstName} ${dto.lastName}`.trim(),
+            } as any,
           });
           break;
 
@@ -265,6 +262,10 @@ export class UsersService {
               userId: user.id,
               firstName: dto.firstName,
               lastName: dto.lastName,
+              nicNumber: dto.nicNumber,
+              gender: dto.gender,
+              address: dto.address,
+              phone: dto.phoneNumber,
               specialization: dto.subject,
               salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
             },
@@ -391,7 +392,15 @@ export class UsersService {
    * Update user details
    */
   static async updateUser(userId: number, dto: UpdateUserDto) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        manager: true,
+        teacher: true,
+        student: true,
+        supportStaff: true,
+      },
+    });
 
     if (!user) {
       throw new AppError('User not found.', 404);
@@ -426,10 +435,21 @@ export class UsersService {
     try {
       switch (user.role) {
         case UserRole.MANAGER:
-          if (dto.fullName || dto.department) {
+          if (dto.firstName || dto.lastName || dto.nicNumber || dto.gender || dto.address || dto.phoneNumber || dto.salary) {
             const managerUpdateData: any = {};
-            if (dto.fullName) managerUpdateData.fullName = dto.fullName;
-            if (dto.department) managerUpdateData.department = dto.department;
+            if (dto.firstName) managerUpdateData.firstName = dto.firstName;
+            if (dto.lastName) managerUpdateData.lastName = dto.lastName;
+            if (dto.nicNumber) managerUpdateData.nicNumber = dto.nicNumber;
+            if (dto.gender) managerUpdateData.gender = dto.gender;
+            if (dto.address) managerUpdateData.address = dto.address;
+            if (dto.phoneNumber) managerUpdateData.phone = dto.phoneNumber;
+            if (dto.salary !== undefined) managerUpdateData.salary = dto.salary ? new Prisma.Decimal(dto.salary) : null;
+            if (dto.firstName || dto.lastName) {
+              const managerRecord = user.manager as any;
+              const existingFirstName = dto.firstName || managerRecord?.firstName || '';
+              const existingLastName = dto.lastName || managerRecord?.lastName || '';
+              managerUpdateData.fullName = `${existingFirstName} ${existingLastName}`.trim();
+            }
             await prisma.manager.update({
               where: { userId },
               data: managerUpdateData,
@@ -523,8 +543,15 @@ export class UsersService {
     }
 
     if (updatedUserWithData.manager) {
-      response.fullName = updatedUserWithData.manager.fullName;
-      response.department = updatedUserWithData.manager.department;
+      const manager = updatedUserWithData.manager as any;
+      response.firstName = manager.firstName;
+      response.lastName = manager.lastName;
+      response.nicNumber = manager.nicNumber;
+      response.gender = manager.gender;
+      response.address = manager.address;
+      response.phone = manager.phone;
+      response.salary = manager.salary;
+      response.fullName = manager.fullName;
     }
 
     if (updatedUserWithData.supportStaff) {
