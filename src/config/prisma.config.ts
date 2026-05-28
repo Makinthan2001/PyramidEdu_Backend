@@ -32,4 +32,4 @@ if (process.env.NODE_ENV === "production") {
 
 export const prisma = prismaInstance;
 export default prisma;
-
+
