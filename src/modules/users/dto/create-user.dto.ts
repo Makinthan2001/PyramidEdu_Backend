@@ -41,8 +41,12 @@ export type CreateTeacherDto = z.infer<typeof createTeacherSchema>;
 // Support Staff DTO
 export const createSupportStaffSchema = z.object({
   role: z.literal('SUPPORT_STAFF'),
-  fullName: z.string().min(1, 'Full name is required').max(255),
-  roleType: z.string().min(1, 'Role type is required').max(255),
+  firstName: z.string().min(1, 'First name is required').max(255),
+  lastName: z.string().min(1, 'Last name is required').max(255),
+  nicNumber: z.string().min(1, 'NIC number is required').max(20),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
+  address: z.string().min(1, 'Address is required').max(500),
+  roleType: z.string().min(1, 'Role is required').max(255),
   email: emailField,
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
   salary: z.number().positive('Salary must be positive').optional(),
