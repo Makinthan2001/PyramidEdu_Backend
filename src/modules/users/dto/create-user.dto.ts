@@ -60,8 +60,7 @@ export const createStudentSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(255),
   lastName: z.string().min(1, 'Last name is required').max(255),
   indexNumber: z.string().min(1, 'Index number is required').max(255),
-  parentName: z.string().min(1, 'Parent name is required').max(255),
-  parentPhone: z.string().min(10, 'Parent phone must be at least 10 digits'),
+  dateOfBirth: z.coerce.date(),
   address: z.string().min(1, 'Address is required').max(500),
   email: emailField,
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
@@ -85,8 +84,7 @@ export const createAdminSchema = z.object({
   subject: z.string().max(255).optional(),
   // Student fields
   indexNumber: z.string().max(255).optional(),
-  parentName: z.string().max(255).optional(),
-  parentPhone: z.string().optional(),
+  dateOfBirth: z.coerce.date().optional(),
   // Support Staff fields
   roleType: z.string().max(255).optional(),
   // Common optional
