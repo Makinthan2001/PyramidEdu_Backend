@@ -291,6 +291,7 @@ export class UsersService {
               firstName: dto.firstName,
               lastName: dto.lastName,
               indexNumber: dto.indexNumber,
+              dateOfBirth: dto.dateOfBirth,
               phone: dto.phoneNumber,
               address: dto.address,
               // parentId will need to be set separately if parent exists
