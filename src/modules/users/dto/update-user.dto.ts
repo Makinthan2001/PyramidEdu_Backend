@@ -12,25 +12,24 @@ export const updateUserSchema = z.object({
   email: emailField,
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits').optional(),
   
-  // Manager fields
+  // Name fields
   fullName: z.string().min(1).max(255).optional(),
-  department: z.string().min(1).max(255).optional(),
-  
-  // Teacher fields
   firstName: z.string().min(1).max(255).optional(),
   lastName: z.string().min(1).max(255).optional(),
-  subject: z.string().min(1).max(255).optional(),
   
-  // Student fields
+  // Identification & Demographic
+  nicNumber: z.string().min(1).max(20).optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
+  address: z.string().min(1).max(500).optional(),
+  
+  // Role-specific fields
+  subject: z.string().min(1).max(255).optional(),
   indexNumber: z.string().min(1).max(255).optional(),
   parentName: z.string().min(1).max(255).optional(),
   parentPhone: z.string().min(10).optional(),
-  address: z.string().min(1).max(500).optional(),
-  
-  // Support Staff fields
   roleType: z.string().min(1).max(255).optional(),
   
-  // Salary (for teacher and support staff)
+  // Salary
   salary: z.number().positive('Salary must be positive').optional(),
 });
 

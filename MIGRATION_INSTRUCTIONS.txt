@@ -1,6 +1,6 @@
 for migration
 npx prisma migrate status --schema prisma/schema.prisma
-px prisma migrate dev --name xxxxxxxxxxx --schema prisma/schema.prisma
+npx prisma migrate dev --name xxxxxxxxxxx --schema prisma/schema.prisma
 npx prisma generate --schema prisma/schema.prisma
 
 for reset

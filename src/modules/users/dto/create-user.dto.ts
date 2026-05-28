@@ -10,10 +10,14 @@ const emailField = z
 // Manager DTO
 export const createManagerSchema = z.object({
   role: z.literal('MANAGER'),
-  fullName: z.string().min(1, 'Full name is required').max(255),
-  department: z.string().min(1, 'Department is required').max(255),
+  firstName: z.string().min(1, 'First name is required').max(255),
+  lastName: z.string().min(1, 'Last name is required').max(255),
+  nicNumber: z.string().min(10, 'NIC number is required').max(20),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
+  address: z.string().min(3, 'Address is required').max(500),
   email: emailField,
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
+  salary: z.number().positive('Salary must be positive').optional(),
 });
 
 export type CreateManagerDto = z.infer<typeof createManagerSchema>;
@@ -67,24 +71,22 @@ export const createAdminSchema = z.object({
   // Common fields
   email: emailField,
   // Manager fields
-  fullName: z.string().max(255).optional(),
-  department: z.string().max(255).optional(),
-  // Teacher fields
   firstName: z.string().max(255).optional(),
   lastName: z.string().max(255).optional(),
   nicNumber: z.string().max(20).optional(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
+  address: z.string().max(500).optional(),
+  salary: z.number().positive().optional(),
+  // Teacher fields
   subject: z.string().max(255).optional(),
   // Student fields
   indexNumber: z.string().max(255).optional(),
   parentName: z.string().max(255).optional(),
   parentPhone: z.string().optional(),
-  address: z.string().max(500).optional(),
   // Support Staff fields
   roleType: z.string().max(255).optional(),
   // Common optional
   phoneNumber: z.string().min(10).optional(),
-  salary: z.number().positive().optional(),
 });
 
 export type CreateAdminDto = z.infer<typeof createAdminSchema>;

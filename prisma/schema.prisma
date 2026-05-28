@@ -200,8 +200,14 @@ model Teacher {
 model Manager {
   id         Int      @id @default(autoincrement())
   userId     Int      @unique @map("user_id")
+  firstName  String   @map("first_name")
+  lastName   String   @map("last_name")
+  nicNumber  String   @unique @map("nic_number")
+  gender     Gender
+  address    String
+  phone      String
+  salary     Decimal? @db.Decimal(10, 2)
   fullName   String   @map("full_name")
-  department String
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt      @map("updated_at")
 
