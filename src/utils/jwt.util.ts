@@ -17,9 +17,12 @@ function requireSecret(secret: string | undefined, name: string): string {
   return secret;
 }
 
-export function generateAccessToken(payload: Omit<JwtAccessPayload, 'iat' | 'exp'>): string {
+export function generateAccessToken(
+  payload: Omit<JwtAccessPayload, 'iat' | 'exp'>,
+  expiresIn: string = ACCESS_EXPIRES,
+): string {
   return jwt.sign(payload, requireSecret(ACCESS_SECRET, 'JWT_ACCESS_SECRET'), {
-    expiresIn: ACCESS_EXPIRES,
+    expiresIn,
   } as SignOptions);
 }
 
@@ -34,11 +37,11 @@ export function verifyAccessToken(token: string): JwtAccessPayload {
   }
 }
 
-export function generateRefreshToken(userId: number, tokenFamily: string): string {
+export function generateRefreshToken(userId: number, tokenFamily: string, expiresIn: string = REFRESH_EXPIRES): string {
   return jwt.sign(
     { sub: userId, tokenFamily } satisfies Omit<JwtRefreshPayload, 'iat' | 'exp'>,
     requireSecret(REFRESH_SECRET, 'JWT_REFRESH_SECRET'),
-    { expiresIn: REFRESH_EXPIRES } as SignOptions,
+    { expiresIn } as SignOptions,
   );
 }
 
