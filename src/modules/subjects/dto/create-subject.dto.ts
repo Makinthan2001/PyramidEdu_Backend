@@ -14,9 +14,11 @@ export const createSubjectSchema = z.object({
     .trim()
     .min(1, 'Subject code is required')
     .max(20, 'Subject code must not exceed 20 characters')
-    .regex(/^[a-zA-Z0-9]+$/, 'Subject code must be alphanumeric'),
+    .regex(/^[a-zA-Z0-9]+$/, 'Subject code must be alphanumeric')
+    .optional(),
   feePerMonth: feePerMonthSchema,
-  teacherId: z.number().int().positive('Teacher ID is required'),
+  streamIds: z.array(z.number().int().positive()).min(1, 'At least one stream is required'),
+  isActive: z.boolean().optional(),
   description: z.string().trim().max(500).optional(),
 });
 

@@ -18,4 +18,9 @@ export {
   type AssignTeacherDto,
 } from '../dto/assign-teacher.dto';
 
+export {
+  createStreamSchema,
+  type CreateStreamDto,
+} from '../dto/create-stream.dto';
+
 export default {};

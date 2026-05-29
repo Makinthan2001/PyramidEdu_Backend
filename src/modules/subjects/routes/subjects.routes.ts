@@ -6,6 +6,7 @@ import { validate } from '../../../middleware/validate';
 import * as controller from '../controller/subjects.controller';
 import {
   createSubjectSchema,
+  createStreamSchema,
   updateSubjectSchema,
   enrollStudentSchema,
   assignTeacherSchema,
@@ -14,6 +15,9 @@ import {
 const router = Router();
 
 router.use(jwtGuard);
+
+router.get('/streams', controller.getStreams);
+router.post('/streams', roleGuard(UserRole.ADMIN, UserRole.MANAGER), validate(createStreamSchema), controller.createStream);
 
 router.get('/', controller.getSubjects);
 router.get('/:id', controller.getSubjectById);
