@@ -198,6 +198,27 @@ export class SubjectsService {
     return streams;
   }
 
+  static async getAvailableSubjects() {
+    const subjects = await prisma.subject.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+      include: {
+        subjectStreams: {
+          include: {
+            stream: true,
+          },
+        },
+      },
+    });
+
+    return subjects.map((sub) => ({
+      id: sub.id,
+      name: sub.name,
+      streams: (sub.subjectStreams ?? []).map((ss) => ss.stream.name),
+      feePerMonth: decimalToNumber(sub.feePerMonth),
+    }));
+  }
+
   static async createStream(dto: CreateStreamDto, actor?: { userId?: number }) {
     const stream = await prisma.stream.create({
       data: {
