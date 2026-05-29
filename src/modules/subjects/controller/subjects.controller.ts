@@ -59,6 +59,20 @@ export async function getStreams(req: Request, res: Response, next: NextFunction
   }
 }
 
+export async function getAvailableSubjects(req: Request, res: Response, next: NextFunction) {
+  try {
+    const subjects = await SubjectsService.getAvailableSubjects();
+
+    res.status(200).json({
+      success: true,
+      message: 'Available subjects retrieved successfully',
+      data: subjects,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function createStream(req: Request, res: Response, next: NextFunction) {
   try {
     const dto: CreateStreamDto = req.body;
@@ -254,6 +268,7 @@ export async function getEnrollmentCount(req: Request, res: Response, next: Next
 }
 
 export default {
+  getAvailableSubjects,
   getStreams,
   createStream,
   getSubjects,
