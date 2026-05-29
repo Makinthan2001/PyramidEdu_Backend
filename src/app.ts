@@ -11,6 +11,7 @@ import authRouter from './modules/auth';
 import healthRouter from './modules/health';
 import mobileRouter from './modules/mobile';
 import usersRouter from './modules/users';
+import subjectsRouter from './modules/subjects';
 
 validateEnv();
 
@@ -74,6 +75,9 @@ app.use('/api/v1/mobile', mobileRouter);
 
 // Users routes
 app.use('/api/v1/users', usersRouter);
+
+// Subjects routes
+app.use('/api/v1/subjects', subjectsRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);
