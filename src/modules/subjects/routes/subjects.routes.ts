@@ -17,6 +17,7 @@ const router = Router();
 router.use(jwtGuard);
 
 router.get('/streams', controller.getStreams);
+router.get('/available', controller.getAvailableSubjects);
 router.post('/streams', roleGuard(UserRole.ADMIN, UserRole.MANAGER), validate(createStreamSchema), controller.createStream);
 
 router.get('/', controller.getSubjects);
