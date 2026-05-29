@@ -70,6 +70,15 @@ export async function loginUser(dto: LoginDto): Promise<LoginResult> {
     throw new AppError('Invalid email or password.', 401);
   }
 
+  // If user is a student, ensure their student profile is approved
+  if (user.role === UserRole.STUDENT) {
+    const student = await prisma.student.findUnique({ where: { userId: user.id } });
+    // Prisma client types may be out-of-sync with schema during migrations; cast to any for safety
+    if (!student || (student as any).isApproved === false) {
+      throw new AppError('Your account is pending approval. Please contact the administration.', 403);
+    }
+  }
+
   const tokenFamily = generateTokenFamily();
   const accessToken = generateAccessToken({ sub: user.id, email: user.email, role: user.role });
   const refreshToken = generateRefreshToken(user.id, tokenFamily);

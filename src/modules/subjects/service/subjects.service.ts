@@ -141,6 +141,134 @@ async function resolveTeacherReference(referenceId: number) {
   return null;
 }
 
+async function resolveStudentReference(referenceId: number) {
+  const studentByStudentId = await prisma.student.findUnique({
+    where: { id: referenceId },
+    select: {
+      id: true,
+      userId: true,
+      user: {
+        select: {
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  if (studentByStudentId) {
+    if (!studentByStudentId.user?.isActive) {
+      throw new AppError('Student is inactive.', 403);
+    }
+
+    return studentByStudentId;
+  }
+
+  const studentByUserId = await prisma.student.findUnique({
+    where: { userId: referenceId },
+    select: {
+      id: true,
+      userId: true,
+      user: {
+        select: {
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  if (studentByUserId) {
+    if (!studentByUserId.user?.isActive) {
+      throw new AppError('Student is inactive.', 403);
+    }
+
+    return studentByUserId;
+  }
+
+  return null;
+}
+
+async function findSubjectByIdentifier(identifier: string) {
+  const numericId = Number(identifier);
+
+  if (Number.isInteger(numericId)) {
+    const subjectById = await prisma.subject.findUnique({
+      where: { id: numericId },
+      include: {
+        subjectStreams: {
+          include: {
+            stream: true,
+          },
+        },
+        teacher: {
+          include: {
+            user: {
+              select: {
+                isActive: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (subjectById) {
+      return subjectById;
+    }
+  }
+
+  return prisma.subject.findUnique({
+    where: { code: identifier },
+    include: {
+      subjectStreams: {
+        include: {
+          stream: true,
+        },
+      },
+      teacher: {
+        include: {
+          user: {
+            select: {
+              isActive: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+async function resolveEnrollmentStudentId(dto: EnrollStudentDto, actor?: { userRole?: UserRole; userId?: number }) {
+  if (actor?.userRole === UserRole.STUDENT) {
+    if (!actor.userId) {
+      throw new AppError('Student profile not found.', 403);
+    }
+
+    const student = await getStudentProfileByUserId(actor.userId);
+
+    if (!student) {
+      throw new AppError('Student profile not found.', 403);
+    }
+
+    return student.id;
+  }
+
+  if (dto.studentId) {
+    return dto.studentId;
+  }
+
+  if (dto.userId) {
+    const student = await resolveStudentReference(dto.userId);
+
+    if (!student) {
+      throw new AppError('Student profile not found.', 403);
+    }
+
+    return student.id;
+  }
+
+  throw new AppError('Student ID is required for enrollment.', 400);
+}
+
 function buildSubjectResponse(subject: any, activeEnrollmentCount = 0, currentTeacherId?: number) {
   return {
     id: subject.id,
@@ -342,50 +470,7 @@ export class SubjectsService {
   }
 
   static async getSubjectByIdentifier(identifier: string, actor?: { userRole?: UserRole; userId?: number }) {
-    const numericId = Number(identifier);
-    let subject = Number.isInteger(numericId)
-      ? await prisma.subject.findUnique({
-          where: { id: numericId },
-          include: {
-            subjectStreams: {
-              include: {
-                stream: true,
-              },
-            },
-            teacher: {
-              include: {
-                user: {
-                  select: {
-                    isActive: true,
-                  },
-                },
-              },
-            },
-          },
-        })
-      : null;
-
-    if (!subject) {
-      subject = await prisma.subject.findUnique({
-        where: { code: identifier },
-        include: {
-          subjectStreams: {
-            include: {
-              stream: true,
-            },
-          },
-          teacher: {
-            include: {
-              user: {
-                select: {
-                  isActive: true,
-                },
-              },
-            },
-          },
-        },
-      });
-    }
+    const subject = await findSubjectByIdentifier(identifier);
 
     if (!subject) {
       throw new AppError('Subject not found.', 404);
@@ -721,25 +806,7 @@ export class SubjectsService {
       throw new AppError('Cannot enroll students in an inactive subject.', 409);
     }
 
-    let studentId = dto.studentId;
-
-    if (actor?.userRole === UserRole.STUDENT) {
-      if (!actor.userId) {
-        throw new AppError('Student profile not found.', 403);
-      }
-
-      const student = await getStudentProfileByUserId(actor.userId);
-
-      if (!student) {
-        throw new AppError('Student profile not found.', 403);
-      }
-
-      studentId = student.id;
-    }
-
-    if (!studentId) {
-      throw new AppError('Student ID is required for enrollment.', 400);
-    }
+    const studentId = await resolveEnrollmentStudentId(dto, actor);
 
     const student = await prisma.student.findUnique({
       where: { id: studentId },

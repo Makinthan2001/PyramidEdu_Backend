@@ -24,9 +24,9 @@ function requireSecret(secret, name) {
     }
     return secret;
 }
-function generateAccessToken(payload) {
+function generateAccessToken(payload, expiresIn = ACCESS_EXPIRES) {
     return jsonwebtoken_1.default.sign(payload, requireSecret(ACCESS_SECRET, 'JWT_ACCESS_SECRET'), {
-        expiresIn: ACCESS_EXPIRES,
+        expiresIn,
     });
 }
 function verifyAccessToken(token) {
@@ -40,8 +40,8 @@ function verifyAccessToken(token) {
         throw new AppError_1.AppError('Invalid access token.', 401);
     }
 }
-function generateRefreshToken(userId, tokenFamily) {
-    return jsonwebtoken_1.default.sign({ sub: userId, tokenFamily }, requireSecret(REFRESH_SECRET, 'JWT_REFRESH_SECRET'), { expiresIn: REFRESH_EXPIRES });
+function generateRefreshToken(userId, tokenFamily, expiresIn = REFRESH_EXPIRES) {
+    return jsonwebtoken_1.default.sign({ sub: userId, tokenFamily }, requireSecret(REFRESH_SECRET, 'JWT_REFRESH_SECRET'), { expiresIn });
 }
 function verifyRefreshToken(token) {
     try {
