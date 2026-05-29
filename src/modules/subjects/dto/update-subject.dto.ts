@@ -18,6 +18,8 @@ export const updateSubjectSchema = z.object({
     .optional(),
   feePerMonth: feePerMonthSchema.optional(),
   description: z.string().trim().max(500).nullable().optional(),
+  streamIds: z.array(z.number().int().positive()).min(1, 'At least one stream is required').optional(),
+  isActive: z.boolean().optional(),
 });
 
 export type UpdateSubjectDto = z.infer<typeof updateSubjectSchema>;

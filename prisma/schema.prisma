@@ -265,8 +265,40 @@ model Subject {
   performances PerformanceRecord[]
   materials    StudyMaterial[]
   feeInvoices  FeeInvoiceSubject[]
+  subjectStreams SubjectStream[]
 
   @@map("subjects")
+}
+
+// ------------------------------------------------------------
+// STREAM
+// ------------------------------------------------------------
+model Stream {
+  id            Int             @id @default(autoincrement())
+  name          String          @unique
+  isActive      Boolean         @default(true) @map("is_active")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  subjectStreams SubjectStream[]
+
+  @@map("streams")
+}
+
+// ------------------------------------------------------------
+// SUBJECT_STREAM — subject ↔ stream many-to-many
+// ------------------------------------------------------------
+model SubjectStream {
+  subjectId  Int @map("subject_id")
+  streamId   Int @map("stream_id")
+
+  // Relations
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  stream  Stream  @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@id([subjectId, streamId])
+  @@index([streamId], name: "idx_subject_stream_stream")
+  @@map("subject_streams")
 }
 
 // ------------------------------------------------------------

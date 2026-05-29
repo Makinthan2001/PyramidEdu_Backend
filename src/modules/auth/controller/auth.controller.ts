@@ -10,7 +10,8 @@ import { AppError } from '../../../utils/AppError';
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict' as const,
+  // Allow cross-site cookie usage in development (frontend on different origin)
+  sameSite: process.env.NODE_ENV === 'production' ? ('strict' as const) : ('lax' as const),
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: '/api',
 };

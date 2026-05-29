@@ -2,6 +2,7 @@ import { Prisma, UserRole } from '@prisma/client';
 import prisma from '../../../config/prisma.config';
 import { AppError } from '../../../utils/AppError';
 import type { CreateSubjectDto } from '../dto/create-subject.dto';
+import type { CreateStreamDto } from '../dto/create-stream.dto';
 import type { UpdateSubjectDto } from '../dto/update-subject.dto';
 import type { EnrollStudentDto } from '../dto/enroll-student.dto';
 
@@ -9,9 +10,48 @@ export interface SubjectsQueryParams {
   active?: boolean;
   teacherId?: number;
   search?: string;
-  code?: string;
   userRole?: UserRole;
   userId?: number;
+}
+
+function generateSubjectCode(name: string) {
+  const normalized = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return (normalized || 'SUBJECT').slice(0, 20);
+}
+
+async function ensureUniqueSubjectCode(baseCode: string) {
+  let code = baseCode;
+  let suffix = 1;
+
+  while (await prisma.subject.findUnique({ where: { code } })) {
+    const suffixText = String(suffix);
+    code = `${baseCode.slice(0, Math.max(1, 20 - suffixText.length))}${suffixText}`;
+    suffix += 1;
+  }
+
+  return code;
+}
+
+async function validateStreamIds(streamIds: number[]) {
+  const uniqueIds = Array.from(new Set(streamIds));
+
+  if (uniqueIds.length === 0) {
+    throw new AppError('At least one stream is required.', 400);
+  }
+
+  const streams = await prisma.stream.findMany({
+    where: {
+      id: { in: uniqueIds },
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  if (streams.length !== uniqueIds.length) {
+    throw new AppError('One or more selected streams were not found.', 404);
+  }
+
+  return uniqueIds;
 }
 
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined) {
@@ -105,12 +145,16 @@ function buildSubjectResponse(subject: any, activeEnrollmentCount = 0, currentTe
   return {
     id: subject.id,
     name: subject.name,
-    code: subject.code,
     feePerMonth: decimalToNumber(subject.feePerMonth),
     description: subject.description,
     teacherId: subject.teacherId,
     isActive: subject.isActive,
     createdAt: subject.createdAt,
+    streams: (subject.subjectStreams ?? []).map((subjectStream: any) => ({
+      id: subjectStream.stream.id,
+      name: subjectStream.stream.name,
+      isActive: subjectStream.stream.isActive,
+    })),
     teacher: subject.teacher
       ? {
           id: subject.teacher.id,
@@ -145,29 +189,57 @@ async function getActiveEnrollmentCountMap(subjectIds: number[]) {
 }
 
 export class SubjectsService {
-  static async createSubject(dto: CreateSubjectDto, actor?: { userId?: number }) {
-    const teacher = await resolveTeacherReference(dto.teacherId);
+  static async getStreams() {
+    const streams = await prisma.stream.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+    });
 
-    if (!teacher) {
-      throw new AppError('Teacher not found. Use the teacher table id or the linked user id.', 404);
-    }
+    return streams;
+  }
+
+  static async createStream(dto: CreateStreamDto, actor?: { userId?: number }) {
+    const stream = await prisma.stream.create({
+      data: {
+        name: dto.name,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'STREAM_CREATED',
+        userId: actor?.userId ?? null,
+        resourceType: 'STREAM',
+        resourceId: stream.id,
+        details: JSON.stringify({ name: stream.name }),
+      },
+    });
+
+    return stream;
+  }
+
+  static async createSubject(dto: CreateSubjectDto, actor?: { userId?: number }) {
+    const streamIds = await validateStreamIds(dto.streamIds);
+    const requestedCode = dto.code ? dto.code.toUpperCase() : generateSubjectCode(dto.name);
+    const code = await ensureUniqueSubjectCode(requestedCode);
 
     const subject = await prisma.subject.create({
       data: {
         name: dto.name,
-        code: dto.code,
+        code,
         feePerMonth: new Prisma.Decimal(dto.feePerMonth),
-        teacherId: teacher.id,
         description: dto.description,
+        isActive: dto.isActive ?? true,
+        subjectStreams: {
+          createMany: {
+            data: streamIds.map((streamId) => ({ streamId })),
+          },
+        },
       },
       include: {
-        teacher: {
+        subjectStreams: {
           include: {
-            user: {
-              select: {
-                isActive: true,
-              },
-            },
+            stream: true,
           },
         },
       },
@@ -183,7 +255,6 @@ export class SubjectsService {
           name: subject.name,
           code: subject.code,
           feePerMonth: subject.feePerMonth.toString(),
-          teacherId: subject.teacherId,
         }),
       },
     });
@@ -204,12 +275,11 @@ export class SubjectsService {
       where.teacherId = params.teacherId;
     }
 
-    if (params.code) {
-      where.code = { equals: params.code, mode: 'insensitive' };
-    }
-
     if (params.search) {
-      where.code = { contains: params.search, mode: 'insensitive' };
+      where.OR = [
+        { name: { contains: params.search, mode: 'insensitive' } },
+        { code: { contains: params.search, mode: 'insensitive' } },
+      ];
     }
 
     const [subjects, currentTeacher] = await Promise.all([
@@ -217,6 +287,11 @@ export class SubjectsService {
         where,
         orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
         include: {
+          subjectStreams: {
+            include: {
+              stream: true,
+            },
+          },
           teacher: {
             include: {
               user: {
@@ -251,6 +326,11 @@ export class SubjectsService {
       ? await prisma.subject.findUnique({
           where: { id: numericId },
           include: {
+            subjectStreams: {
+              include: {
+                stream: true,
+              },
+            },
             teacher: {
               include: {
                 user: {
@@ -268,6 +348,11 @@ export class SubjectsService {
       subject = await prisma.subject.findUnique({
         where: { code: identifier },
         include: {
+          subjectStreams: {
+            include: {
+              stream: true,
+            },
+          },
           teacher: {
             include: {
               user: {
@@ -331,10 +416,19 @@ export class SubjectsService {
         data.feePerMonth = new Prisma.Decimal(dto.feePerMonth);
       }
 
+      if (dto.isActive !== undefined) {
+        data.isActive = dto.isActive;
+      }
+
       const subject = await tx.subject.update({
         where: { id: subjectId },
         data,
         include: {
+          subjectStreams: {
+            include: {
+              stream: true,
+            },
+          },
           teacher: {
             include: {
               user: {
@@ -362,7 +456,61 @@ export class SubjectsService {
         });
       }
 
-      return subject;
+      if (dto.isActive !== undefined && existing.isActive !== dto.isActive) {
+        await tx.auditLog.create({
+          data: {
+            action: dto.isActive ? 'SUBJECT_ACTIVATED' : 'SUBJECT_DEACTIVATED',
+            userId: actor?.userId ?? null,
+            resourceType: 'SUBJECT',
+            resourceId: subject.id,
+            details: JSON.stringify({
+              previousIsActive: existing.isActive,
+              newIsActive: dto.isActive,
+            }),
+          },
+        });
+      }
+
+      if (dto.streamIds !== undefined) {
+        const streamIds = await validateStreamIds(dto.streamIds);
+
+        await tx.subjectStream.deleteMany({
+          where: { subjectId },
+        });
+
+        await tx.subjectStream.createMany({
+          data: streamIds.map((streamId) => ({
+            subjectId,
+            streamId,
+          })),
+        });
+      }
+
+      const refreshed = await tx.subject.findUnique({
+        where: { id: subjectId },
+        include: {
+          subjectStreams: {
+            include: {
+              stream: true,
+            },
+          },
+          teacher: {
+            include: {
+              user: {
+                select: {
+                  isActive: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!refreshed) {
+        throw new AppError('Subject not found.', 404);
+      }
+
+      return refreshed;
     });
 
     return buildSubjectResponse(updated, 0);
@@ -394,6 +542,11 @@ export class SubjectsService {
         isActive: false,
       },
       include: {
+        subjectStreams: {
+          include: {
+            stream: true,
+          },
+        },
         teacher: {
           include: {
             user: {
@@ -431,9 +584,14 @@ export class SubjectsService {
     const subject = await prisma.subject.update({
       where: { id: subjectId },
       data: {
-        teacherId,
+        teacherId: teacher.id,
       },
       include: {
+        subjectStreams: {
+          include: {
+            stream: true,
+          },
+        },
         teacher: {
           include: {
             user: {
@@ -453,7 +611,7 @@ export class SubjectsService {
         resourceType: 'SUBJECT',
         resourceId: subjectId,
         details: JSON.stringify({
-          teacherId,
+          teacherId: teacher.id,
         }),
       },
     });

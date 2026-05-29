@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { UserRole } from '@prisma/client';
 import SubjectsService from '../service/subjects.service';
 import type { CreateSubjectDto } from '../dto/create-subject.dto';
+import type { CreateStreamDto } from '../dto/create-stream.dto';
 import type { UpdateSubjectDto } from '../dto/update-subject.dto';
 import type { EnrollStudentDto } from '../dto/enroll-student.dto';
 
@@ -30,7 +31,6 @@ export async function getSubjects(req: Request, res: Response, next: NextFunctio
       active: parseBoolean(req.query.active),
       teacherId: req.query.teacherId ? Number(req.query.teacherId) : undefined,
       search: (req.query.search as string) || undefined,
-      code: (req.query.code as string) || undefined,
       userRole,
       userId,
     });
@@ -39,6 +39,37 @@ export async function getSubjects(req: Request, res: Response, next: NextFunctio
       success: true,
       message: 'Subjects retrieved successfully',
       data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getStreams(req: Request, res: Response, next: NextFunction) {
+  try {
+    const streams = await SubjectsService.getStreams();
+
+    res.status(200).json({
+      success: true,
+      message: 'Streams retrieved successfully',
+      data: streams,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function createStream(req: Request, res: Response, next: NextFunction) {
+  try {
+    const dto: CreateStreamDto = req.body;
+    const userId = (req as any).userId as number | undefined;
+
+    const stream = await SubjectsService.createStream(dto, { userId });
+
+    res.status(201).json({
+      success: true,
+      message: 'Stream created successfully',
+      data: stream,
     });
   } catch (error) {
     next(error);
@@ -223,6 +254,8 @@ export async function getEnrollmentCount(req: Request, res: Response, next: Next
 }
 
 export default {
+  getStreams,
+  createStream,
   getSubjects,
   getSubjectById,
   createSubject,
