@@ -126,8 +126,11 @@ export class UsersService {
 
     // Role-based access control
     if (params.userRole === UserRole.MANAGER) {
-      // MANAGER can only see STUDENT users
-      where.role = UserRole.STUDENT;
+      // Managers are allowed to list users, but by default only see STUDENT users
+      // If an explicit role filter is provided (e.g., role=teachers), honor it below.
+      if (!params.role) {
+        where.role = UserRole.STUDENT;
+      }
     } else if (params.userRole !== UserRole.ADMIN) {
       // Non-admin, non-manager users cannot list users
       throw new AppError(
