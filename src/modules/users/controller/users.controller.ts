@@ -205,6 +205,26 @@ export async function activateUser(req: Request, res: Response, next: NextFuncti
   }
 }
 
+/**
+ * PATCH /api/v1/users/:id/approve
+ * Approve a student so they can sign in
+ */
+export async function approveStudent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = parseInt(req.params.id as string);
+
+    const user = await UsersService.approveStudent(userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Student approved successfully',
+      data: user,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export default {
   getUsers,
   getUserById,

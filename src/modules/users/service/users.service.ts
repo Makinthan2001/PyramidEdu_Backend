@@ -34,6 +34,7 @@ const userListSelect = {
       lastName: true,
       indexNumber: true,
       phone: true,
+      isApproved: true,
       address: true,
     },
   },
@@ -80,6 +81,7 @@ function formatUserListItem(user: any) {
     response.lastName = user.student.lastName;
     response.indexNumber = user.student.indexNumber;
     response.phone = user.student.phone;
+    response.isApproved = user.student.isApproved ?? false;
     response.address = user.student.address;
   }
 
@@ -109,6 +111,14 @@ function formatUserListItem(user: any) {
 
   return response;
 }
+
+/**
+ * Users Service - Manages user account operations
+ */
+
+/**
+ * Users Service - Manages user account operations
+ */
 
 /**
  * Users Service - Manages user account operations
@@ -196,6 +206,38 @@ export class UsersService {
     }
 
     return formatUserListItem(user);
+  }
+
+  /**
+   * Approve a student profile (set isApproved = true)
+   */
+  static async approveStudent(userId: number) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { student: true } });
+    if (!user) throw new AppError('User not found.', 404);
+    if (user.role !== UserRole.STUDENT) throw new AppError('Target user is not a student.', 400);
+    if (!user.student) throw new AppError('Student profile not found.', 404);
+
+    if ((user.student as any).isApproved) {
+      throw new AppError('Student is already approved.', 400);
+    }
+
+    // Cast data to any for isApproved update in case Prisma client types are not yet generated
+    const updatedStudent = await prisma.student.update({ where: { userId }, data: { isApproved: true } as any });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'STUDENT_APPROVED',
+        userId,
+        resourceType: 'STUDENT',
+        resourceId: updatedStudent.id,
+        details: `Student approved (userId=${userId})`,
+      },
+    });
+
+    // Return updated user summary
+    const updatedUser = await prisma.user.findUnique({ where: { id: userId }, select: userListSelect });
+    if (!updatedUser) throw new AppError('Error retrieving updated user.', 500);
+    return formatUserListItem(updatedUser);
   }
 
   /**

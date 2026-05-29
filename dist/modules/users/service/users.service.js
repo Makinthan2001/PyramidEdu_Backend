@@ -30,6 +30,7 @@ const userListSelect = {
             lastName: true,
             indexNumber: true,
             phone: true,
+            isApproved: true,
             address: true,
         },
     },
@@ -61,6 +62,7 @@ const userListSelect = {
     },
 };
 function formatUserListItem(user) {
+    var _a;
     const response = {
         id: user.id,
         email: user.email,
@@ -74,6 +76,7 @@ function formatUserListItem(user) {
         response.lastName = user.student.lastName;
         response.indexNumber = user.student.indexNumber;
         response.phone = user.student.phone;
+        response.isApproved = (_a = user.student.isApproved) !== null && _a !== void 0 ? _a : false;
         response.address = user.student.address;
     }
     if (user.teacher) {
@@ -102,6 +105,12 @@ function formatUserListItem(user) {
 /**
  * Users Service - Manages user account operations
  */
+/**
+ * Users Service - Manages user account operations
+ */
+/**
+ * Users Service - Manages user account operations
+ */
 class UsersService {
     /**
      * Get all users with role-based filtering and pagination
@@ -114,8 +123,11 @@ class UsersService {
             const where = {};
             // Role-based access control
             if (params.userRole === client_1.UserRole.MANAGER) {
-                // MANAGER can only see STUDENT users
-                where.role = client_1.UserRole.STUDENT;
+                // Managers are allowed to list users, but by default only see STUDENT users
+                // If an explicit role filter is provided (e.g., role=teachers), honor it below.
+                if (!params.role) {
+                    where.role = client_1.UserRole.STUDENT;
+                }
             }
             else if (params.userRole !== client_1.UserRole.ADMIN) {
                 // Non-admin, non-manager users cannot list users
@@ -172,6 +184,39 @@ class UsersService {
                 throw new AppError_1.AppError('User not found.', 404);
             }
             return formatUserListItem(user);
+        });
+    }
+    /**
+     * Approve a student profile (set isApproved = true)
+     */
+    static approveStudent(userId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const user = yield prisma_config_1.default.user.findUnique({ where: { id: userId }, include: { student: true } });
+            if (!user)
+                throw new AppError_1.AppError('User not found.', 404);
+            if (user.role !== client_1.UserRole.STUDENT)
+                throw new AppError_1.AppError('Target user is not a student.', 400);
+            if (!user.student)
+                throw new AppError_1.AppError('Student profile not found.', 404);
+            if (user.student.isApproved) {
+                throw new AppError_1.AppError('Student is already approved.', 400);
+            }
+            // Cast data to any for isApproved update in case Prisma client types are not yet generated
+            const updatedStudent = yield prisma_config_1.default.student.update({ where: { userId }, data: { isApproved: true } });
+            yield prisma_config_1.default.auditLog.create({
+                data: {
+                    action: 'STUDENT_APPROVED',
+                    userId,
+                    resourceType: 'STUDENT',
+                    resourceId: updatedStudent.id,
+                    details: `Student approved (userId=${userId})`,
+                },
+            });
+            // Return updated user summary
+            const updatedUser = yield prisma_config_1.default.user.findUnique({ where: { id: userId }, select: userListSelect });
+            if (!updatedUser)
+                throw new AppError_1.AppError('Error retrieving updated user.', 500);
+            return formatUserListItem(updatedUser);
         });
     }
     /**
@@ -264,6 +309,7 @@ class UsersService {
                                 firstName: dto.firstName,
                                 lastName: dto.lastName,
                                 indexNumber: dto.indexNumber,
+                                dateOfBirth: dto.dateOfBirth,
                                 phone: dto.phoneNumber,
                                 address: dto.address,
                                 // parentId will need to be set separately if parent exists

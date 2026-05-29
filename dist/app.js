@@ -14,21 +14,32 @@ const errorHandler_1 = __importDefault(require("./middleware/errorHandler"));
 const validateEnv_1 = require("./utils/validateEnv");
 const auth_1 = __importDefault(require("./modules/auth"));
 const health_1 = __importDefault(require("./modules/health"));
+const mobile_1 = __importDefault(require("./modules/mobile"));
 const users_1 = __importDefault(require("./modules/users"));
 const subjects_1 = __importDefault(require("./modules/subjects"));
 (0, validateEnv_1.validateEnv)();
 const app = (0, express_1.default)();
 // Secure security headers
 app.use((0, helmet_1.default)());
-const corsOrigin = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
-    : true;
+const defaultCorsOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:8081',
+    'http://127.0.0.1:8081',
+];
+const corsOrigin = Array.from(new Set([
+    ...defaultCorsOrigins,
+    ...(process.env.CORS_ORIGIN
+        ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+        : []),
+]));
 const corsOptions = {
     origin: corsOrigin,
     credentials: true,
     optionsSuccessStatus: 200,
 };
 app.use((0, cors_1.default)(corsOptions));
+app.options(/.*/, (0, cors_1.default)(corsOptions));
 app.use((0, cookie_parser_1.default)());
 app.use(express_1.default.json());
 app.use((0, morgan_1.default)(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
@@ -38,6 +49,7 @@ const authRateLimiter = (0, express_rate_limit_1.default)({
     max: 100, // Limit each IP to 100 requests per windowMs
     standardHeaders: true, // Return rate limit info in headers
     legacyHeaders: false, // Disable X-RateLimit-* headers
+    skip: (req) => req.method === 'OPTIONS',
     message: {
         success: false,
         message: 'Too many requests from this IP, please try again after 15 minutes.'
@@ -45,7 +57,7 @@ const authRateLimiter = (0, express_rate_limit_1.default)({
 });
 const authBasePaths = ['/api/v1/auth', '/api/auth'];
 // Apply rate limiter to auth routes
-app.use(['/api/v1/auth/login', '/api/auth/login'], authRateLimiter);
+app.use(['/api/v1/auth/login', '/api/auth/login', '/api/v1/mobile/auth/login'], authRateLimiter);
 app.use(['/api/v1/auth/register', '/api/auth/register'], authRateLimiter);
 app.get('/', (req, res) => {
     res.send('PyramidEdu Backend Running');
@@ -54,7 +66,8 @@ app.get('/', (req, res) => {
 app.use('/api/v1/health', health_1.default);
 // Authentication routes
 app.use('/api/v1/auth', auth_1.default);
-app.use('/api/auth', auth_1.default);
+// Mobile routes
+app.use('/api/v1/mobile', mobile_1.default);
 // Users routes
 app.use('/api/v1/users', users_1.default);
 // Subjects routes

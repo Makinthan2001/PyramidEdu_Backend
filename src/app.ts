@@ -20,12 +20,19 @@ const app = express();
 // Secure security headers
 app.use(helmet());
 
-const corsOrigin = process.env.CORS_ORIGIN
-  ? Array.from(new Set([
-      ...process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
-      'http://localhost:8081',
-    ]))
-  : ['http://localhost:3000', 'http://localhost:8081'];
+const defaultCorsOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:8081',
+  'http://127.0.0.1:8081',
+];
+
+const corsOrigin = Array.from(new Set([
+  ...defaultCorsOrigins,
+  ...(process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+    : []),
+]));
 
 const corsOptions = {
   origin: corsOrigin,
@@ -68,7 +75,6 @@ app.use('/api/v1/health', healthRouter);
 
 // Authentication routes
 app.use('/api/v1/auth', authRouter);
-// app.use('/api/auth', authRouter);
 
 // Mobile routes
 app.use('/api/v1/mobile', mobileRouter);

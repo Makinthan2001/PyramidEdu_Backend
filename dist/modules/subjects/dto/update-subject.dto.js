@@ -19,6 +19,8 @@ exports.updateSubjectSchema = zod_1.z.object({
         .optional(),
     feePerMonth: feePerMonthSchema.optional(),
     description: zod_1.z.string().trim().max(500).nullable().optional(),
+    streamIds: zod_1.z.array(zod_1.z.number().int().positive()).min(1, 'At least one stream is required').optional(),
+    isActive: zod_1.z.boolean().optional(),
 });
 exports.default = {
     updateSubjectSchema: exports.updateSubjectSchema,

@@ -21,6 +21,7 @@ exports.updateUser = updateUser;
 exports.deleteUser = deleteUser;
 exports.deactivateUser = deactivateUser;
 exports.activateUser = activateUser;
+exports.approveStudent = approveStudent;
 const users_service_1 = __importDefault(require("../service/users.service"));
 /**
  * Users Controller - Handles user account operations
@@ -214,6 +215,26 @@ function activateUser(req, res, next) {
             res.status(200).json({
                 success: true,
                 message: 'User activated successfully',
+                data: user,
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
+/**
+ * PATCH /api/v1/users/:id/approve
+ * Approve a student so they can sign in
+ */
+function approveStudent(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const userId = parseInt(req.params.id);
+            const user = yield users_service_1.default.approveStudent(userId);
+            res.status(200).json({
+                success: true,
+                message: 'Student approved successfully',
                 data: user,
             });
         }

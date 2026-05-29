@@ -51,8 +51,7 @@ exports.createStudentSchema = zod_1.z.object({
     firstName: zod_1.z.string().min(1, 'First name is required').max(255),
     lastName: zod_1.z.string().min(1, 'Last name is required').max(255),
     indexNumber: zod_1.z.string().min(1, 'Index number is required').max(255),
-    parentName: zod_1.z.string().min(1, 'Parent name is required').max(255),
-    parentPhone: zod_1.z.string().min(10, 'Parent phone must be at least 10 digits'),
+    dateOfBirth: zod_1.z.coerce.date(),
     address: zod_1.z.string().min(1, 'Address is required').max(500),
     email: emailField,
     phoneNumber: zod_1.z.string().min(10, 'Phone number must be at least 10 digits'),
@@ -73,8 +72,7 @@ exports.createAdminSchema = zod_1.z.object({
     subject: zod_1.z.string().max(255).optional(),
     // Student fields
     indexNumber: zod_1.z.string().max(255).optional(),
-    parentName: zod_1.z.string().max(255).optional(),
-    parentPhone: zod_1.z.string().optional(),
+    dateOfBirth: zod_1.z.coerce.date().optional(),
     // Support Staff fields
     roleType: zod_1.z.string().max(255).optional(),
     // Common optional

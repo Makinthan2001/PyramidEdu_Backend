@@ -18,7 +18,7 @@ const MOBILE_REFRESH_EXPIRES = process.env.JWT_MOBILE_REFRESH_EXPIRES_IN || '30d
 export interface MobileStudentSession {
   id: number;
   email: string;
-  role: UserRole.STUDENT;
+  role: UserRole; // runtime value set as 'STUDENT'
   isActive: boolean;
   forcePasswordChange: boolean;
   createdAt: Date;
@@ -46,7 +46,7 @@ function toStudentSession(user: StudentAuthRecord): MobileStudentSession {
   return {
     id: user.id,
     email: user.email,
-    role: UserRole.STUDENT,
+    role: 'STUDENT' as UserRole,
     isActive: user.isActive,
     forcePasswordChange: user.forcePasswordChange,
     createdAt: user.createdAt,
@@ -76,6 +76,11 @@ export async function loginStudent(dto: LoginDto): Promise<MobileLoginResult> {
   const isMatch = await comparePasswords(dto.password, user.passwordHash);
   if (!isMatch) {
     throw new AppError('Invalid email or password.', 401);
+  }
+
+  // Ensure student profile has been approved
+  if (!user.student || (user.student as any).isApproved === false) {
+    throw new AppError('Your account is pending approval. Please contact the school administration.', 403);
   }
 
   const tokenFamily = generateTokenFamily();

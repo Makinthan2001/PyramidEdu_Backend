@@ -15,9 +15,11 @@ exports.createSubjectSchema = zod_1.z.object({
         .trim()
         .min(1, 'Subject code is required')
         .max(20, 'Subject code must not exceed 20 characters')
-        .regex(/^[a-zA-Z0-9]+$/, 'Subject code must be alphanumeric'),
+        .regex(/^[a-zA-Z0-9]+$/, 'Subject code must be alphanumeric')
+        .optional(),
     feePerMonth: feePerMonthSchema,
-    teacherId: zod_1.z.number().int().positive('Teacher ID is required'),
+    streamIds: zod_1.z.array(zod_1.z.number().int().positive()).min(1, 'At least one stream is required'),
+    isActive: zod_1.z.boolean().optional(),
     description: zod_1.z.string().trim().max(500).optional(),
 });
 exports.default = {

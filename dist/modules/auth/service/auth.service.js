@@ -20,6 +20,7 @@ exports.getCurrentUser = getCurrentUser;
 exports.changePassword = changePassword;
 exports.forgotPassword = forgotPassword;
 exports.resetPassword = resetPassword;
+const client_1 = require("@prisma/client");
 const prisma_config_1 = __importDefault(require("../../../config/prisma.config"));
 const password_util_1 = require("../../../utils/password.util");
 const jwt_util_1 = require("../../../utils/jwt.util");
@@ -64,6 +65,14 @@ function loginUser(dto) {
         const isMatch = yield (0, password_util_1.comparePasswords)(dto.password, user.passwordHash);
         if (!isMatch) {
             throw new AppError_1.AppError('Invalid email or password.', 401);
+        }
+        // If user is a student, ensure their student profile is approved
+        if (user.role === client_1.UserRole.STUDENT) {
+            const student = yield prisma_config_1.default.student.findUnique({ where: { userId: user.id } });
+            // Prisma client types may be out-of-sync with schema during migrations; cast to any for safety
+            if (!student || student.isApproved === false) {
+                throw new AppError_1.AppError('Your account is pending approval. Please contact the administration.', 403);
+            }
         }
         const tokenFamily = (0, crypto_util_1.generateTokenFamily)();
         const accessToken = (0, jwt_util_1.generateAccessToken)({ sub: user.id, email: user.email, role: user.role });

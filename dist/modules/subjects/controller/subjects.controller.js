@@ -13,6 +13,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getSubjects = getSubjects;
+exports.getStreams = getStreams;
+exports.getAvailableSubjects = getAvailableSubjects;
+exports.createStream = createStream;
 exports.getSubjectById = getSubjectById;
 exports.createSubject = createSubject;
 exports.updateSubject = updateSubject;
@@ -45,7 +48,6 @@ function getSubjects(req, res, next) {
                 active: parseBoolean(req.query.active),
                 teacherId: req.query.teacherId ? Number(req.query.teacherId) : undefined,
                 search: req.query.search || undefined,
-                code: req.query.code || undefined,
                 userRole,
                 userId,
             });
@@ -53,6 +55,53 @@ function getSubjects(req, res, next) {
                 success: true,
                 message: 'Subjects retrieved successfully',
                 data: result,
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
+function getStreams(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const streams = yield subjects_service_1.default.getStreams();
+            res.status(200).json({
+                success: true,
+                message: 'Streams retrieved successfully',
+                data: streams,
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
+function getAvailableSubjects(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const subjects = yield subjects_service_1.default.getAvailableSubjects();
+            res.status(200).json({
+                success: true,
+                message: 'Available subjects retrieved successfully',
+                data: subjects,
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
+function createStream(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const dto = req.body;
+            const userId = req.userId;
+            const stream = yield subjects_service_1.default.createStream(dto, { userId });
+            res.status(201).json({
+                success: true,
+                message: 'Stream created successfully',
+                data: stream,
             });
         }
         catch (error) {
@@ -238,6 +287,9 @@ function getEnrollmentCount(req, res, next) {
     });
 }
 exports.default = {
+    getAvailableSubjects,
+    getStreams,
+    createStream,
     getSubjects,
     getSubjectById,
     createSubject,

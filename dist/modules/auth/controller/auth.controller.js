@@ -55,7 +55,8 @@ const AppError_1 = require("../../../utils/AppError");
 const REFRESH_COOKIE_OPTIONS = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    // Allow cross-site cookie usage in development (frontend on different origin)
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: '/api',
 };

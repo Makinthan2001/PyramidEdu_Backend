@@ -119,4 +119,9 @@ router.patch('/:id/deactivate', users_guard_1.canManageUsers, users_guard_1.prev
  * Reactivate user account
  */
 router.patch('/:id/activate', users_guard_1.canManageUsers, controller.activateUser);
+/**
+ * PATCH /api/v1/users/:id/approve
+ * Approve a student profile (MANAGER/ADMIN)
+ */
+router.patch('/:id/approve', users_guard_1.canManageUsers, controller.approveStudent);
 exports.default = router;
