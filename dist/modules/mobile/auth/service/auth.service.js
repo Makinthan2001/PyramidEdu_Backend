@@ -49,7 +49,7 @@ function toStudentSession(user) {
 }
 function loginStudent(dto) {
     return __awaiter(this, void 0, void 0, function* () {
-        const user = yield auth_repository_1.default.findStudentByEmail(dto.email);
+        const user = yield auth_repository_1.default.findStudentByEmail(dto.email.trim().toLowerCase());
         if (!user || user.role !== client_1.UserRole.STUDENT || !user.student) {
             throw new AppError_1.AppError('Invalid email or password.', 401);
         }

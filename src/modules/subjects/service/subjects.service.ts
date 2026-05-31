@@ -717,32 +717,32 @@ export class SubjectsService {
     return buildSubjectResponse(updated, activeEnrollmentCount);
   }
 
-  static async assignTeacher(subjectId: number, teacherId: number, actor?: { userId?: number }) {
+  static async assignTeacher(subjectIdentifier: string | number, teacherId: number, actor?: { userId?: number }) {
+    // Resolve subject by ID or code
+    const subject = typeof subjectIdentifier === 'string' && isNaN(Number(subjectIdentifier))
+      ? await prisma.subject.findUnique({ where: { code: subjectIdentifier }, select: { id: true } })
+      : await prisma.subject.findUnique({ where: { id: Number(subjectIdentifier) }, select: { id: true } });
+    if (!subject) {
+      throw new AppError('Subject not found.', 404);
+    }
+
     const teacher = await resolveTeacherReference(teacherId);
 
     if (!teacher) {
       throw new AppError('Teacher not found. Use the teacher table id or the linked user id.', 404);
     }
 
-    const subject = await prisma.subject.update({
-      where: { id: subjectId },
+    const updatedSubject = await prisma.subject.update({
+      where: { id: subject.id },
       data: {
         teacherId: teacher.id,
       },
       include: {
         subjectStreams: {
-          include: {
-            stream: true,
-          },
+          include: { stream: true },
         },
         teacher: {
-          include: {
-            user: {
-              select: {
-                isActive: true,
-              },
-            },
-          },
+          include: { user: { select: { isActive: true } } },
         },
       },
     });
@@ -752,14 +752,12 @@ export class SubjectsService {
         action: 'SUBJECT_TEACHER_ASSIGNED',
         userId: actor?.userId ?? null,
         resourceType: 'SUBJECT',
-        resourceId: subjectId,
-        details: JSON.stringify({
-          teacherId: teacher.id,
-        }),
+        resourceId: subject.id,
+        details: JSON.stringify({ teacherId: teacher.id }),
       },
     });
 
-    return buildSubjectResponse(subject, 0);
+    return buildSubjectResponse(updatedSubject, 0);
   }
 
   static async getSubjectStudents(subjectId: number, actor?: { userRole?: UserRole; userId?: number }) {

@@ -41,9 +41,11 @@ const validate_1 = require("../../../middleware/validate");
 const controller = __importStar(require("../controller/subjects.controller"));
 const subjects_validator_1 = require("../validators/subjects.validator");
 const router = (0, express_1.Router)();
-router.use(jwt_guard_1.jwtGuard);
+// Public read-only endpoints for the student registration flow.
 router.get('/streams', controller.getStreams);
 router.get('/available', controller.getAvailableSubjects);
+router.get('/teachers', controller.getTeachersForSubject);
+router.use(jwt_guard_1.jwtGuard);
 router.post('/streams', (0, role_guard_1.roleGuard)(client_1.UserRole.ADMIN, client_1.UserRole.MANAGER), (0, validate_1.validate)(subjects_validator_1.createStreamSchema), controller.createStream);
 router.get('/', controller.getSubjects);
 router.get('/:id', controller.getSubjectById);

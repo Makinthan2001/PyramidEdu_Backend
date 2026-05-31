@@ -110,8 +110,17 @@ export async function changeMyPassword(req: Request, res: Response, next: NextFu
 export async function resetUserPassword(req: Request, res: Response, next: NextFunction) {
   try {
     const targetUserId = parseInt(req.params.id as string);
+    // Allow admins to provide a specific password in the request body to set for the user.
+    const providedPassword = (req.body && typeof req.body.password === 'string' && req.body.password.length > 0)
+      ? req.body.password
+      : undefined;
 
-    const result = await UsersService.resetPassword(targetUserId);
+    let result;
+    if (providedPassword) {
+      result = await UsersService.setPasswordForUser(targetUserId, providedPassword);
+    } else {
+      result = await UsersService.resetPassword(targetUserId);
+    }
 
     res.status(200).json({
       success: true,
