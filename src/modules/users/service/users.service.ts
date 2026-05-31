@@ -34,7 +34,6 @@ const userListSelect = {
       lastName: true,
       indexNumber: true,
       phone: true,
-      isApproved: true,
       address: true,
     },
   },
@@ -283,94 +282,98 @@ export class UsersService {
       forcePasswordChange: true,
     };
 
-    const user = await prisma.user.create({
-      data: userData,
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
-
-    // Create role-specific record
+    // Create user and role-specific record inside a transaction so partial creates don't occur
+    let user: any;
     try {
-      switch (role) {
-        case UserRole.MANAGER:
-          await prisma.manager.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              nicNumber: dto.nicNumber,
-              gender: dto.gender,
-              address: dto.address,
-              phone: dto.phoneNumber,
-              salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
-              fullName: `${dto.firstName} ${dto.lastName}`.trim(),
-            } as any,
-          });
-          break;
+      await prisma.$transaction(async (tx) => {
+        user = await tx.user.create({
+          data: userData,
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
 
-        case UserRole.TEACHER:
-          await prisma.teacher.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              nicNumber: dto.nicNumber,
-              gender: dto.gender,
-              address: dto.address,
-              phone: dto.phoneNumber,
-              specialization: dto.subject,
-              salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
-            },
-          });
-          break;
+        // Create role-specific record using transactional client
+        switch (role) {
+          case UserRole.MANAGER:
+            await tx.manager.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                nicNumber: dto.nicNumber,
+                gender: dto.gender,
+                address: dto.address,
+                phone: dto.phoneNumber,
+                salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
+                fullName: `${dto.firstName} ${dto.lastName}`.trim(),
+              } as any,
+            });
+            break;
 
-        case UserRole.STUDENT:
-          await prisma.student.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              indexNumber: dto.indexNumber,
-              dateOfBirth: dto.dateOfBirth,
-              phone: dto.phoneNumber,
-              address: dto.address,
-              // parentId will need to be set separately if parent exists
-            },
-          });
-          break;
+          case UserRole.TEACHER:
+            await tx.teacher.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                nicNumber: dto.nicNumber,
+                gender: dto.gender,
+                address: dto.address,
+                phone: dto.phoneNumber,
+                specialization: dto.subject,
+                salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
+              },
+            });
+            break;
 
-        case UserRole.SUPPORT_STAFF:
-          await prisma.supportStaff.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              nicNumber: dto.nicNumber,
-              gender: dto.gender,
-              address: dto.address,
-              phone: dto.phoneNumber,
-              fullName: `${dto.firstName} ${dto.lastName}`.trim(),
-              roleType: dto.roleType,
-              salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
-            },
-          });
-          break;
+          case UserRole.STUDENT:
+            await tx.student.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                indexNumber: dto.indexNumber,
+                dateOfBirth: dto.dateOfBirth,
+                phone: dto.phoneNumber,
+                address: dto.address,
+                // parentId will need to be set separately if parent exists
+              },
+            });
+            break;
 
-        case UserRole.ADMIN:
-          // ADMIN role doesn't have a separate table
-          break;
+          case UserRole.SUPPORT_STAFF:
+            await tx.supportStaff.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                nicNumber: dto.nicNumber,
+                gender: dto.gender,
+                address: dto.address,
+                phone: dto.phoneNumber,
+                fullName: `${dto.firstName} ${dto.lastName}`.trim(),
+                roleType: dto.roleType,
+                salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
+              },
+            });
+            break;
 
-        default:
-          console.warn(`Unknown role: ${role}`);
-      }
+          case UserRole.ADMIN:
+            // ADMIN role doesn't have a separate table
+            break;
+
+          default:
+            console.warn(`Unknown role: ${role}`);
+        }
+      });
     } catch (error) {
-      console.error('Error creating role-specific record:', error);
-      // Continue - user is created even if role-specific record fails
+      console.error('Error during transactional user creation:', error);
+      throw new AppError('Failed to create user account. Please try again.', 500);
     }
 
     // Log audit entry
