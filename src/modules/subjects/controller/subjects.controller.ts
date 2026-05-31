@@ -195,11 +195,12 @@ export async function deactivateSubject(req: Request, res: Response, next: NextF
 
 export async function assignTeacher(req: Request, res: Response, next: NextFunction) {
   try {
-    const subjectId = Number(req.params.id);
-    const teacherId = Number(req.body.teacherId);
+      const rawId = req.params.id;
+      const subjectIdentifier = Array.isArray(rawId) ? rawId[0] : rawId; // normalize to string
+    const teacherId = Number(Array.isArray(req.body.teacherId) ? req.body.teacherId[0] : (req.body.teacherId as string));
     const userId = (req as any).userId as number | undefined;
 
-    const subject = await SubjectsService.assignTeacher(subjectId, teacherId, { userId });
+    const subject = await SubjectsService.assignTeacher(subjectIdentifier, teacherId, { userId });
 
     res.status(200).json({
       success: true,

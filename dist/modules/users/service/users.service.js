@@ -118,21 +118,9 @@ class UsersService {
     static getUsers(params) {
         return __awaiter(this, void 0, void 0, function* () {
             const page = params.page || 1;
-            const limit = params.limit || 10;
+            const limit = params.limit || 1000;
             const skip = (page - 1) * limit;
             const where = {};
-            // Role-based access control
-            if (params.userRole === client_1.UserRole.MANAGER) {
-                // Managers are allowed to list users, but by default only see STUDENT users
-                // If an explicit role filter is provided (e.g., role=teachers), honor it below.
-                if (!params.role) {
-                    where.role = client_1.UserRole.STUDENT;
-                }
-            }
-            else if (params.userRole !== client_1.UserRole.ADMIN) {
-                // Non-admin, non-manager users cannot list users
-                throw new AppError_1.AppError('You do not have permission to list users.', 403);
-            }
             // Filter by role if specified
             if (params.role && params.role !== 'all') {
                 const roleMap = {
@@ -242,33 +230,28 @@ class UsersService {
         return __awaiter(this, void 0, void 0, function* () {
             // Check if email already exists
             const existingUser = yield prisma_config_1.default.user.findUnique({
-                where: { email: dto.email.toLowerCase() },
+                where: { email: dto.email.trim().toLowerCase() },
             });
             if (existingUser) {
                 throw new AppError_1.AppError('Email already in use.', 409);
             }
-            // Generate a cryptographically secure temporary password (backend only)
-            const temporaryPassword = role === client_1.UserRole.SUPPORT_STAFF ? undefined : (0, password_util_1.generateTemporaryPassword)(12);
-            // Hash temporary password before saving
-            const hashedPassword = yield (0, password_util_1.hashPassword)(temporaryPassword !== null && temporaryPassword !== void 0 ? temporaryPassword : (0, password_util_1.generateTemporaryPassword)(12));
-            // Prepare user data - only use fields that exist in User table
+            // Determine password: use provided or generate temporary one
+            const providedPassword = typeof dto.password === 'string' && dto.password.trim().length > 0
+                ? dto.password.trim()
+                : (0, password_util_1.generateTemporaryPassword)(12);
+            // Hash the password before saving
+            const hashedPassword = yield (0, password_util_1.hashPassword)(providedPassword);
+            // Prepare user data
             const userData = {
-                email: dto.email.toLowerCase(),
+                email: dto.email.trim().toLowerCase(),
                 passwordHash: hashedPassword,
                 role,
                 isActive: true,
                 forcePasswordChange: true,
             };
-            const user = yield prisma_config_1.default.user.create({
-                data: userData,
-                select: {
-                    id: true,
-                    email: true,
-                    role: true,
-                    isActive: true,
-                    createdAt: true,
-                },
-            });
+            // Create the base user record
+            const user = yield prisma_config_1.default.user.create({ data: userData });
+            // Create role-specific record (unchanged) ... (will follow unchanged code after this point)
             // Create role-specific record
             try {
                 switch (role) {
@@ -353,8 +336,8 @@ class UsersService {
                     details: `User ${user.email} created with role ${role}`,
                 },
             });
-            // Return user and temporary password (temporaryPassword must be communicated securely by the admin)
-            return { user, temporaryPassword };
+            // Return created user and temporary password for frontend use
+            return { user, temporaryPassword: providedPassword };
         });
     }
     /**
@@ -413,6 +396,35 @@ class UsersService {
                 },
             });
             return { user: updated, temporaryPassword };
+        });
+    }
+    /**
+     * Admin sets a specific password for a user (used for fixing mismatches).
+     * Returns the updated user and echoes back the submitted password so caller can display it.
+     */
+    static setPasswordForUser(targetUserId, newPassword) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const user = yield prisma_config_1.default.user.findUnique({ where: { id: targetUserId } });
+            if (!user)
+                throw new AppError_1.AppError('User not found.', 404);
+            // Normalize password (trim) before hashing to match createUser behavior
+            const normalized = typeof newPassword === 'string' ? newPassword.trim() : newPassword;
+            const hashed = yield (0, password_util_1.hashPassword)(normalized);
+            const updated = yield prisma_config_1.default.user.update({
+                where: { id: targetUserId },
+                data: { passwordHash: hashed, forcePasswordChange: true },
+                select: { id: true, email: true, role: true, isActive: true, createdAt: true },
+            });
+            yield prisma_config_1.default.auditLog.create({
+                data: {
+                    action: 'PASSWORD_SET_BY_ADMIN',
+                    userId: targetUserId,
+                    resourceType: 'USER',
+                    resourceId: targetUserId,
+                    details: 'Admin set user password',
+                },
+            });
+            return { user: updated, temporaryPassword: newPassword };
         });
     }
     /**

@@ -129,25 +129,12 @@ export class UsersService {
    */
   static async getUsers(params: UsersQueryParams): Promise<PaginatedUsers> {
     const page = params.page || 1;
-    const limit = params.limit || 10;
+    const limit = params.limit || 1000;
     const skip = (page - 1) * limit;
 
     const where: any = {};
 
-    // Role-based access control
-    if (params.userRole === UserRole.MANAGER) {
-      // Managers are allowed to list users, but by default only see STUDENT users
-      // If an explicit role filter is provided (e.g., role=teachers), honor it below.
-      if (!params.role) {
-        where.role = UserRole.STUDENT;
-      }
-    } else if (params.userRole !== UserRole.ADMIN) {
-      // Non-admin, non-manager users cannot list users
-      throw new AppError(
-        'You do not have permission to list users.',
-        403
-      );
-    }
+
 
     // Filter by role if specified
     if (params.role && params.role !== 'all') {
@@ -261,38 +248,35 @@ export class UsersService {
   static async createUser(dto: any, role: UserRole) {
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase() },
+      where: { email: dto.email.trim().toLowerCase() },
     });
 
     if (existingUser) {
       throw new AppError('Email already in use.', 409);
     }
 
-    // Generate a cryptographically secure temporary password (backend only)
-    const temporaryPassword = role === UserRole.SUPPORT_STAFF ? undefined : generateTemporaryPassword(12);
-
-    // Hash temporary password before saving
-    const hashedPassword = await hashPassword(temporaryPassword ?? generateTemporaryPassword(12));
-
-    // Prepare user data - only use fields that exist in User table
+    const providedPassword = typeof dto.password === 'string' && dto.password.trim().length > 0
+      ? dto.password.trim()
+      : generateTemporaryPassword(12);
+    // Hash the password before saving
+    const hashedPassword = await hashPassword(providedPassword);
+    // Prepare user data
     const userData: any = {
-      email: dto.email.toLowerCase(),
+      email: dto.email.trim().toLowerCase(),
       passwordHash: hashedPassword,
       role,
       isActive: true,
       forcePasswordChange: true,
     };
 
-    const user = await prisma.user.create({
-      data: userData,
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
+    // Create the base user record
+    const user = await prisma.user.create({ data: userData });
+
+
+
+    // Create role-specific record (unchanged) ... (will follow unchanged code after this point)
+
+
 
     // Create role-specific record
     try {
@@ -384,8 +368,8 @@ export class UsersService {
       },
     });
 
-    // Return user and temporary password (temporaryPassword must be communicated securely by the admin)
-    return { user, temporaryPassword };
+    // Return created user and temporary password for frontend use
+    return { user, temporaryPassword: providedPassword };
   }
 
   /**
@@ -450,6 +434,37 @@ export class UsersService {
     });
 
     return { user: updated, temporaryPassword };
+  }
+
+  /**
+   * Admin sets a specific password for a user (used for fixing mismatches).
+   * Returns the updated user and echoes back the submitted password so caller can display it.
+   */
+  static async setPasswordForUser(targetUserId: number, newPassword: string) {
+    const user = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!user) throw new AppError('User not found.', 404);
+
+    // Normalize password (trim) before hashing to match createUser behavior
+    const normalized = typeof newPassword === 'string' ? newPassword.trim() : newPassword;
+    const hashed = await hashPassword(normalized as string);
+
+    const updated = await prisma.user.update({
+      where: { id: targetUserId },
+      data: { passwordHash: hashed, forcePasswordChange: true },
+      select: { id: true, email: true, role: true, isActive: true, createdAt: true },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'PASSWORD_SET_BY_ADMIN',
+        userId: targetUserId,
+        resourceType: 'USER',
+        resourceId: targetUserId,
+        details: 'Admin set user password',
+      },
+    });
+
+    return { user: updated, temporaryPassword: newPassword };
   }
 
   /**

@@ -404,6 +404,13 @@ class SubjectsService {
             if (params.teacherId) {
                 where.teacherId = params.teacherId;
             }
+            if (params.streamId) {
+                where.subjectStreams = {
+                    some: {
+                        streamId: params.streamId,
+                    },
+                };
+            }
             if (params.search) {
                 where.OR = [
                     { name: { contains: params.search, mode: 'insensitive' } },
@@ -441,6 +448,34 @@ class SubjectsService {
                 page: 1,
                 limit: subjects.length,
                 hasMore: false,
+            };
+        });
+    }
+    static getSubjectTeacher(subjectId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b, _c, _d, _e;
+            const subject = yield prisma_config_1.default.subject.findUnique({
+                where: { id: subjectId },
+                include: {
+                    teacher: {
+                        include: {
+                            user: {
+                                select: {
+                                    isActive: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            if (!subject || !subject.teacher) {
+                return null;
+            }
+            return {
+                id: subject.teacher.id,
+                name: `${(_a = subject.teacher.firstName) !== null && _a !== void 0 ? _a : ''} ${(_b = subject.teacher.lastName) !== null && _b !== void 0 ? _b : ''}`.trim(),
+                qualification: (_c = subject.teacher.specialization) !== null && _c !== void 0 ? _c : '',
+                isActive: (_e = (_d = subject.teacher.user) === null || _d === void 0 ? void 0 : _d.isActive) !== null && _e !== void 0 ? _e : true,
             };
         });
     }
@@ -633,32 +668,31 @@ class SubjectsService {
             return buildSubjectResponse(updated, activeEnrollmentCount);
         });
     }
-    static assignTeacher(subjectId, teacherId, actor) {
+    static assignTeacher(subjectIdentifier, teacherId, actor) {
         return __awaiter(this, void 0, void 0, function* () {
             var _a;
+            // Resolve subject by ID or code
+            const subject = typeof subjectIdentifier === 'string' && isNaN(Number(subjectIdentifier))
+                ? yield prisma_config_1.default.subject.findUnique({ where: { code: subjectIdentifier }, select: { id: true } })
+                : yield prisma_config_1.default.subject.findUnique({ where: { id: Number(subjectIdentifier) }, select: { id: true } });
+            if (!subject) {
+                throw new AppError_1.AppError('Subject not found.', 404);
+            }
             const teacher = yield resolveTeacherReference(teacherId);
             if (!teacher) {
                 throw new AppError_1.AppError('Teacher not found. Use the teacher table id or the linked user id.', 404);
             }
-            const subject = yield prisma_config_1.default.subject.update({
-                where: { id: subjectId },
+            const updatedSubject = yield prisma_config_1.default.subject.update({
+                where: { id: subject.id },
                 data: {
                     teacherId: teacher.id,
                 },
                 include: {
                     subjectStreams: {
-                        include: {
-                            stream: true,
-                        },
+                        include: { stream: true },
                     },
                     teacher: {
-                        include: {
-                            user: {
-                                select: {
-                                    isActive: true,
-                                },
-                            },
-                        },
+                        include: { user: { select: { isActive: true } } },
                     },
                 },
             });
@@ -667,13 +701,11 @@ class SubjectsService {
                     action: 'SUBJECT_TEACHER_ASSIGNED',
                     userId: (_a = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _a !== void 0 ? _a : null,
                     resourceType: 'SUBJECT',
-                    resourceId: subjectId,
-                    details: JSON.stringify({
-                        teacherId: teacher.id,
-                    }),
+                    resourceId: subject.id,
+                    details: JSON.stringify({ teacherId: teacher.id }),
                 },
             });
-            return buildSubjectResponse(subject, 0);
+            return buildSubjectResponse(updatedSubject, 0);
         });
     }
     static getSubjectStudents(subjectId, actor) {

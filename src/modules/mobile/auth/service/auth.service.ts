@@ -63,7 +63,7 @@ function toStudentSession(user: StudentAuthRecord): MobileStudentSession {
 }
 
 export async function loginStudent(dto: LoginDto): Promise<MobileLoginResult> {
-  const user = await MobileAuthRepository.findStudentByEmail(dto.email);
+  const user = await MobileAuthRepository.findStudentByEmail(dto.email.trim().toLowerCase());
 
   if (!user || user.role !== UserRole.STUDENT || !user.student) {
     throw new AppError('Invalid email or password.', 401);

@@ -38,14 +38,15 @@ function toSafeUser(user) {
 }
 function registerUser(dto) {
     return __awaiter(this, void 0, void 0, function* () {
-        const existing = yield prisma_config_1.default.user.findUnique({ where: { email: dto.email } });
+        const email = dto.email.trim().toLowerCase();
+        const existing = yield prisma_config_1.default.user.findUnique({ where: { email } });
         if (existing) {
             throw new AppError_1.AppError('An account with this email already exists.', 409);
         }
         const passwordHash = yield (0, password_util_1.hashPassword)(dto.password);
         const user = yield prisma_config_1.default.user.create({
             data: {
-                email: dto.email,
+                email,
                 passwordHash,
                 role: dto.role,
             },
@@ -55,15 +56,22 @@ function registerUser(dto) {
 }
 function loginUser(dto) {
     return __awaiter(this, void 0, void 0, function* () {
-        const user = yield prisma_config_1.default.user.findUnique({ where: { email: dto.email } });
+        const email = dto.email.trim().toLowerCase();
+        const user = yield prisma_config_1.default.user.findUnique({ where: { email } });
         if (!user) {
             throw new AppError_1.AppError('Invalid email or password.', 401);
         }
         if (!user.isActive) {
             throw new AppError_1.AppError('Your account has been deactivated. Please contact an administrator.', 403);
         }
-        const isMatch = yield (0, password_util_1.comparePasswords)(dto.password, user.passwordHash);
+        if (!dto.password || typeof dto.password !== 'string') {
+            throw new AppError_1.AppError('Password is required.', 400);
+        }
+        const incomingPassword = dto.password;
+        const isMatch = yield (0, password_util_1.comparePasswords)(incomingPassword, user.passwordHash);
         if (!isMatch) {
+            // Lightweight warning to aid debugging in development; do not log passwords
+            console.warn(`Failed login attempt for ${email}: password did not match stored hash.`);
             throw new AppError_1.AppError('Invalid email or password.', 401);
         }
         // If user is a student, ensure their student profile is approved

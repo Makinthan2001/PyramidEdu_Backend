@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getSubjects = getSubjects;
 exports.getStreams = getStreams;
 exports.getAvailableSubjects = getAvailableSubjects;
+exports.getTeachersForSubject = getTeachersForSubject;
 exports.createStream = createStream;
 exports.getSubjectById = getSubjectById;
 exports.createSubject = createSubject;
@@ -47,6 +48,7 @@ function getSubjects(req, res, next) {
             const result = yield subjects_service_1.default.getSubjects({
                 active: parseBoolean(req.query.active),
                 teacherId: req.query.teacherId ? Number(req.query.teacherId) : undefined,
+                streamId: req.query.streamId ? Number(req.query.streamId) : undefined,
                 search: req.query.search || undefined,
                 userRole,
                 userId,
@@ -85,6 +87,29 @@ function getAvailableSubjects(req, res, next) {
                 success: true,
                 message: 'Available subjects retrieved successfully',
                 data: subjects,
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
+function getTeachersForSubject(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const subjectId = Number(req.query.subjectId);
+            if (!Number.isFinite(subjectId)) {
+                res.status(400).json({
+                    success: false,
+                    message: 'subjectId query parameter is required',
+                });
+                return;
+            }
+            const teacher = yield subjects_service_1.default.getSubjectTeacher(subjectId);
+            res.status(200).json({
+                success: true,
+                message: 'Teachers retrieved successfully',
+                data: teacher ? [teacher] : [],
             });
         }
         catch (error) {
@@ -190,10 +215,11 @@ function deactivateSubject(req, res, next) {
 function assignTeacher(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const subjectId = Number(req.params.id);
-            const teacherId = Number(req.body.teacherId);
+            const rawId = req.params.id;
+            const subjectIdentifier = Array.isArray(rawId) ? rawId[0] : rawId; // normalize to string
+            const teacherId = Number(Array.isArray(req.body.teacherId) ? req.body.teacherId[0] : req.body.teacherId);
             const userId = req.userId;
-            const subject = yield subjects_service_1.default.assignTeacher(subjectId, teacherId, { userId });
+            const subject = yield subjects_service_1.default.assignTeacher(subjectIdentifier, teacherId, { userId });
             res.status(200).json({
                 success: true,
                 message: 'Teacher assigned successfully',

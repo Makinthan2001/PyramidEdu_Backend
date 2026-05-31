@@ -129,7 +129,17 @@ function resetUserPassword(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const targetUserId = parseInt(req.params.id);
-            const result = yield users_service_1.default.resetPassword(targetUserId);
+            // Allow admins to provide a specific password in the request body to set for the user.
+            const providedPassword = (req.body && typeof req.body.password === 'string' && req.body.password.length > 0)
+                ? req.body.password
+                : undefined;
+            let result;
+            if (providedPassword) {
+                result = yield users_service_1.default.setPasswordForUser(targetUserId, providedPassword);
+            }
+            else {
+                result = yield users_service_1.default.resetPassword(targetUserId);
+            }
             res.status(200).json({
                 success: true,
                 message: 'Password reset successfully',
