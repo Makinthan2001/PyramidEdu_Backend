@@ -494,7 +494,7 @@ export class SubjectsService {
       },
     });
 
-    if (!subject || !subject.teacher) {
+    if (!subject?.teacher) {
       return null;
     }
 
@@ -540,6 +540,10 @@ export class SubjectsService {
       throw new AppError('Subject not found.', 404);
     }
 
+    const streamIds = dto.streamIds === undefined
+      ? undefined
+      : await validateStreamIds(dto.streamIds);
+
     const updated = await prisma.$transaction(async (tx) => {
       const data: Prisma.SubjectUpdateInput = {};
 
@@ -563,7 +567,7 @@ export class SubjectsService {
         data.isActive = dto.isActive;
       }
 
-      const subject = await tx.subject.update({
+      await tx.subject.update({
         where: { id: subjectId },
         data,
         include: {
@@ -584,39 +588,7 @@ export class SubjectsService {
         },
       });
 
-      if (dto.feePerMonth !== undefined && decimalToNumber(existing.feePerMonth) !== dto.feePerMonth) {
-        await tx.auditLog.create({
-          data: {
-            action: 'SUBJECT_FEE_UPDATED',
-            userId: actor?.userId ?? null,
-            resourceType: 'SUBJECT',
-            resourceId: subject.id,
-            details: JSON.stringify({
-              previousFeePerMonth: existing.feePerMonth.toString(),
-              newFeePerMonth: subject.feePerMonth.toString(),
-            }),
-          },
-        });
-      }
-
-      if (dto.isActive !== undefined && existing.isActive !== dto.isActive) {
-        await tx.auditLog.create({
-          data: {
-            action: dto.isActive ? 'SUBJECT_ACTIVATED' : 'SUBJECT_DEACTIVATED',
-            userId: actor?.userId ?? null,
-            resourceType: 'SUBJECT',
-            resourceId: subject.id,
-            details: JSON.stringify({
-              previousIsActive: existing.isActive,
-              newIsActive: dto.isActive,
-            }),
-          },
-        });
-      }
-
-      if (dto.streamIds !== undefined) {
-        const streamIds = await validateStreamIds(dto.streamIds);
-
+      if (streamIds !== undefined) {
         await tx.subjectStream.deleteMany({
           where: { subjectId },
         });
@@ -655,6 +627,50 @@ export class SubjectsService {
 
       return refreshed;
     });
+
+    if (dto.feePerMonth !== undefined && decimalToNumber(existing.feePerMonth) !== dto.feePerMonth) {
+      await prisma.auditLog.create({
+        data: {
+          action: 'SUBJECT_FEE_UPDATED',
+          userId: actor?.userId ?? null,
+          resourceType: 'SUBJECT',
+          resourceId: updated.id,
+          details: JSON.stringify({
+            previousFeePerMonth: existing.feePerMonth.toString(),
+            newFeePerMonth: updated.feePerMonth.toString(),
+          }),
+        },
+      });
+    }
+
+    if (dto.isActive !== undefined && existing.isActive !== dto.isActive) {
+      await prisma.auditLog.create({
+        data: {
+          action: dto.isActive ? 'SUBJECT_ACTIVATED' : 'SUBJECT_DEACTIVATED',
+          userId: actor?.userId ?? null,
+          resourceType: 'SUBJECT',
+          resourceId: updated.id,
+          details: JSON.stringify({
+            previousIsActive: existing.isActive,
+            newIsActive: dto.isActive,
+          }),
+        },
+      });
+    }
+
+    if (streamIds !== undefined) {
+      await prisma.auditLog.create({
+        data: {
+          action: 'SUBJECT_STREAMS_UPDATED',
+          userId: actor?.userId ?? null,
+          resourceType: 'SUBJECT',
+          resourceId: updated.id,
+          details: JSON.stringify({
+            streamIds,
+          }),
+        },
+      });
+    }
 
     return buildSubjectResponse(updated, 0);
   }
@@ -719,7 +735,7 @@ export class SubjectsService {
 
   static async assignTeacher(subjectIdentifier: string | number, teacherId: number, actor?: { userId?: number }) {
     // Resolve subject by ID or code
-    const subject = typeof subjectIdentifier === 'string' && isNaN(Number(subjectIdentifier))
+    const subject = typeof subjectIdentifier === 'string' && Number.isNaN(Number(subjectIdentifier))
       ? await prisma.subject.findUnique({ where: { code: subjectIdentifier }, select: { id: true } })
       : await prisma.subject.findUnique({ where: { id: Number(subjectIdentifier) }, select: { id: true } });
     if (!subject) {

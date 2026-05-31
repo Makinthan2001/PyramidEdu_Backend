@@ -2,7 +2,7 @@ import { UserRole, Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.config';
 import { hashPassword, generateTemporaryPassword, comparePasswords } from '../../../utils/password.util';
 import { AppError } from '../../../utils/AppError';
-import type { CreateUserDto, UpdateUserDto } from '../dto';
+import type { UpdateUserDto } from '../dto';
 
 export interface UsersQueryParams {
   page?: number;
@@ -35,6 +35,7 @@ const userListSelect = {
       indexNumber: true,
       phone: true,
       address: true,
+      isApproved: true,
     },
   },
   teacher: {
@@ -204,7 +205,9 @@ export class UsersService {
     if (!user.student) throw new AppError('Student profile not found.', 404);
 
     if ((user.student as any).isApproved) {
-      throw new AppError('Student is already approved.', 400);
+      const currentUser = await prisma.user.findUnique({ where: { id: userId }, select: userListSelect });
+      if (!currentUser) throw new AppError('Error retrieving updated user.', 500);
+      return formatUserListItem(currentUser);
     }
 
     // Cast data to any for isApproved update in case Prisma client types are not yet generated
@@ -450,8 +453,8 @@ export class UsersService {
     if (!user) throw new AppError('User not found.', 404);
 
     // Normalize password (trim) before hashing to match createUser behavior
-    const normalized = typeof newPassword === 'string' ? newPassword.trim() : newPassword;
-    const hashed = await hashPassword(normalized as string);
+    const normalized = newPassword.trim();
+    const hashed = await hashPassword(normalized);
 
     const updated = await prisma.user.update({
       where: { id: targetUserId },

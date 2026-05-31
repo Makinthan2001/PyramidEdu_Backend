@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createStreamSchema = exports.assignTeacherSchema = exports.enrollStudentSchema = exports.updateSubjectSchema = exports.createSubjectSchema = void 0;
+var create_subject_dto_1 = require("../dto/create-subject.dto");
+Object.defineProperty(exports, "createSubjectSchema", { enumerable: true, get: function () { return create_subject_dto_1.createSubjectSchema; } });
+var update_subject_dto_1 = require("../dto/update-subject.dto");
+Object.defineProperty(exports, "updateSubjectSchema", { enumerable: true, get: function () { return update_subject_dto_1.updateSubjectSchema; } });
+var enroll_student_dto_1 = require("../dto/enroll-student.dto");
+Object.defineProperty(exports, "enrollStudentSchema", { enumerable: true, get: function () { return enroll_student_dto_1.enrollStudentSchema; } });
+var assign_teacher_dto_1 = require("../dto/assign-teacher.dto");
+Object.defineProperty(exports, "assignTeacherSchema", { enumerable: true, get: function () { return assign_teacher_dto_1.assignTeacherSchema; } });
+var create_stream_dto_1 = require("../dto/create-stream.dto");
+Object.defineProperty(exports, "createStreamSchema", { enumerable: true, get: function () { return create_stream_dto_1.createStreamSchema; } });
+exports.default = {};
