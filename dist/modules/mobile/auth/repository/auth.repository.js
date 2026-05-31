@@ -8,7 +8,7 @@ const prisma_config_1 = __importDefault(require("../../../../config/prisma.confi
 exports.MobileAuthRepository = {
     findStudentByEmail(email) {
         return prisma_config_1.default.user.findUnique({
-            where: { email },
+            where: { email: email.toLowerCase() },
             include: { student: true },
         });
     },

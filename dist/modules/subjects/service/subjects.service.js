@@ -468,7 +468,7 @@ class SubjectsService {
                     },
                 },
             });
-            if (!subject || !subject.teacher) {
+            if (!(subject === null || subject === void 0 ? void 0 : subject.teacher)) {
                 return null;
             }
             return {
@@ -503,14 +503,17 @@ class SubjectsService {
     }
     static updateSubject(subjectId, dto, actor) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b, _c;
             const existing = yield prisma_config_1.default.subject.findUnique({
                 where: { id: subjectId },
             });
             if (!existing) {
                 throw new AppError_1.AppError('Subject not found.', 404);
             }
+            const streamIds = dto.streamIds === undefined
+                ? undefined
+                : yield validateStreamIds(dto.streamIds);
             const updated = yield prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
-                var _a, _b;
                 const data = {};
                 if (dto.name !== undefined) {
                     data.name = dto.name;
@@ -527,7 +530,7 @@ class SubjectsService {
                 if (dto.isActive !== undefined) {
                     data.isActive = dto.isActive;
                 }
-                const subject = yield tx.subject.update({
+                yield tx.subject.update({
                     where: { id: subjectId },
                     data,
                     include: {
@@ -547,36 +550,7 @@ class SubjectsService {
                         },
                     },
                 });
-                if (dto.feePerMonth !== undefined && decimalToNumber(existing.feePerMonth) !== dto.feePerMonth) {
-                    yield tx.auditLog.create({
-                        data: {
-                            action: 'SUBJECT_FEE_UPDATED',
-                            userId: (_a = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _a !== void 0 ? _a : null,
-                            resourceType: 'SUBJECT',
-                            resourceId: subject.id,
-                            details: JSON.stringify({
-                                previousFeePerMonth: existing.feePerMonth.toString(),
-                                newFeePerMonth: subject.feePerMonth.toString(),
-                            }),
-                        },
-                    });
-                }
-                if (dto.isActive !== undefined && existing.isActive !== dto.isActive) {
-                    yield tx.auditLog.create({
-                        data: {
-                            action: dto.isActive ? 'SUBJECT_ACTIVATED' : 'SUBJECT_DEACTIVATED',
-                            userId: (_b = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _b !== void 0 ? _b : null,
-                            resourceType: 'SUBJECT',
-                            resourceId: subject.id,
-                            details: JSON.stringify({
-                                previousIsActive: existing.isActive,
-                                newIsActive: dto.isActive,
-                            }),
-                        },
-                    });
-                }
-                if (dto.streamIds !== undefined) {
-                    const streamIds = yield validateStreamIds(dto.streamIds);
+                if (streamIds !== undefined) {
                     yield tx.subjectStream.deleteMany({
                         where: { subjectId },
                     });
@@ -611,6 +585,47 @@ class SubjectsService {
                 }
                 return refreshed;
             }));
+            if (dto.feePerMonth !== undefined && decimalToNumber(existing.feePerMonth) !== dto.feePerMonth) {
+                yield prisma_config_1.default.auditLog.create({
+                    data: {
+                        action: 'SUBJECT_FEE_UPDATED',
+                        userId: (_a = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _a !== void 0 ? _a : null,
+                        resourceType: 'SUBJECT',
+                        resourceId: updated.id,
+                        details: JSON.stringify({
+                            previousFeePerMonth: existing.feePerMonth.toString(),
+                            newFeePerMonth: updated.feePerMonth.toString(),
+                        }),
+                    },
+                });
+            }
+            if (dto.isActive !== undefined && existing.isActive !== dto.isActive) {
+                yield prisma_config_1.default.auditLog.create({
+                    data: {
+                        action: dto.isActive ? 'SUBJECT_ACTIVATED' : 'SUBJECT_DEACTIVATED',
+                        userId: (_b = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _b !== void 0 ? _b : null,
+                        resourceType: 'SUBJECT',
+                        resourceId: updated.id,
+                        details: JSON.stringify({
+                            previousIsActive: existing.isActive,
+                            newIsActive: dto.isActive,
+                        }),
+                    },
+                });
+            }
+            if (streamIds !== undefined) {
+                yield prisma_config_1.default.auditLog.create({
+                    data: {
+                        action: 'SUBJECT_STREAMS_UPDATED',
+                        userId: (_c = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _c !== void 0 ? _c : null,
+                        resourceType: 'SUBJECT',
+                        resourceId: updated.id,
+                        details: JSON.stringify({
+                            streamIds,
+                        }),
+                    },
+                });
+            }
             return buildSubjectResponse(updated, 0);
         });
     }
@@ -672,7 +687,7 @@ class SubjectsService {
         return __awaiter(this, void 0, void 0, function* () {
             var _a;
             // Resolve subject by ID or code
-            const subject = typeof subjectIdentifier === 'string' && isNaN(Number(subjectIdentifier))
+            const subject = typeof subjectIdentifier === 'string' && Number.isNaN(Number(subjectIdentifier))
                 ? yield prisma_config_1.default.subject.findUnique({ where: { code: subjectIdentifier }, select: { id: true } })
                 : yield prisma_config_1.default.subject.findUnique({ where: { id: Number(subjectIdentifier) }, select: { id: true } });
             if (!subject) {

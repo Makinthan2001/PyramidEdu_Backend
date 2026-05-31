@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { UserRole } from '@prisma/client';
 import { AppError } from '../../../utils/AppError';
+import prisma from '../../../config/prisma.config';
 
 /**
  * Users Guards - Role-based access control for user operations
@@ -78,6 +79,30 @@ export function canManageUsers(req: Request, res: Response, next: NextFunction) 
 
   // MANAGER can manage students
   if (userRole === UserRole.MANAGER) {
+    // If this request targets a specific user (has :id), ensure the target is a STUDENT
+    const targetIdRaw = req.params.id;
+    if (targetIdRaw) {
+      const targetId = parseInt(targetIdRaw as string);
+      if (!Number.isNaN(targetId)) {
+        prisma.user.findUnique({ where: { id: targetId }, select: { role: true } })
+          .then((target) => {
+            if (!target) {
+              return next(new AppError('Target user not found.', 404));
+            }
+            if (target.role !== UserRole.STUDENT) {
+              return next(new AppError('Managers can only manage student accounts.', 403));
+            }
+            return next();
+          })
+          .catch((err) => {
+            console.error('Error fetching target user for permission check:', err);
+            return next(new AppError('Unable to verify permissions at this time.', 500));
+          });
+        return;
+      }
+    }
+
+    // For non-targeted requests (e.g., listing), allow manager to proceed (service-level filters will apply)
     return next();
   }
 

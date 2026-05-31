@@ -30,8 +30,8 @@ const userListSelect = {
             lastName: true,
             indexNumber: true,
             phone: true,
-            isApproved: true,
             address: true,
+            isApproved: true,
         },
     },
     teacher: {
@@ -187,7 +187,10 @@ class UsersService {
             if (!user.student)
                 throw new AppError_1.AppError('Student profile not found.', 404);
             if (user.student.isApproved) {
-                throw new AppError_1.AppError('Student is already approved.', 400);
+                const currentUser = yield prisma_config_1.default.user.findUnique({ where: { id: userId }, select: userListSelect });
+                if (!currentUser)
+                    throw new AppError_1.AppError('Error retrieving updated user.', 500);
+                return formatUserListItem(currentUser);
             }
             // Cast data to any for isApproved update in case Prisma client types are not yet generated
             const updatedStudent = yield prisma_config_1.default.student.update({ where: { userId }, data: { isApproved: true } });
@@ -235,7 +238,6 @@ class UsersService {
             if (existingUser) {
                 throw new AppError_1.AppError('Email already in use.', 409);
             }
-            // Determine password: use provided or generate temporary one
             const providedPassword = typeof dto.password === 'string' && dto.password.trim().length > 0
                 ? dto.password.trim()
                 : (0, password_util_1.generateTemporaryPassword)(12);
@@ -249,82 +251,93 @@ class UsersService {
                 isActive: true,
                 forcePasswordChange: true,
             };
-            // Create the base user record
-            const user = yield prisma_config_1.default.user.create({ data: userData });
-            // Create role-specific record (unchanged) ... (will follow unchanged code after this point)
-            // Create role-specific record
+            // Create user and role-specific record inside a transaction so partial creates don't occur
+            let user;
             try {
-                switch (role) {
-                    case client_1.UserRole.MANAGER:
-                        yield prisma_config_1.default.manager.create({
-                            data: {
-                                userId: user.id,
-                                firstName: dto.firstName,
-                                lastName: dto.lastName,
-                                nicNumber: dto.nicNumber,
-                                gender: dto.gender,
-                                address: dto.address,
-                                phone: dto.phoneNumber,
-                                salary: dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null,
-                                fullName: `${dto.firstName} ${dto.lastName}`.trim(),
-                            },
-                        });
-                        break;
-                    case client_1.UserRole.TEACHER:
-                        yield prisma_config_1.default.teacher.create({
-                            data: {
-                                userId: user.id,
-                                firstName: dto.firstName,
-                                lastName: dto.lastName,
-                                nicNumber: dto.nicNumber,
-                                gender: dto.gender,
-                                address: dto.address,
-                                phone: dto.phoneNumber,
-                                specialization: dto.subject,
-                                salary: dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null,
-                            },
-                        });
-                        break;
-                    case client_1.UserRole.STUDENT:
-                        yield prisma_config_1.default.student.create({
-                            data: {
-                                userId: user.id,
-                                firstName: dto.firstName,
-                                lastName: dto.lastName,
-                                indexNumber: dto.indexNumber,
-                                dateOfBirth: dto.dateOfBirth,
-                                phone: dto.phoneNumber,
-                                address: dto.address,
-                                // parentId will need to be set separately if parent exists
-                            },
-                        });
-                        break;
-                    case client_1.UserRole.SUPPORT_STAFF:
-                        yield prisma_config_1.default.supportStaff.create({
-                            data: {
-                                userId: user.id,
-                                firstName: dto.firstName,
-                                lastName: dto.lastName,
-                                nicNumber: dto.nicNumber,
-                                gender: dto.gender,
-                                address: dto.address,
-                                phone: dto.phoneNumber,
-                                fullName: `${dto.firstName} ${dto.lastName}`.trim(),
-                                roleType: dto.roleType,
-                                salary: dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null,
-                            },
-                        });
-                        break;
-                    case client_1.UserRole.ADMIN:
-                        // ADMIN role doesn't have a separate table
-                        break;
-                    default:
-                        console.warn(`Unknown role: ${role}`);
-                }
+                yield prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+                    user = yield tx.user.create({
+                        data: userData,
+                        select: {
+                            id: true,
+                            email: true,
+                            role: true,
+                            isActive: true,
+                            createdAt: true,
+                        },
+                    });
+                    // Create role-specific record using transactional client
+                    switch (role) {
+                        case client_1.UserRole.MANAGER:
+                            yield tx.manager.create({
+                                data: {
+                                    userId: user.id,
+                                    firstName: dto.firstName,
+                                    lastName: dto.lastName,
+                                    nicNumber: dto.nicNumber,
+                                    gender: dto.gender,
+                                    address: dto.address,
+                                    phone: dto.phoneNumber,
+                                    salary: dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null,
+                                    fullName: `${dto.firstName} ${dto.lastName}`.trim(),
+                                },
+                            });
+                            break;
+                        case client_1.UserRole.TEACHER:
+                            yield tx.teacher.create({
+                                data: {
+                                    userId: user.id,
+                                    firstName: dto.firstName,
+                                    lastName: dto.lastName,
+                                    nicNumber: dto.nicNumber,
+                                    gender: dto.gender,
+                                    address: dto.address,
+                                    phone: dto.phoneNumber,
+                                    specialization: dto.subject,
+                                    salary: dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null,
+                                },
+                            });
+                            break;
+                        case client_1.UserRole.STUDENT:
+                            yield tx.student.create({
+                                data: {
+                                    userId: user.id,
+                                    firstName: dto.firstName,
+                                    lastName: dto.lastName,
+                                    indexNumber: dto.indexNumber,
+                                    dateOfBirth: dto.dateOfBirth,
+                                    phone: dto.phoneNumber,
+                                    address: dto.address,
+                                    // parentId will need to be set separately if parent exists
+                                },
+                            });
+                            break;
+                        case client_1.UserRole.SUPPORT_STAFF:
+                            yield tx.supportStaff.create({
+                                data: {
+                                    userId: user.id,
+                                    firstName: dto.firstName,
+                                    lastName: dto.lastName,
+                                    nicNumber: dto.nicNumber,
+                                    gender: dto.gender,
+                                    address: dto.address,
+                                    phone: dto.phoneNumber,
+                                    fullName: `${dto.firstName} ${dto.lastName}`.trim(),
+                                    roleType: dto.roleType,
+                                    salary: dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null,
+                                },
+                            });
+                            break;
+                        case client_1.UserRole.ADMIN:
+                            // ADMIN role doesn't have a separate table
+                            break;
+                        default:
+                            console.warn(`Unknown role: ${role}`);
+                    }
+                }));
             }
             catch (error) {
-                console.error('Error creating role-specific record:', error);
-                // Continue - user is created even if role-specific record fails
+                console.error('Error during transactional user creation:', error);
+                throw new AppError_1.AppError('Failed to create user account. Please try again.', 500);
             }
             // Log audit entry
             yield prisma_config_1.default.auditLog.create({
@@ -408,7 +421,7 @@ class UsersService {
             if (!user)
                 throw new AppError_1.AppError('User not found.', 404);
             // Normalize password (trim) before hashing to match createUser behavior
-            const normalized = typeof newPassword === 'string' ? newPassword.trim() : newPassword;
+            const normalized = newPassword.trim();
             const hashed = yield (0, password_util_1.hashPassword)(normalized);
             const updated = yield prisma_config_1.default.user.update({
                 where: { id: targetUserId },

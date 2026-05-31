@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isUserOwner = isUserOwner;
 exports.canAccessUser = canAccessUser;
@@ -7,6 +10,7 @@ exports.canCreateRole = canCreateRole;
 exports.preventSelfDeactivation = preventSelfDeactivation;
 const client_1 = require("@prisma/client");
 const AppError_1 = require("../../../utils/AppError");
+const prisma_config_1 = __importDefault(require("../../../config/prisma.config"));
 /**
  * Users Guards - Role-based access control for user operations
  */
@@ -63,6 +67,29 @@ function canManageUsers(req, res, next) {
     }
     // MANAGER can manage students
     if (userRole === client_1.UserRole.MANAGER) {
+        // If this request targets a specific user (has :id), ensure the target is a STUDENT
+        const targetIdRaw = req.params.id;
+        if (targetIdRaw) {
+            const targetId = parseInt(targetIdRaw);
+            if (!Number.isNaN(targetId)) {
+                prisma_config_1.default.user.findUnique({ where: { id: targetId }, select: { role: true } })
+                    .then((target) => {
+                    if (!target) {
+                        return next(new AppError_1.AppError('Target user not found.', 404));
+                    }
+                    if (target.role !== client_1.UserRole.STUDENT) {
+                        return next(new AppError_1.AppError('Managers can only manage student accounts.', 403));
+                    }
+                    return next();
+                })
+                    .catch((err) => {
+                    console.error('Error fetching target user for permission check:', err);
+                    return next(new AppError_1.AppError('Unable to verify permissions at this time.', 500));
+                });
+                return;
+            }
+        }
+        // For non-targeted requests (e.g., listing), allow manager to proceed (service-level filters will apply)
         return next();
     }
     // Others cannot manage users

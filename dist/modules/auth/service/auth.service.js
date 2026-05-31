@@ -183,7 +183,8 @@ function changePassword(userId, dto) {
 }
 function forgotPassword(dto) {
     return __awaiter(this, void 0, void 0, function* () {
-        const user = yield prisma_config_1.default.user.findUnique({ where: { email: dto.email } });
+        const email = dto.email.trim().toLowerCase();
+        const user = yield prisma_config_1.default.user.findUnique({ where: { email } });
         if (!user || !user.isActive) {
             return null;
         }

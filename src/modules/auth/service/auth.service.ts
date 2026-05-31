@@ -198,7 +198,8 @@ export async function changePassword(userId: number, dto: ChangePasswordDto): Pr
 }
 
 export async function forgotPassword(dto: ForgotPasswordDto): Promise<string | null> {
-  const user = await prisma.user.findUnique({ where: { email: dto.email } });
+  const email = dto.email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || !user.isActive) {
     return null;

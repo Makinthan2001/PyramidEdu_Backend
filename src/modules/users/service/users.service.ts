@@ -2,7 +2,7 @@ import { UserRole, Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.config';
 import { hashPassword, generateTemporaryPassword, comparePasswords } from '../../../utils/password.util';
 import { AppError } from '../../../utils/AppError';
-import type { CreateUserDto, UpdateUserDto } from '../dto';
+import type { UpdateUserDto } from '../dto';
 
 export interface UsersQueryParams {
   page?: number;
@@ -34,8 +34,8 @@ const userListSelect = {
       lastName: true,
       indexNumber: true,
       phone: true,
-      isApproved: true,
       address: true,
+      isApproved: true,
     },
   },
   teacher: {
@@ -205,7 +205,9 @@ export class UsersService {
     if (!user.student) throw new AppError('Student profile not found.', 404);
 
     if ((user.student as any).isApproved) {
-      throw new AppError('Student is already approved.', 400);
+      const currentUser = await prisma.user.findUnique({ where: { id: userId }, select: userListSelect });
+      if (!currentUser) throw new AppError('Error retrieving updated user.', 500);
+      return formatUserListItem(currentUser);
     }
 
     // Cast data to any for isApproved update in case Prisma client types are not yet generated
@@ -269,92 +271,98 @@ export class UsersService {
       forcePasswordChange: true,
     };
 
-    // Create the base user record
-    const user = await prisma.user.create({ data: userData });
-
-
-
-    // Create role-specific record (unchanged) ... (will follow unchanged code after this point)
-
-
-
-    // Create role-specific record
+    // Create user and role-specific record inside a transaction so partial creates don't occur
+    let user: any;
     try {
-      switch (role) {
-        case UserRole.MANAGER:
-          await prisma.manager.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              nicNumber: dto.nicNumber,
-              gender: dto.gender,
-              address: dto.address,
-              phone: dto.phoneNumber,
-              salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
-              fullName: `${dto.firstName} ${dto.lastName}`.trim(),
-            } as any,
-          });
-          break;
+      await prisma.$transaction(async (tx) => {
+        user = await tx.user.create({
+          data: userData,
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
 
-        case UserRole.TEACHER:
-          await prisma.teacher.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              nicNumber: dto.nicNumber,
-              gender: dto.gender,
-              address: dto.address,
-              phone: dto.phoneNumber,
-              specialization: dto.subject,
-              salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
-            },
-          });
-          break;
+        // Create role-specific record using transactional client
+        switch (role) {
+          case UserRole.MANAGER:
+            await tx.manager.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                nicNumber: dto.nicNumber,
+                gender: dto.gender,
+                address: dto.address,
+                phone: dto.phoneNumber,
+                salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
+                fullName: `${dto.firstName} ${dto.lastName}`.trim(),
+              } as any,
+            });
+            break;
 
-        case UserRole.STUDENT:
-          await prisma.student.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              indexNumber: dto.indexNumber,
-              dateOfBirth: dto.dateOfBirth,
-              phone: dto.phoneNumber,
-              address: dto.address,
-              // parentId will need to be set separately if parent exists
-            },
-          });
-          break;
+          case UserRole.TEACHER:
+            await tx.teacher.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                nicNumber: dto.nicNumber,
+                gender: dto.gender,
+                address: dto.address,
+                phone: dto.phoneNumber,
+                specialization: dto.subject,
+                salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
+              },
+            });
+            break;
 
-        case UserRole.SUPPORT_STAFF:
-          await prisma.supportStaff.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              nicNumber: dto.nicNumber,
-              gender: dto.gender,
-              address: dto.address,
-              phone: dto.phoneNumber,
-              fullName: `${dto.firstName} ${dto.lastName}`.trim(),
-              roleType: dto.roleType,
-              salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
-            },
-          });
-          break;
+          case UserRole.STUDENT:
+            await tx.student.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                indexNumber: dto.indexNumber,
+                dateOfBirth: dto.dateOfBirth,
+                phone: dto.phoneNumber,
+                address: dto.address,
+                // parentId will need to be set separately if parent exists
+              },
+            });
+            break;
 
-        case UserRole.ADMIN:
-          // ADMIN role doesn't have a separate table
-          break;
+          case UserRole.SUPPORT_STAFF:
+            await tx.supportStaff.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                nicNumber: dto.nicNumber,
+                gender: dto.gender,
+                address: dto.address,
+                phone: dto.phoneNumber,
+                fullName: `${dto.firstName} ${dto.lastName}`.trim(),
+                roleType: dto.roleType,
+                salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
+              },
+            });
+            break;
 
-        default:
-          console.warn(`Unknown role: ${role}`);
-      }
+          case UserRole.ADMIN:
+            // ADMIN role doesn't have a separate table
+            break;
+
+          default:
+            console.warn(`Unknown role: ${role}`);
+        }
+      });
     } catch (error) {
-      console.error('Error creating role-specific record:', error);
-      // Continue - user is created even if role-specific record fails
+      console.error('Error during transactional user creation:', error);
+      throw new AppError('Failed to create user account. Please try again.', 500);
     }
 
     // Log audit entry
@@ -445,8 +453,8 @@ export class UsersService {
     if (!user) throw new AppError('User not found.', 404);
 
     // Normalize password (trim) before hashing to match createUser behavior
-    const normalized = typeof newPassword === 'string' ? newPassword.trim() : newPassword;
-    const hashed = await hashPassword(normalized as string);
+    const normalized = newPassword.trim();
+    const hashed = await hashPassword(normalized);
 
     const updated = await prisma.user.update({
       where: { id: targetUserId },
