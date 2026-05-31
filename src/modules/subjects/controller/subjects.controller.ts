@@ -86,12 +86,12 @@ export async function getTeachersForSubject(req: Request, res: Response, next: N
       return;
     }
 
-    const teacher = await SubjectsService.getSubjectTeacher(subjectId);
+    const teachers = await SubjectsService.getSubjectTeachers(subjectId);
 
     res.status(200).json({
       success: true,
       message: 'Teachers retrieved successfully',
-      data: teacher ? [teacher] : [],
+      data: teachers,
     });
   } catch (error) {
     next(error);

@@ -35,7 +35,6 @@ const userListSelect = {
       indexNumber: true,
       phone: true,
       address: true,
-      isApproved: true,
     },
   },
   teacher: {
@@ -81,7 +80,7 @@ function formatUserListItem(user: any) {
     response.lastName = user.student.lastName;
     response.indexNumber = user.student.indexNumber;
     response.phone = user.student.phone;
-    response.isApproved = user.student.isApproved ?? false;
+    response.isApproved = Boolean((user.student as any).isApproved);
     response.address = user.student.address;
   }
 
