@@ -2,7 +2,7 @@ import { UserRole, Prisma } from '@prisma/client';
 import prisma from '../../../config/prisma.config';
 import { hashPassword, generateTemporaryPassword, comparePasswords } from '../../../utils/password.util';
 import { AppError } from '../../../utils/AppError';
-import type { CreateUserDto, UpdateUserDto } from '../dto';
+import type { UpdateUserDto } from '../dto';
 
 export interface UsersQueryParams {
   page?: number;
@@ -35,6 +35,7 @@ const userListSelect = {
       indexNumber: true,
       phone: true,
       address: true,
+      isApproved: true,
     },
   },
   teacher: {
@@ -128,25 +129,12 @@ export class UsersService {
    */
   static async getUsers(params: UsersQueryParams): Promise<PaginatedUsers> {
     const page = params.page || 1;
-    const limit = params.limit || 10;
+    const limit = params.limit || 1000;
     const skip = (page - 1) * limit;
 
     const where: any = {};
 
-    // Role-based access control
-    if (params.userRole === UserRole.MANAGER) {
-      // Managers are allowed to list users, but by default only see STUDENT users
-      // If an explicit role filter is provided (e.g., role=teachers), honor it below.
-      if (!params.role) {
-        where.role = UserRole.STUDENT;
-      }
-    } else if (params.userRole !== UserRole.ADMIN) {
-      // Non-admin, non-manager users cannot list users
-      throw new AppError(
-        'You do not have permission to list users.',
-        403
-      );
-    }
+
 
     // Filter by role if specified
     if (params.role && params.role !== 'all') {
@@ -217,7 +205,9 @@ export class UsersService {
     if (!user.student) throw new AppError('Student profile not found.', 404);
 
     if ((user.student as any).isApproved) {
-      throw new AppError('Student is already approved.', 400);
+      const currentUser = await prisma.user.findUnique({ where: { id: userId }, select: userListSelect });
+      if (!currentUser) throw new AppError('Error retrieving updated user.', 500);
+      return formatUserListItem(currentUser);
     }
 
     // Cast data to any for isApproved update in case Prisma client types are not yet generated
@@ -260,22 +250,21 @@ export class UsersService {
   static async createUser(dto: any, role: UserRole) {
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase() },
+      where: { email: dto.email.trim().toLowerCase() },
     });
 
     if (existingUser) {
       throw new AppError('Email already in use.', 409);
     }
 
-    // Generate a cryptographically secure temporary password (backend only)
-    const temporaryPassword = role === UserRole.SUPPORT_STAFF ? undefined : generateTemporaryPassword(12);
-
-    // Hash temporary password before saving
-    const hashedPassword = await hashPassword(temporaryPassword ?? generateTemporaryPassword(12));
-
-    // Prepare user data - only use fields that exist in User table
+    const providedPassword = typeof dto.password === 'string' && dto.password.trim().length > 0
+      ? dto.password.trim()
+      : generateTemporaryPassword(12);
+    // Hash the password before saving
+    const hashedPassword = await hashPassword(providedPassword);
+    // Prepare user data
     const userData: any = {
-      email: dto.email.toLowerCase(),
+      email: dto.email.trim().toLowerCase(),
       passwordHash: hashedPassword,
       role,
       isActive: true,
@@ -387,8 +376,8 @@ export class UsersService {
       },
     });
 
-    // Return user and temporary password (temporaryPassword must be communicated securely by the admin)
-    return { user, temporaryPassword };
+    // Return created user and temporary password for frontend use
+    return { user, temporaryPassword: providedPassword };
   }
 
   /**
@@ -453,6 +442,37 @@ export class UsersService {
     });
 
     return { user: updated, temporaryPassword };
+  }
+
+  /**
+   * Admin sets a specific password for a user (used for fixing mismatches).
+   * Returns the updated user and echoes back the submitted password so caller can display it.
+   */
+  static async setPasswordForUser(targetUserId: number, newPassword: string) {
+    const user = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!user) throw new AppError('User not found.', 404);
+
+    // Normalize password (trim) before hashing to match createUser behavior
+    const normalized = newPassword.trim();
+    const hashed = await hashPassword(normalized);
+
+    const updated = await prisma.user.update({
+      where: { id: targetUserId },
+      data: { passwordHash: hashed, forcePasswordChange: true },
+      select: { id: true, email: true, role: true, isActive: true, createdAt: true },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'PASSWORD_SET_BY_ADMIN',
+        userId: targetUserId,
+        resourceType: 'USER',
+        resourceId: targetUserId,
+        details: 'Admin set user password',
+      },
+    });
+
+    return { user: updated, temporaryPassword: newPassword };
   }
 
   /**
