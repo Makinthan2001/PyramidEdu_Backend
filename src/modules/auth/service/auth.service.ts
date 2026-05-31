@@ -37,7 +37,8 @@ function toSafeUser(user: {
 }
 
 export async function registerUser(dto: RegisterDto): Promise<SafeUser> {
-  const existing = await prisma.user.findUnique({ where: { email: dto.email } });
+  const email = dto.email.trim().toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     throw new AppError('An account with this email already exists.', 409);
   }
@@ -46,7 +47,7 @@ export async function registerUser(dto: RegisterDto): Promise<SafeUser> {
 
   const user = await prisma.user.create({
     data: {
-      email: dto.email,
+      email,
       passwordHash,
       role: dto.role,
     },
@@ -56,7 +57,8 @@ export async function registerUser(dto: RegisterDto): Promise<SafeUser> {
 }
 
 export async function loginUser(dto: LoginDto): Promise<LoginResult> {
-  const user = await prisma.user.findUnique({ where: { email: dto.email } });
+  const email = dto.email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
     throw new AppError('Invalid email or password.', 401);
   }
@@ -68,6 +70,15 @@ export async function loginUser(dto: LoginDto): Promise<LoginResult> {
   const isMatch = await comparePasswords(dto.password, user.passwordHash);
   if (!isMatch) {
     throw new AppError('Invalid email or password.', 401);
+  }
+
+  // If user is a student, ensure their student profile is approved
+  if (user.role === UserRole.STUDENT) {
+    const student = await prisma.student.findUnique({ where: { userId: user.id } });
+    // Prisma client types may be out-of-sync with schema during migrations; cast to any for safety
+    if (!student || (student as any).isApproved === false) {
+      throw new AppError('Your account is pending approval. Please contact the administration.', 403);
+    }
   }
 
   const tokenFamily = generateTokenFamily();
@@ -180,7 +191,8 @@ export async function changePassword(userId: number, dto: ChangePasswordDto): Pr
 }
 
 export async function forgotPassword(dto: ForgotPasswordDto): Promise<string | null> {
-  const user = await prisma.user.findUnique({ where: { email: dto.email } });
+  const email = dto.email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || !user.isActive) {
     return null;

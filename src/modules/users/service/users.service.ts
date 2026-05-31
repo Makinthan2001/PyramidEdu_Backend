@@ -80,6 +80,7 @@ function formatUserListItem(user: any) {
     response.lastName = user.student.lastName;
     response.indexNumber = user.student.indexNumber;
     response.phone = user.student.phone;
+    response.isApproved = user.student.isApproved ?? false;
     response.address = user.student.address;
   }
 
@@ -109,6 +110,14 @@ function formatUserListItem(user: any) {
 
   return response;
 }
+
+/**
+ * Users Service - Manages user account operations
+ */
+
+/**
+ * Users Service - Manages user account operations
+ */
 
 /**
  * Users Service - Manages user account operations
@@ -199,6 +208,38 @@ export class UsersService {
   }
 
   /**
+   * Approve a student profile (set isApproved = true)
+   */
+  static async approveStudent(userId: number) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { student: true } });
+    if (!user) throw new AppError('User not found.', 404);
+    if (user.role !== UserRole.STUDENT) throw new AppError('Target user is not a student.', 400);
+    if (!user.student) throw new AppError('Student profile not found.', 404);
+
+    if ((user.student as any).isApproved) {
+      throw new AppError('Student is already approved.', 400);
+    }
+
+    // Cast data to any for isApproved update in case Prisma client types are not yet generated
+    const updatedStudent = await prisma.student.update({ where: { userId }, data: { isApproved: true } as any });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'STUDENT_APPROVED',
+        userId,
+        resourceType: 'STUDENT',
+        resourceId: updatedStudent.id,
+        details: `Student approved (userId=${userId})`,
+      },
+    });
+
+    // Return updated user summary
+    const updatedUser = await prisma.user.findUnique({ where: { id: userId }, select: userListSelect });
+    if (!updatedUser) throw new AppError('Error retrieving updated user.', 500);
+    return formatUserListItem(updatedUser);
+  }
+
+  /**
    * Get user by email
    */
   static async getUserByEmail(email: string) {
@@ -241,94 +282,98 @@ export class UsersService {
       forcePasswordChange: true,
     };
 
-    const user = await prisma.user.create({
-      data: userData,
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
-
-    // Create role-specific record
+    // Create user and role-specific record inside a transaction so partial creates don't occur
+    let user: any;
     try {
-      switch (role) {
-        case UserRole.MANAGER:
-          await prisma.manager.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              nicNumber: dto.nicNumber,
-              gender: dto.gender,
-              address: dto.address,
-              phone: dto.phoneNumber,
-              salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
-              fullName: `${dto.firstName} ${dto.lastName}`.trim(),
-            } as any,
-          });
-          break;
+      await prisma.$transaction(async (tx) => {
+        user = await tx.user.create({
+          data: userData,
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
 
-        case UserRole.TEACHER:
-          await prisma.teacher.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              nicNumber: dto.nicNumber,
-              gender: dto.gender,
-              address: dto.address,
-              phone: dto.phoneNumber,
-              specialization: dto.subject,
-              salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
-            },
-          });
-          break;
+        // Create role-specific record using transactional client
+        switch (role) {
+          case UserRole.MANAGER:
+            await tx.manager.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                nicNumber: dto.nicNumber,
+                gender: dto.gender,
+                address: dto.address,
+                phone: dto.phoneNumber,
+                salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
+                fullName: `${dto.firstName} ${dto.lastName}`.trim(),
+              } as any,
+            });
+            break;
 
-        case UserRole.STUDENT:
-          await prisma.student.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              indexNumber: dto.indexNumber,
-              dateOfBirth: dto.dateOfBirth,
-              phone: dto.phoneNumber,
-              address: dto.address,
-              // parentId will need to be set separately if parent exists
-            },
-          });
-          break;
+          case UserRole.TEACHER:
+            await tx.teacher.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                nicNumber: dto.nicNumber,
+                gender: dto.gender,
+                address: dto.address,
+                phone: dto.phoneNumber,
+                specialization: dto.subject,
+                salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
+              },
+            });
+            break;
 
-        case UserRole.SUPPORT_STAFF:
-          await prisma.supportStaff.create({
-            data: {
-              userId: user.id,
-              firstName: dto.firstName,
-              lastName: dto.lastName,
-              nicNumber: dto.nicNumber,
-              gender: dto.gender,
-              address: dto.address,
-              phone: dto.phoneNumber,
-              fullName: `${dto.firstName} ${dto.lastName}`.trim(),
-              roleType: dto.roleType,
-              salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
-            },
-          });
-          break;
+          case UserRole.STUDENT:
+            await tx.student.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                indexNumber: dto.indexNumber,
+                dateOfBirth: dto.dateOfBirth,
+                phone: dto.phoneNumber,
+                address: dto.address,
+                // parentId will need to be set separately if parent exists
+              },
+            });
+            break;
 
-        case UserRole.ADMIN:
-          // ADMIN role doesn't have a separate table
-          break;
+          case UserRole.SUPPORT_STAFF:
+            await tx.supportStaff.create({
+              data: {
+                userId: user.id,
+                firstName: dto.firstName,
+                lastName: dto.lastName,
+                nicNumber: dto.nicNumber,
+                gender: dto.gender,
+                address: dto.address,
+                phone: dto.phoneNumber,
+                fullName: `${dto.firstName} ${dto.lastName}`.trim(),
+                roleType: dto.roleType,
+                salary: dto.salary ? new Prisma.Decimal(dto.salary) : null,
+              },
+            });
+            break;
 
-        default:
-          console.warn(`Unknown role: ${role}`);
-      }
+          case UserRole.ADMIN:
+            // ADMIN role doesn't have a separate table
+            break;
+
+          default:
+            console.warn(`Unknown role: ${role}`);
+        }
+      });
     } catch (error) {
-      console.error('Error creating role-specific record:', error);
-      // Continue - user is created even if role-specific record fails
+      console.error('Error during transactional user creation:', error);
+      throw new AppError('Failed to create user account. Please try again.', 500);
     }
 
     // Log audit entry

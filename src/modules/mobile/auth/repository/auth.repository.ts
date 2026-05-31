@@ -10,7 +10,7 @@ export type StudentAuthRecord = Prisma.UserGetPayload<{
 export const MobileAuthRepository = {
   findStudentByEmail(email: string): Promise<StudentAuthRecord | null> {
     return prisma.user.findUnique({
-      where: { email },
+      where: { email: email.toLowerCase() },
       include: { student: true },
     });
   },

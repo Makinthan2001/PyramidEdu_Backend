@@ -152,6 +152,7 @@ model Student {
   dateOfBirth DateTime? @map("date_of_birth") @db.Date
   parentId    Int?      @map("parent_id")
   enrolledAt  DateTime  @default(now()) @map("enrolled_at")
+  isApproved  Boolean   @default(false) @map("is_approved")
   createdAt   DateTime  @default(now()) @map("created_at")
 
   // Relations

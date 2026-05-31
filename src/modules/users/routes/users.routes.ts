@@ -130,4 +130,10 @@ router.patch(
   controller.activateUser
 );
 
+/**
+ * PATCH /api/v1/users/:id/approve
+ * Approve a student profile (MANAGER/ADMIN)
+ */
+router.patch('/:id/approve', canManageUsers, controller.approveStudent);
+
 export default router;
