@@ -12,6 +12,7 @@ import healthRouter from './modules/health';
 import mobileRouter from './modules/mobile';
 import usersRouter from './modules/users';
 import subjectsRouter from './modules/subjects';
+import * as subjectsController from './modules/subjects/controller/subjects.controller';
 
 validateEnv();
 
@@ -83,6 +84,9 @@ app.use('/api/v1/mobile', mobileRouter);
 app.use('/api/v1/users', usersRouter);
 
 // Subjects routes
+app.get('/api/v1/streams', subjectsController.getStreams);
+app.get('/api/v1/teachers', subjectsController.getTeachersForSubject);
+app.get('/api/v1/subjects', subjectsController.getSubjects);
 app.use('/api/v1/subjects', subjectsRouter);
 
 // centralized error handler - must be last

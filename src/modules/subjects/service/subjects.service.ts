@@ -9,6 +9,7 @@ import type { EnrollStudentDto } from '../dto/enroll-student.dto';
 export interface SubjectsQueryParams {
   active?: boolean;
   teacherId?: number;
+  streamId?: number;
   search?: string;
   userRole?: UserRole;
   userId?: number;
@@ -424,6 +425,14 @@ export class SubjectsService {
       where.teacherId = params.teacherId;
     }
 
+    if (params.streamId) {
+      where.subjectStreams = {
+        some: {
+          streamId: params.streamId,
+        },
+      };
+    }
+
     if (params.search) {
       where.OR = [
         { name: { contains: params.search, mode: 'insensitive' } },
@@ -466,6 +475,34 @@ export class SubjectsService {
       page: 1,
       limit: subjects.length,
       hasMore: false,
+    };
+  }
+
+  static async getSubjectTeacher(subjectId: number) {
+    const subject = await prisma.subject.findUnique({
+      where: { id: subjectId },
+      include: {
+        teacher: {
+          include: {
+            user: {
+              select: {
+                isActive: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!subject || !subject.teacher) {
+      return null;
+    }
+
+    return {
+      id: subject.teacher.id,
+      name: `${subject.teacher.firstName ?? ''} ${subject.teacher.lastName ?? ''}`.trim(),
+      qualification: subject.teacher.specialization ?? '',
+      isActive: subject.teacher.user?.isActive ?? true,
     };
   }
 
