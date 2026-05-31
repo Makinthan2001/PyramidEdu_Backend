@@ -14,10 +14,13 @@ import {
 
 const router = Router();
 
-router.use(jwtGuard);
-
+// Public read-only endpoints for the student registration flow.
 router.get('/streams', controller.getStreams);
 router.get('/available', controller.getAvailableSubjects);
+router.get('/teachers', controller.getTeachersForSubject);
+
+router.use(jwtGuard);
+
 router.post('/streams', roleGuard(UserRole.ADMIN, UserRole.MANAGER), validate(createStreamSchema), controller.createStream);
 
 router.get('/', controller.getSubjects);

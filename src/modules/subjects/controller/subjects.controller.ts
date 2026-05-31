@@ -30,6 +30,7 @@ export async function getSubjects(req: Request, res: Response, next: NextFunctio
     const result = await SubjectsService.getSubjects({
       active: parseBoolean(req.query.active),
       teacherId: req.query.teacherId ? Number(req.query.teacherId) : undefined,
+      streamId: req.query.streamId ? Number(req.query.streamId) : undefined,
       search: (req.query.search as string) || undefined,
       userRole,
       userId,
@@ -67,6 +68,30 @@ export async function getAvailableSubjects(req: Request, res: Response, next: Ne
       success: true,
       message: 'Available subjects retrieved successfully',
       data: subjects,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getTeachersForSubject(req: Request, res: Response, next: NextFunction) {
+  try {
+    const subjectId = Number(req.query.subjectId);
+
+    if (!Number.isFinite(subjectId)) {
+      res.status(400).json({
+        success: false,
+        message: 'subjectId query parameter is required',
+      });
+      return;
+    }
+
+    const teacher = await SubjectsService.getSubjectTeacher(subjectId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Teachers retrieved successfully',
+      data: teacher ? [teacher] : [],
     });
   } catch (error) {
     next(error);
