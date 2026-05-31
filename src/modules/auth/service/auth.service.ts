@@ -67,8 +67,15 @@ export async function loginUser(dto: LoginDto): Promise<LoginResult> {
     throw new AppError('Your account has been deactivated. Please contact an administrator.', 403);
   }
 
-  const isMatch = await comparePasswords(dto.password, user.passwordHash);
+  if (!dto.password || typeof dto.password !== 'string') {
+    throw new AppError('Password is required.', 400);
+  }
+  const incomingPassword = dto.password;
+  const isMatch = await comparePasswords(incomingPassword, user.passwordHash);
+
   if (!isMatch) {
+    // Lightweight warning to aid debugging in development; do not log passwords
+    console.warn(`Failed login attempt for ${email}: password did not match stored hash.`);
     throw new AppError('Invalid email or password.', 401);
   }
 

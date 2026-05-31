@@ -16,6 +16,7 @@ export const createManagerSchema = z.object({
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
   address: z.string().min(3, 'Address is required').max(500),
   email: emailField,
+  password: z.string().min(1, 'Password is required').optional(),
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
   salary: z.number().positive('Salary must be positive').optional(),
 });
@@ -32,6 +33,7 @@ export const createTeacherSchema = z.object({
   address: z.string().min(3, 'Address is required').max(500),
   subject: z.string().min(1, 'Subject is required').max(255),
   email: emailField,
+  password: z.string().min(1, 'Password is required').optional(),
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
   salary: z.number().positive('Salary must be positive').optional(),
 });
@@ -48,6 +50,7 @@ export const createSupportStaffSchema = z.object({
   address: z.string().min(1, 'Address is required').max(500),
   roleType: z.string().min(1, 'Role is required').max(255),
   email: emailField,
+  password: z.string().min(1, 'Password is required').optional(),
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
   salary: z.number().positive('Salary must be positive').optional(),
 });
@@ -63,6 +66,7 @@ export const createStudentSchema = z.object({
   dateOfBirth: z.coerce.date(),
   address: z.string().min(1, 'Address is required').max(500),
   email: emailField,
+  password: z.string().min(1, 'Password is required').optional(),
   phoneNumber: z.string().min(10, 'Phone number must be at least 10 digits'),
 });
 
@@ -73,6 +77,7 @@ export const createAdminSchema = z.object({
   role: z.enum(['ADMIN', 'MANAGER', 'TEACHER', 'STUDENT', 'SUPPORT_STAFF']),
   // Common fields
   email: emailField,
+  password: z.string().min(1, 'Password is required'),
   // Manager fields
   firstName: z.string().max(255).optional(),
   lastName: z.string().max(255).optional(),
