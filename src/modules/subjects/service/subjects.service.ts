@@ -478,7 +478,7 @@ export class SubjectsService {
     };
   }
 
-  static async getSubjectTeacher(subjectId: number) {
+  static async getSubjectTeachers(subjectId: number) {
     const subject = await prisma.subject.findUnique({
       where: { id: subjectId },
       include: {
@@ -491,19 +491,87 @@ export class SubjectsService {
             },
           },
         },
+        materials: {
+          include: {
+            teacher: {
+              include: {
+                user: {
+                  select: {
+                    isActive: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
-    if (!subject?.teacher) {
-      return null;
+    if (!subject) {
+      throw new AppError('Subject not found.', 404);
     }
 
-    return {
-      id: subject.teacher.id,
-      name: `${subject.teacher.firstName ?? ''} ${subject.teacher.lastName ?? ''}`.trim(),
-      qualification: subject.teacher.specialization ?? '',
-      isActive: subject.teacher.user?.isActive ?? true,
-    };
+    const teachersById = new Map<number, { id: number; name: string; qualification: string; isActive: boolean }>();
+
+    const subjectTeachers = await prisma.teacher.findMany({
+      where: {
+        specialization: {
+          equals: subject.name,
+          mode: 'insensitive',
+        },
+        user: {
+          isActive: true,
+        },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        specialization: true,
+        user: {
+          select: {
+            isActive: true,
+          },
+        },
+      },
+      orderBy: {
+        firstName: 'asc',
+      },
+    });
+
+    for (const teacher of subjectTeachers) {
+      teachersById.set(teacher.id, {
+        id: teacher.id,
+        name: `${teacher.firstName ?? ''} ${teacher.lastName ?? ''}`.trim(),
+        qualification: teacher.specialization ?? '',
+        isActive: teacher.user?.isActive ?? true,
+      });
+    }
+
+    if (subject.teacher) {
+      teachersById.set(subject.teacher.id, {
+        id: subject.teacher.id,
+        name: `${subject.teacher.firstName ?? ''} ${subject.teacher.lastName ?? ''}`.trim(),
+        qualification: subject.teacher.specialization ?? '',
+        isActive: subject.teacher.user?.isActive ?? true,
+      });
+    }
+
+    for (const material of subject.materials ?? []) {
+      const teacher = material.teacher;
+      if (!teacher || teachersById.has(teacher.id)) {
+        continue;
+      }
+
+      teachersById.set(teacher.id, {
+        id: teacher.id,
+        name: `${teacher.firstName ?? ''} ${teacher.lastName ?? ''}`.trim(),
+        qualification: teacher.specialization ?? '',
+        isActive: teacher.user?.isActive ?? true,
+      });
+    }
+
+    return Array.from(teachersById.values());
   }
 
   static async getSubjectByIdentifier(identifier: string, actor?: { userRole?: UserRole; userId?: number }) {
