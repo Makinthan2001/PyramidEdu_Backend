@@ -22,9 +22,9 @@ app.use(helmet());
 
 const corsOrigin = process.env.CORS_ORIGIN
   ? Array.from(new Set([
-      ...process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
-      'http://localhost:8081',
-    ]))
+    ...process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
+    'http://localhost:8081',
+  ]))
   : ['http://localhost:3000', 'http://localhost:8081'];
 
 const corsOptions = {

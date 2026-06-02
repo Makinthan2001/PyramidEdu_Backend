@@ -40,6 +40,13 @@ export interface SafeUser {
   isActive: boolean;
   forcePasswordChange: boolean;
   createdAt: Date;
+  firstName?: string;
+  lastName?: string;
+  subject?: string;
+  specialization?: string;
+  fullName?: string;
+  phone?: string;
+  address?: string;
 }
 
 export interface PasswordResetPayload {
