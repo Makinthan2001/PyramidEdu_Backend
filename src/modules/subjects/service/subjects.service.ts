@@ -612,88 +612,56 @@ export class SubjectsService {
       ? undefined
       : await validateStreamIds(dto.streamIds);
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const data: Prisma.SubjectUpdateInput = {};
+    const data: Prisma.SubjectUpdateInput = {};
 
-      if (dto.name !== undefined) {
-        data.name = dto.name;
-      }
+    if (dto.name !== undefined) {
+      data.name = dto.name;
+    }
 
-      if (dto.code !== undefined) {
-        data.code = dto.code;
-      }
+    if (dto.code !== undefined) {
+      data.code = dto.code;
+    }
 
-      if (dto.description !== undefined) {
-        data.description = dto.description;
-      }
+    if (dto.description !== undefined) {
+      data.description = dto.description;
+    }
 
-      if (dto.feePerMonth !== undefined) {
-        data.feePerMonth = new Prisma.Decimal(dto.feePerMonth);
-      }
+    if (dto.feePerMonth !== undefined) {
+      data.feePerMonth = new Prisma.Decimal(dto.feePerMonth);
+    }
 
-      if (dto.isActive !== undefined) {
-        data.isActive = dto.isActive;
-      }
+    if (dto.isActive !== undefined) {
+      data.isActive = dto.isActive;
+    }
 
-      await tx.subject.update({
-        where: { id: subjectId },
-        data,
-        include: {
-          subjectStreams: {
-            include: {
-              stream: true,
-            },
+    if (streamIds !== undefined) {
+      data.subjectStreams = {
+        deleteMany: {},
+        createMany: {
+          data: streamIds.map((streamId) => ({ streamId })),
+        },
+      };
+    }
+
+    const updated = await prisma.subject.update({
+      where: { id: subjectId },
+      data,
+      include: {
+        subjectStreams: {
+          include: {
+            stream: true,
           },
-          teacher: {
-            include: {
-              user: {
-                select: {
-                  isActive: true,
-                },
+        },
+        teacher: {
+          include: {
+            user: {
+              select: {
+                isActive: true,
               },
             },
           },
         },
-      });
-
-      if (streamIds !== undefined) {
-        await tx.subjectStream.deleteMany({
-          where: { subjectId },
-        });
-
-        await tx.subjectStream.createMany({
-          data: streamIds.map((streamId) => ({
-            subjectId,
-            streamId,
-          })),
-        });
-      }
-
-      const refreshed = await tx.subject.findUnique({
-        where: { id: subjectId },
-        include: {
-          subjectStreams: {
-            include: {
-              stream: true,
-            },
-          },
-          teacher: {
-            include: {
-              user: {
-                select: {
-                  isActive: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!refreshed) {
-        throw new AppError('Subject not found.', 404);
-      }
-
-      return refreshed;
+      },
     });
 
     if (dto.feePerMonth !== undefined && decimalToNumber(existing.feePerMonth) !== dto.feePerMonth) {

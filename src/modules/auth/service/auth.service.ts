@@ -18,15 +18,15 @@ import type { ChangePasswordDto } from '../dto/change-password.dto';
 import type { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import type { ResetPasswordDto } from '../dto/reset-password.dto';
 
-function toSafeUser(user: {
-  id: number;
-  email: string;
-  role: UserRole;
-  isActive: boolean;
-  forcePasswordChange: boolean;
-  createdAt: Date;
-}): SafeUser {
-  return {
+const userProfileInclude = {
+  student: true,
+  teacher: true,
+  manager: true,
+  supportStaff: true,
+};
+
+function toSafeUser(user: any): SafeUser {
+  const response: SafeUser = {
     id: user.id,
     email: user.email,
     role: user.role,
@@ -34,6 +34,34 @@ function toSafeUser(user: {
     forcePasswordChange: user.forcePasswordChange,
     createdAt: user.createdAt,
   };
+
+  if (user.student) {
+    response.firstName = user.student.firstName;
+    response.lastName = user.student.lastName;
+    response.phone = user.student.phone;
+    response.address = user.student.address;
+  }
+
+  if (user.teacher) {
+    response.firstName = user.teacher.firstName;
+    response.lastName = user.teacher.lastName;
+    response.subject = user.teacher.specialization;
+    response.specialization = user.teacher.specialization;
+  }
+
+  if (user.manager) {
+    response.fullName = user.manager.fullName;
+  }
+
+  if (user.supportStaff) {
+    response.firstName = user.supportStaff.firstName;
+    response.lastName = user.supportStaff.lastName;
+    response.phone = user.supportStaff.phone;
+    response.address = user.supportStaff.address;
+    response.fullName = user.supportStaff.fullName;
+  }
+
+  return response;
 }
 
 export async function registerUser(dto: RegisterDto): Promise<SafeUser> {
@@ -58,7 +86,10 @@ export async function registerUser(dto: RegisterDto): Promise<SafeUser> {
 
 export async function loginUser(dto: LoginDto): Promise<LoginResult> {
   const email = dto.email.trim().toLowerCase();
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: userProfileInclude,
+  });
   if (!user) {
     throw new AppError('Invalid email or password.', 401);
   }
@@ -168,7 +199,10 @@ export async function logoutUser(refreshToken: string, logoutAll = false): Promi
 }
 
 export async function getCurrentUser(userId: number): Promise<SafeUser> {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: userProfileInclude,
+  });
   if (!user) {
     throw new AppError('User not found.', 404);
   }
