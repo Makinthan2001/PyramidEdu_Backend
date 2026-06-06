@@ -339,6 +339,17 @@ model UserSession {
   @@map("user_sessions")
 }
 
+model OtpVerification {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  otpCode   String   @map("otp_code")
+  expiresAt DateTime @map("expires_at")
+  data      Json?    // Stores the pending registration payload
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("otp_verifications")
+}
+
 // ─────────────────────────────────────────────────────────────
 // ACADEMIC STRUCTURE
 // ─────────────────────────────────────────────────────────────
