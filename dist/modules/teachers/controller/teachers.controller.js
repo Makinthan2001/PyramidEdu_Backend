@@ -33,8 +33,7 @@ function getTeachers(req, res, next) {
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const search = req.query.search;
-            const specialization = req.query.specialization;
-            const result = yield teachers_service_1.default.getTeachers({ page, limit, search, specialization });
+            const result = yield teachers_service_1.default.getTeachers({ page, limit, search });
             res.status(200).json({ success: true, message: 'Teachers retrieved', data: result });
         }
         catch (error) {
@@ -49,7 +48,7 @@ function getTeachers(req, res, next) {
 function getTeacherById(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const id = Number(req.params.id);
+            const id = req.params.id;
             const teacher = yield teachers_service_1.default.getTeacherById(id);
             if (!teacher) {
                 return res.status(404).json({ success: false, message: 'Teacher not found' });
@@ -84,7 +83,7 @@ function createTeacher(req, res, next) {
 function updateTeacher(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const id = Number(req.params.id);
+            const id = req.params.id;
             const dto = req.body;
             const teacher = yield teachers_service_1.default.updateTeacher(id, dto);
             res.status(200).json({ success: true, message: 'Teacher updated', data: teacher });
@@ -101,7 +100,7 @@ function updateTeacher(req, res, next) {
 function deleteTeacher(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const id = Number(req.params.id);
+            const id = req.params.id;
             const teacher = yield teachers_service_1.default.deleteTeacher(id);
             res.status(200).json({ success: true, message: 'Teacher deleted (soft)', data: teacher });
         }
@@ -117,10 +116,10 @@ function deleteTeacher(req, res, next) {
 function getMyProfile(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const teacherId = req.teacherId; // set by auth middleware
-            const teacher = yield teachers_service_1.default.getTeacherById(teacherId);
+            const userId = req.userId;
+            const teacher = yield teachers_service_1.default.getTeacherByUserId(userId);
             if (!teacher) {
-                return res.status(404).json({ success: false, message: 'Teacher not found' });
+                return res.status(404).json({ success: false, message: 'Teacher profile not found' });
             }
             res.status(200).json({ success: true, message: 'Profile retrieved', data: teacher });
         }
@@ -136,10 +135,14 @@ function getMyProfile(req, res, next) {
 function updateMyProfile(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const teacherId = req.teacherId;
+            const userId = req.userId;
+            const teacher = yield teachers_service_1.default.getTeacherByUserId(userId);
+            if (!teacher) {
+                return res.status(404).json({ success: false, message: 'Teacher profile not found' });
+            }
             const dto = req.body;
-            const teacher = yield teachers_service_1.default.updateTeacher(teacherId, dto);
-            res.status(200).json({ success: true, message: 'Profile updated', data: teacher });
+            const updatedTeacher = yield teachers_service_1.default.updateTeacher(teacher.id, dto);
+            res.status(200).json({ success: true, message: 'Profile updated', data: updatedTeacher });
         }
         catch (error) {
             next(error);
@@ -152,14 +155,14 @@ function updateMyProfile(req, res, next) {
  */
 function getTeacherSubjects(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a;
+        var _a, _b;
         try {
-            const id = Number(req.params.id);
+            const id = req.params.id;
             const teacher = yield teachers_service_1.default.getTeacherById(id);
             if (!teacher) {
                 return res.status(404).json({ success: false, message: 'Teacher not found' });
             }
-            const subjects = (_a = teacher.subjects) !== null && _a !== void 0 ? _a : [];
+            const subjects = (_b = (_a = teacher.subjectAllocations) === null || _a === void 0 ? void 0 : _a.map((alloc) => alloc.subject)) !== null && _b !== void 0 ? _b : [];
             res.status(200).json({ success: true, message: 'Subjects retrieved', data: subjects });
         }
         catch (error) {
@@ -174,7 +177,7 @@ function getTeacherSubjects(req, res, next) {
 function updateSalary(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const id = Number(req.params.id);
+            const id = req.params.id;
             const { salary } = req.body;
             const teacher = yield teachers_service_1.default.updateTeacher(id, { salary });
             res.status(200).json({ success: true, message: 'Salary updated', data: teacher });
@@ -191,7 +194,7 @@ function updateSalary(req, res, next) {
 function assignSubject(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const id = Number(req.params.id);
+            const id = req.params.id;
             const dto = req.body;
             yield teachers_service_1.default.assignSubject(id, dto);
             res.status(200).json({ success: true, message: 'Subject assigned' });

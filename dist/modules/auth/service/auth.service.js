@@ -24,44 +24,34 @@ const client_1 = require("@prisma/client");
 const prisma_config_1 = __importDefault(require("../../../config/prisma.config"));
 const password_util_1 = require("../../../utils/password.util");
 const jwt_util_1 = require("../../../utils/jwt.util");
-const crypto_util_1 = require("../../../utils/crypto.util");
 const AppError_1 = require("../../../utils/AppError");
 const userProfileInclude = {
     student: true,
     teacher: true,
     manager: true,
-    supportStaff: true,
+    admin: true,
 };
 function toSafeUser(user) {
     const response = {
         id: user.id,
         email: user.email,
+        fullName: user.fullName,
         role: user.role,
         isActive: user.isActive,
-        forcePasswordChange: user.forcePasswordChange,
+        forcePwdChange: user.forcePwdChange,
         createdAt: user.createdAt,
+        phone: user.phone || undefined,
     };
     if (user.student) {
-        response.firstName = user.student.firstName;
-        response.lastName = user.student.lastName;
-        response.phone = user.student.phone;
-        response.address = user.student.address;
+        response.phone = user.student.phone || response.phone;
+        response.address = user.student.address || undefined;
     }
     if (user.teacher) {
-        response.firstName = user.teacher.firstName;
-        response.lastName = user.teacher.lastName;
-        response.subject = user.teacher.specialization;
-        response.specialization = user.teacher.specialization;
+        response.phone = user.teacher.phone || response.phone;
+        response.address = user.teacher.address || undefined;
     }
     if (user.manager) {
-        response.fullName = user.manager.fullName;
-    }
-    if (user.supportStaff) {
-        response.firstName = user.supportStaff.firstName;
-        response.lastName = user.supportStaff.lastName;
-        response.phone = user.supportStaff.phone;
-        response.address = user.supportStaff.address;
-        response.fullName = user.supportStaff.fullName;
+        response.address = user.manager.address || undefined;
     }
     return response;
 }
@@ -72,14 +62,40 @@ function registerUser(dto) {
         if (existing) {
             throw new AppError_1.AppError('An account with this email already exists.', 409);
         }
-        const passwordHash = yield (0, password_util_1.hashPassword)(dto.password);
-        const user = yield prisma_config_1.default.user.create({
-            data: {
-                email,
-                passwordHash,
-                role: dto.role,
-            },
-        });
+        const hashedPassword = yield (0, password_util_1.hashPassword)(dto.password);
+        let user;
+        yield prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+            user = yield tx.user.create({
+                data: {
+                    email,
+                    fullName: dto.fullName,
+                    password: hashedPassword,
+                    role: dto.role,
+                },
+            });
+            if (dto.role === client_1.Role.ADMIN) {
+                yield tx.admin.create({
+                    data: {
+                        userId: user.id,
+                        accessLevel: 1,
+                    },
+                });
+            }
+            else if (dto.role === client_1.Role.MANAGER) {
+                yield tx.manager.create({
+                    data: {
+                        userId: user.id,
+                    },
+                });
+            }
+            else if (dto.role === client_1.Role.TEACHER) {
+                yield tx.teacher.create({
+                    data: {
+                        userId: user.id,
+                    },
+                });
+            }
+        }));
         return toSafeUser(user);
     });
 }
@@ -100,29 +116,24 @@ function loginUser(dto) {
             throw new AppError_1.AppError('Password is required.', 400);
         }
         const incomingPassword = dto.password;
-        const isMatch = yield (0, password_util_1.comparePasswords)(incomingPassword, user.passwordHash);
+        const isMatch = yield (0, password_util_1.comparePasswords)(incomingPassword, user.password);
         if (!isMatch) {
-            // Lightweight warning to aid debugging in development; do not log passwords
             console.warn(`Failed login attempt for ${email}: password did not match stored hash.`);
             throw new AppError_1.AppError('Invalid email or password.', 401);
         }
-        // If user is a student, ensure their student profile is approved
-        if (user.role === client_1.UserRole.STUDENT) {
+        if (user.role === client_1.Role.STUDENT) {
             const student = yield prisma_config_1.default.student.findUnique({ where: { userId: user.id } });
-            // Prisma client types may be out-of-sync with schema during migrations; cast to any for safety
             if (!student || student.isApproved === false) {
                 throw new AppError_1.AppError('Your account is pending approval. Please contact the administration.', 403);
             }
         }
-        const tokenFamily = (0, crypto_util_1.generateTokenFamily)();
         const accessToken = (0, jwt_util_1.generateAccessToken)({ sub: user.id, email: user.email, role: user.role });
-        const refreshToken = (0, jwt_util_1.generateRefreshToken)(user.id, tokenFamily);
+        const refreshToken = (0, jwt_util_1.generateRefreshToken)(user.id);
         const refreshExpires = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
         yield prisma_config_1.default.refreshToken.create({
             data: {
                 userId: user.id,
-                tokenHash: (0, crypto_util_1.hashToken)(refreshToken),
-                tokenFamily,
+                token: refreshToken,
                 expiresAt: (0, jwt_util_1.expiryStringToDate)(refreshExpires),
             },
         });
@@ -135,18 +146,13 @@ function loginUser(dto) {
 function refreshAccessToken(refreshToken) {
     return __awaiter(this, void 0, void 0, function* () {
         const payload = (0, jwt_util_1.verifyRefreshToken)(refreshToken);
-        const tokenHash = (0, crypto_util_1.hashToken)(refreshToken);
-        const stored = yield prisma_config_1.default.refreshToken.findUnique({ where: { tokenHash } });
+        const stored = yield prisma_config_1.default.refreshToken.findUnique({ where: { token: refreshToken } });
         if (!stored) {
             yield prisma_config_1.default.refreshToken.deleteMany({ where: { userId: payload.sub } });
             throw new AppError_1.AppError('Refresh token reuse detected. All sessions have been terminated.', 401);
         }
-        if (stored.tokenFamily !== payload.tokenFamily) {
-            yield prisma_config_1.default.refreshToken.deleteMany({ where: { userId: payload.sub } });
-            throw new AppError_1.AppError('Token family mismatch. Please log in again.', 401);
-        }
         if (stored.expiresAt < new Date()) {
-            yield prisma_config_1.default.refreshToken.delete({ where: { tokenHash } });
+            yield prisma_config_1.default.refreshToken.delete({ where: { token: refreshToken } });
             throw new AppError_1.AppError('Refresh token has expired. Please log in again.', 401);
         }
         const user = yield prisma_config_1.default.user.findUnique({ where: { id: payload.sub } });
@@ -154,15 +160,14 @@ function refreshAccessToken(refreshToken) {
             yield prisma_config_1.default.refreshToken.deleteMany({ where: { userId: payload.sub } });
             throw new AppError_1.AppError('User not found or account deactivated.', 401);
         }
-        yield prisma_config_1.default.refreshToken.delete({ where: { tokenHash } });
-        const newRefreshToken = (0, jwt_util_1.generateRefreshToken)(user.id, payload.tokenFamily);
+        yield prisma_config_1.default.refreshToken.delete({ where: { token: refreshToken } });
+        const newRefreshToken = (0, jwt_util_1.generateRefreshToken)(user.id);
         const newAccessToken = (0, jwt_util_1.generateAccessToken)({ sub: user.id, email: user.email, role: user.role });
         const refreshExpires = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
         yield prisma_config_1.default.refreshToken.create({
             data: {
                 userId: user.id,
-                tokenHash: (0, crypto_util_1.hashToken)(newRefreshToken),
-                tokenFamily: payload.tokenFamily,
+                token: newRefreshToken,
                 expiresAt: (0, jwt_util_1.expiryStringToDate)(refreshExpires),
             },
         });
@@ -177,7 +182,7 @@ function logoutUser(refreshToken_1) {
                 yield prisma_config_1.default.refreshToken.deleteMany({ where: { userId: payload.sub } });
                 return;
             }
-            yield prisma_config_1.default.refreshToken.deleteMany({ where: { tokenHash: (0, crypto_util_1.hashToken)(refreshToken) } });
+            yield prisma_config_1.default.refreshToken.delete({ where: { token: refreshToken } });
         }
         catch (_a) {
             return;
@@ -202,7 +207,7 @@ function changePassword(userId, dto) {
         if (!user) {
             throw new AppError_1.AppError('User not found.', 404);
         }
-        const isMatch = yield (0, password_util_1.comparePasswords)(dto.currentPassword, user.passwordHash);
+        const isMatch = yield (0, password_util_1.comparePasswords)(dto.currentPassword, user.password);
         if (!isMatch) {
             throw new AppError_1.AppError('Current password is incorrect.', 400);
         }
@@ -210,7 +215,7 @@ function changePassword(userId, dto) {
         yield prisma_config_1.default.$transaction([
             prisma_config_1.default.user.update({
                 where: { id: userId },
-                data: { passwordHash: newHash },
+                data: { password: newHash },
             }),
             prisma_config_1.default.refreshToken.deleteMany({ where: { userId } }),
         ]);
@@ -241,7 +246,7 @@ function resetPassword(dto) {
         yield prisma_config_1.default.$transaction([
             prisma_config_1.default.user.update({
                 where: { id: user.id },
-                data: { passwordHash: newHash },
+                data: { password: newHash },
             }),
             prisma_config_1.default.refreshToken.deleteMany({ where: { userId: user.id } }),
         ]);

@@ -24,31 +24,12 @@ function ensureUniqueSubjectCode(baseCode) {
     return __awaiter(this, void 0, void 0, function* () {
         let code = baseCode;
         let suffix = 1;
-        while (yield prisma_config_1.default.subject.findUnique({ where: { code } })) {
+        while (yield prisma_config_1.default.subject.findUnique({ where: { subjectCode: code } })) {
             const suffixText = String(suffix);
             code = `${baseCode.slice(0, Math.max(1, 20 - suffixText.length))}${suffixText}`;
             suffix += 1;
         }
         return code;
-    });
-}
-function validateStreamIds(streamIds) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const uniqueIds = Array.from(new Set(streamIds));
-        if (uniqueIds.length === 0) {
-            throw new AppError_1.AppError('At least one stream is required.', 400);
-        }
-        const streams = yield prisma_config_1.default.stream.findMany({
-            where: {
-                id: { in: uniqueIds },
-                isActive: true,
-            },
-            select: { id: true },
-        });
-        if (streams.length !== uniqueIds.length) {
-            throw new AppError_1.AppError('One or more selected streams were not found.', 404);
-        }
-        return uniqueIds;
     });
 }
 function decimalToNumber(value) {
@@ -63,8 +44,6 @@ function getTeacherProfileByUserId(userId) {
             where: { userId },
             select: {
                 id: true,
-                firstName: true,
-                lastName: true,
                 user: {
                     select: {
                         isActive: true,
@@ -80,8 +59,6 @@ function getStudentProfileByUserId(userId) {
             where: { userId },
             select: {
                 id: true,
-                firstName: true,
-                lastName: true,
                 indexNumber: true,
                 user: {
                     select: {
@@ -178,21 +155,19 @@ function resolveStudentReference(referenceId) {
 }
 function findSubjectByIdentifier(identifier) {
     return __awaiter(this, void 0, void 0, function* () {
-        const numericId = Number(identifier);
-        if (Number.isInteger(numericId)) {
+        // Try finding by UUID
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+        if (isUuid) {
             const subjectById = yield prisma_config_1.default.subject.findUnique({
-                where: { id: numericId },
+                where: { id: identifier },
                 include: {
-                    subjectStreams: {
+                    stream: true,
+                    subjectAllocations: {
+                        where: { status: client_1.SubjectAllocationStatus.ACTIVE },
                         include: {
-                            stream: true,
-                        },
-                    },
-                    teacher: {
-                        include: {
-                            user: {
-                                select: {
-                                    isActive: true,
+                            teacher: {
+                                include: {
+                                    user: true,
                                 },
                             },
                         },
@@ -204,18 +179,15 @@ function findSubjectByIdentifier(identifier) {
             }
         }
         return prisma_config_1.default.subject.findUnique({
-            where: { code: identifier },
+            where: { subjectCode: identifier },
             include: {
-                subjectStreams: {
+                stream: true,
+                subjectAllocations: {
+                    where: { status: client_1.SubjectAllocationStatus.ACTIVE },
                     include: {
-                        stream: true,
-                    },
-                },
-                teacher: {
-                    include: {
-                        user: {
-                            select: {
-                                isActive: true,
+                        teacher: {
+                            include: {
+                                user: true,
                             },
                         },
                     },
@@ -226,7 +198,7 @@ function findSubjectByIdentifier(identifier) {
 }
 function resolveEnrollmentStudentId(dto, actor) {
     return __awaiter(this, void 0, void 0, function* () {
-        if ((actor === null || actor === void 0 ? void 0 : actor.userRole) === client_1.UserRole.STUDENT) {
+        if ((actor === null || actor === void 0 ? void 0 : actor.userRole) === client_1.Role.STUDENT) {
             if (!actor.userId) {
                 throw new AppError_1.AppError('Student profile not found.', 403);
             }
@@ -250,31 +222,33 @@ function resolveEnrollmentStudentId(dto, actor) {
     });
 }
 function buildSubjectResponse(subject, activeEnrollmentCount = 0, currentTeacherId) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
+    // Get active teacher from allocations
+    const activeAllocation = (_a = subject.subjectAllocations) === null || _a === void 0 ? void 0 : _a.find((alloc) => alloc.status === client_1.SubjectAllocationStatus.ACTIVE);
+    const teacher = activeAllocation === null || activeAllocation === void 0 ? void 0 : activeAllocation.teacher;
     return {
         id: subject.id,
-        name: subject.name,
-        feePerMonth: decimalToNumber(subject.feePerMonth),
-        description: subject.description,
-        teacherId: subject.teacherId,
+        name: subject.subjectName,
+        code: subject.subjectCode,
+        feePerMonth: decimalToNumber(subject.feeAmount),
         isActive: subject.isActive,
         createdAt: subject.createdAt,
-        streams: ((_a = subject.subjectStreams) !== null && _a !== void 0 ? _a : []).map((subjectStream) => ({
-            id: subjectStream.stream.id,
-            name: subjectStream.stream.name,
-            isActive: subjectStream.stream.isActive,
-        })),
-        teacher: subject.teacher
+        stream: subject.stream
             ? {
-                id: subject.teacher.id,
-                firstName: subject.teacher.firstName,
-                lastName: subject.teacher.lastName,
-                specialization: subject.teacher.specialization,
-                isActive: (_c = (_b = subject.teacher.user) === null || _b === void 0 ? void 0 : _b.isActive) !== null && _c !== void 0 ? _c : true,
+                id: subject.stream.id,
+                name: subject.stream.streamName,
+                isActive: subject.stream.isActive,
+            }
+            : null,
+        teacher: teacher
+            ? {
+                id: teacher.id,
+                name: ((_b = teacher.user) === null || _b === void 0 ? void 0 : _b.fullName) || '',
+                isActive: (_d = (_c = teacher.user) === null || _c === void 0 ? void 0 : _c.isActive) !== null && _d !== void 0 ? _d : true,
             }
             : null,
         activeEnrollmentCount,
-        isAssignedToMe: currentTeacherId ? subject.teacherId === currentTeacherId : false,
+        isAssignedToMe: currentTeacherId && teacher ? teacher.id === currentTeacherId : false,
     };
 }
 function getActiveEnrollmentCountMap(subjectIds) {
@@ -286,7 +260,7 @@ function getActiveEnrollmentCountMap(subjectIds) {
             by: ['subjectId'],
             where: {
                 subjectId: { in: subjectIds },
-                isActive: true,
+                enrollmentStatus: client_1.EnrollmentStatus.ACTIVE,
             },
             _count: {
                 _all: true,
@@ -298,123 +272,110 @@ function getActiveEnrollmentCountMap(subjectIds) {
 class SubjectsService {
     static getStreams() {
         return __awaiter(this, void 0, void 0, function* () {
-            const streams = yield prisma_config_1.default.stream.findMany({
+            return prisma_config_1.default.stream.findMany({
                 where: { isActive: true },
-                orderBy: { name: 'asc' },
+                orderBy: { streamName: 'asc' },
             });
-            return streams;
         });
     }
     static getAvailableSubjects() {
         return __awaiter(this, void 0, void 0, function* () {
             const subjects = yield prisma_config_1.default.subject.findMany({
                 where: { isActive: true },
-                orderBy: { name: 'asc' },
+                orderBy: { subjectName: 'asc' },
                 include: {
-                    subjectStreams: {
-                        include: {
-                            stream: true,
-                        },
-                    },
+                    stream: true,
                 },
             });
-            return subjects.map((sub) => {
-                var _a;
-                return ({
-                    id: sub.id,
-                    name: sub.name,
-                    streams: ((_a = sub.subjectStreams) !== null && _a !== void 0 ? _a : []).map((ss) => ss.stream.name),
-                    feePerMonth: decimalToNumber(sub.feePerMonth),
-                });
-            });
+            return subjects.map((sub) => ({
+                id: sub.id,
+                name: sub.subjectName,
+                streamName: sub.stream.streamName,
+                feePerMonth: decimalToNumber(sub.feeAmount),
+            }));
         });
     }
     static createStream(dto, actor) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a;
             const stream = yield prisma_config_1.default.stream.create({
                 data: {
-                    name: dto.name,
+                    streamName: dto.name,
                 },
             });
-            yield prisma_config_1.default.auditLog.create({
-                data: {
-                    action: 'STREAM_CREATED',
-                    userId: (_a = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _a !== void 0 ? _a : null,
-                    resourceType: 'STREAM',
-                    resourceId: stream.id,
-                    details: JSON.stringify({ name: stream.name }),
-                },
-            });
+            if (actor === null || actor === void 0 ? void 0 : actor.userId) {
+                yield prisma_config_1.default.auditLog.create({
+                    data: {
+                        action: client_1.AuditAction.CREATE,
+                        userId: actor.userId,
+                        module: 'STREAM',
+                        description: `Stream created: ${stream.streamName}`,
+                    },
+                });
+            }
             return stream;
         });
     }
     static createSubject(dto, actor) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b;
-            const streamIds = yield validateStreamIds(dto.streamIds);
-            const requestedCode = dto.code ? dto.code.toUpperCase() : generateSubjectCode(dto.name);
+            var _a;
+            const requestedCode = dto.subjectCode ? dto.subjectCode.toUpperCase() : generateSubjectCode(dto.subjectName);
             const code = yield ensureUniqueSubjectCode(requestedCode);
             const subject = yield prisma_config_1.default.subject.create({
                 data: {
-                    name: dto.name,
-                    code,
-                    feePerMonth: new client_1.Prisma.Decimal(dto.feePerMonth),
-                    description: dto.description,
+                    subjectName: dto.subjectName,
+                    subjectCode: code,
+                    feeAmount: new client_1.Prisma.Decimal(dto.feeAmount),
+                    streamId: dto.streamId,
                     isActive: (_a = dto.isActive) !== null && _a !== void 0 ? _a : true,
-                    subjectStreams: {
-                        createMany: {
-                            data: streamIds.map((streamId) => ({ streamId })),
-                        },
-                    },
                 },
                 include: {
-                    subjectStreams: {
+                    stream: true,
+                    subjectAllocations: {
                         include: {
-                            stream: true,
+                            teacher: {
+                                include: { user: true },
+                            },
                         },
                     },
                 },
             });
-            yield prisma_config_1.default.auditLog.create({
-                data: {
-                    action: 'SUBJECT_CREATED',
-                    userId: (_b = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _b !== void 0 ? _b : null,
-                    resourceType: 'SUBJECT',
-                    resourceId: subject.id,
-                    details: JSON.stringify({
-                        name: subject.name,
-                        code: subject.code,
-                        feePerMonth: subject.feePerMonth.toString(),
-                    }),
-                },
-            });
+            if (actor === null || actor === void 0 ? void 0 : actor.userId) {
+                yield prisma_config_1.default.auditLog.create({
+                    data: {
+                        action: client_1.AuditAction.CREATE,
+                        userId: actor.userId,
+                        module: 'SUBJECT',
+                        description: `Subject created: ${subject.subjectName} (${subject.subjectCode})`,
+                    },
+                });
+            }
             return buildSubjectResponse(subject, 0);
         });
     }
     static getSubjects(params) {
         return __awaiter(this, void 0, void 0, function* () {
             const where = {};
-            if (params.userRole === client_1.UserRole.STUDENT && params.active === undefined) {
+            if (params.userRole === client_1.Role.STUDENT && params.active === undefined) {
                 where.isActive = true;
             }
             else if (params.active !== undefined) {
                 where.isActive = params.active;
             }
             if (params.teacherId) {
-                where.teacherId = params.teacherId;
-            }
-            if (params.streamId) {
-                where.subjectStreams = {
+                where.subjectAllocations = {
                     some: {
-                        streamId: params.streamId,
+                        teacherId: params.teacherId,
+                        status: client_1.SubjectAllocationStatus.ACTIVE,
                     },
                 };
             }
+            if (params.streamId) {
+                where.streamId = params.streamId;
+            }
             if (params.search) {
                 where.OR = [
-                    { name: { contains: params.search, mode: 'insensitive' } },
-                    { code: { contains: params.search, mode: 'insensitive' } },
+                    { subjectName: { contains: params.search, mode: 'insensitive' } },
+                    { subjectCode: { contains: params.search, mode: 'insensitive' } },
                 ];
             }
             const [subjects, currentTeacher] = yield Promise.all([
@@ -422,23 +383,24 @@ class SubjectsService {
                     where,
                     orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
                     include: {
-                        subjectStreams: {
+                        stream: true,
+                        subjectAllocations: {
                             include: {
-                                stream: true,
-                            },
-                        },
-                        teacher: {
-                            include: {
-                                user: {
-                                    select: {
-                                        isActive: true,
+                                teacher: {
+                                    include: {
+                                        user: {
+                                            select: {
+                                                isActive: true,
+                                                fullName: true,
+                                            },
+                                        },
                                     },
                                 },
                             },
                         },
                     },
                 }),
-                params.userRole === client_1.UserRole.TEACHER && params.userId ? getTeacherProfileByUserId(params.userId) : Promise.resolve(null),
+                params.userRole === client_1.Role.TEACHER && params.userId ? getTeacherProfileByUserId(params.userId) : Promise.resolve(null),
             ]);
             const subjectIds = subjects.map((subject) => subject.id);
             const activeCounts = yield getActiveEnrollmentCountMap(subjectIds);
@@ -451,28 +413,65 @@ class SubjectsService {
             };
         });
     }
-    static getSubjectTeachers(subjectId) {
+    static getSubjectByIdentifier(identifier, actor) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r;
-            const subject = yield prisma_config_1.default.subject.findUnique({
+            var _a;
+            const subject = yield findSubjectByIdentifier(identifier);
+            if (!subject) {
+                throw new AppError_1.AppError('Subject not found.', 404);
+            }
+            if (!subject.isActive && (actor === null || actor === void 0 ? void 0 : actor.userRole) === client_1.Role.STUDENT) {
+                throw new AppError_1.AppError('Subject not found.', 404);
+            }
+            const activeEnrollmentCount = yield prisma_config_1.default.enrollment.count({
+                where: {
+                    subjectId: subject.id,
+                    enrollmentStatus: client_1.EnrollmentStatus.ACTIVE,
+                },
+            });
+            const currentTeacher = (actor === null || actor === void 0 ? void 0 : actor.userRole) === client_1.Role.TEACHER && actor.userId
+                ? yield getTeacherProfileByUserId(actor.userId)
+                : null;
+            return buildSubjectResponse(subject, activeEnrollmentCount, (_a = currentTeacher === null || currentTeacher === void 0 ? void 0 : currentTeacher.id) !== null && _a !== void 0 ? _a : undefined);
+        });
+    }
+    static updateSubject(subjectId, dto, actor) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const existing = yield prisma_config_1.default.subject.findUnique({
                 where: { id: subjectId },
+            });
+            if (!existing) {
+                throw new AppError_1.AppError('Subject not found.', 404);
+            }
+            const data = {};
+            if (dto.subjectName !== undefined) {
+                data.subjectName = dto.subjectName;
+            }
+            if (dto.subjectCode !== undefined) {
+                data.subjectCode = dto.subjectCode;
+            }
+            if (dto.feeAmount !== undefined) {
+                data.feeAmount = new client_1.Prisma.Decimal(dto.feeAmount);
+            }
+            if (dto.isActive !== undefined) {
+                data.isActive = dto.isActive;
+            }
+            if (dto.streamId !== undefined) {
+                data.stream = { connect: { id: dto.streamId } };
+            }
+            const updated = yield prisma_config_1.default.subject.update({
+                where: { id: subjectId },
+                data,
                 include: {
-                    teacher: {
-                        include: {
-                            user: {
-                                select: {
-                                    isActive: true,
-                                },
-                            },
-                        },
-                    },
-                    materials: {
+                    stream: true,
+                    subjectAllocations: {
                         include: {
                             teacher: {
                                 include: {
                                     user: {
                                         select: {
                                             isActive: true,
+                                            fullName: true,
                                         },
                                     },
                                 },
@@ -481,182 +480,13 @@ class SubjectsService {
                     },
                 },
             });
-            if (!subject) {
-                throw new AppError_1.AppError('Subject not found.', 404);
-            }
-            const teachersById = new Map();
-            const subjectTeachers = yield prisma_config_1.default.teacher.findMany({
-                where: {
-                    specialization: {
-                        equals: subject.name,
-                        mode: 'insensitive',
-                    },
-                    user: {
-                        isActive: true,
-                    },
-                },
-                select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    specialization: true,
-                    user: {
-                        select: {
-                            isActive: true,
-                        },
-                    },
-                },
-                orderBy: {
-                    firstName: 'asc',
-                },
-            });
-            for (const teacher of subjectTeachers) {
-                teachersById.set(teacher.id, {
-                    id: teacher.id,
-                    name: `${(_a = teacher.firstName) !== null && _a !== void 0 ? _a : ''} ${(_b = teacher.lastName) !== null && _b !== void 0 ? _b : ''}`.trim(),
-                    qualification: (_c = teacher.specialization) !== null && _c !== void 0 ? _c : '',
-                    isActive: (_e = (_d = teacher.user) === null || _d === void 0 ? void 0 : _d.isActive) !== null && _e !== void 0 ? _e : true,
-                });
-            }
-            if (subject.teacher) {
-                teachersById.set(subject.teacher.id, {
-                    id: subject.teacher.id,
-                    name: `${(_f = subject.teacher.firstName) !== null && _f !== void 0 ? _f : ''} ${(_g = subject.teacher.lastName) !== null && _g !== void 0 ? _g : ''}`.trim(),
-                    qualification: (_h = subject.teacher.specialization) !== null && _h !== void 0 ? _h : '',
-                    isActive: (_k = (_j = subject.teacher.user) === null || _j === void 0 ? void 0 : _j.isActive) !== null && _k !== void 0 ? _k : true,
-                });
-            }
-            for (const material of (_l = subject.materials) !== null && _l !== void 0 ? _l : []) {
-                const teacher = material.teacher;
-                if (!teacher || teachersById.has(teacher.id)) {
-                    continue;
-                }
-                teachersById.set(teacher.id, {
-                    id: teacher.id,
-                    name: `${(_m = teacher.firstName) !== null && _m !== void 0 ? _m : ''} ${(_o = teacher.lastName) !== null && _o !== void 0 ? _o : ''}`.trim(),
-                    qualification: (_p = teacher.specialization) !== null && _p !== void 0 ? _p : '',
-                    isActive: (_r = (_q = teacher.user) === null || _q === void 0 ? void 0 : _q.isActive) !== null && _r !== void 0 ? _r : true,
-                });
-            }
-            return Array.from(teachersById.values());
-        });
-    }
-    static getSubjectByIdentifier(identifier, actor) {
-        return __awaiter(this, void 0, void 0, function* () {
-            var _a;
-            const subject = yield findSubjectByIdentifier(identifier);
-            if (!subject) {
-                throw new AppError_1.AppError('Subject not found.', 404);
-            }
-            if (!subject.isActive && (actor === null || actor === void 0 ? void 0 : actor.userRole) === client_1.UserRole.STUDENT) {
-                throw new AppError_1.AppError('Subject not found.', 404);
-            }
-            const activeEnrollmentCount = yield prisma_config_1.default.enrollment.count({
-                where: {
-                    subjectId: subject.id,
-                    isActive: true,
-                },
-            });
-            const currentTeacher = (actor === null || actor === void 0 ? void 0 : actor.userRole) === client_1.UserRole.TEACHER && actor.userId
-                ? yield getTeacherProfileByUserId(actor.userId)
-                : null;
-            return buildSubjectResponse(subject, activeEnrollmentCount, (_a = currentTeacher === null || currentTeacher === void 0 ? void 0 : currentTeacher.id) !== null && _a !== void 0 ? _a : undefined);
-        });
-    }
-    static updateSubject(subjectId, dto, actor) {
-        return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b, _c;
-            const existing = yield prisma_config_1.default.subject.findUnique({
-                where: { id: subjectId },
-            });
-            if (!existing) {
-                throw new AppError_1.AppError('Subject not found.', 404);
-            }
-            const streamIds = dto.streamIds === undefined
-                ? undefined
-                : yield validateStreamIds(dto.streamIds);
-            const data = {};
-            if (dto.name !== undefined) {
-                data.name = dto.name;
-            }
-            if (dto.code !== undefined) {
-                data.code = dto.code;
-            }
-            if (dto.description !== undefined) {
-                data.description = dto.description;
-            }
-            if (dto.feePerMonth !== undefined) {
-                data.feePerMonth = new client_1.Prisma.Decimal(dto.feePerMonth);
-            }
-            if (dto.isActive !== undefined) {
-                data.isActive = dto.isActive;
-            }
-            if (streamIds !== undefined) {
-                data.subjectStreams = {
-                    deleteMany: {},
-                    createMany: {
-                        data: streamIds.map((streamId) => ({ streamId })),
-                    },
-                };
-            }
-            const updated = yield prisma_config_1.default.subject.update({
-                where: { id: subjectId },
-                data,
-                include: {
-                    subjectStreams: {
-                        include: {
-                            stream: true,
-                        },
-                    },
-                    teacher: {
-                        include: {
-                            user: {
-                                select: {
-                                    isActive: true,
-                                },
-                            },
-                        },
-                    },
-                },
-            });
-            if (dto.feePerMonth !== undefined && decimalToNumber(existing.feePerMonth) !== dto.feePerMonth) {
+            if (actor === null || actor === void 0 ? void 0 : actor.userId) {
                 yield prisma_config_1.default.auditLog.create({
                     data: {
-                        action: 'SUBJECT_FEE_UPDATED',
-                        userId: (_a = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _a !== void 0 ? _a : null,
-                        resourceType: 'SUBJECT',
-                        resourceId: updated.id,
-                        details: JSON.stringify({
-                            previousFeePerMonth: existing.feePerMonth.toString(),
-                            newFeePerMonth: updated.feePerMonth.toString(),
-                        }),
-                    },
-                });
-            }
-            if (dto.isActive !== undefined && existing.isActive !== dto.isActive) {
-                yield prisma_config_1.default.auditLog.create({
-                    data: {
-                        action: dto.isActive ? 'SUBJECT_ACTIVATED' : 'SUBJECT_DEACTIVATED',
-                        userId: (_b = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _b !== void 0 ? _b : null,
-                        resourceType: 'SUBJECT',
-                        resourceId: updated.id,
-                        details: JSON.stringify({
-                            previousIsActive: existing.isActive,
-                            newIsActive: dto.isActive,
-                        }),
-                    },
-                });
-            }
-            if (streamIds !== undefined) {
-                yield prisma_config_1.default.auditLog.create({
-                    data: {
-                        action: 'SUBJECT_STREAMS_UPDATED',
-                        userId: (_c = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _c !== void 0 ? _c : null,
-                        resourceType: 'SUBJECT',
-                        resourceId: updated.id,
-                        details: JSON.stringify({
-                            streamIds,
-                        }),
+                        action: client_1.AuditAction.UPDATE,
+                        userId: actor.userId,
+                        module: 'SUBJECT',
+                        description: `Subject updated: ${updated.subjectName}`,
                     },
                 });
             }
@@ -665,7 +495,6 @@ class SubjectsService {
     }
     static deactivateSubject(subjectId, actor) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a;
             const subject = yield prisma_config_1.default.subject.findUnique({
                 where: { id: subjectId },
             });
@@ -675,7 +504,7 @@ class SubjectsService {
             const activeEnrollmentCount = yield prisma_config_1.default.enrollment.count({
                 where: {
                     subjectId,
-                    isActive: true,
+                    enrollmentStatus: client_1.EnrollmentStatus.ACTIVE,
                 },
             });
             if (activeEnrollmentCount > 0 && !(actor === null || actor === void 0 ? void 0 : actor.force)) {
@@ -687,74 +516,113 @@ class SubjectsService {
                     isActive: false,
                 },
                 include: {
-                    subjectStreams: {
+                    stream: true,
+                    subjectAllocations: {
                         include: {
-                            stream: true,
-                        },
-                    },
-                    teacher: {
-                        include: {
-                            user: {
-                                select: {
-                                    isActive: true,
+                            teacher: {
+                                include: {
+                                    user: {
+                                        select: {
+                                            isActive: true,
+                                            fullName: true,
+                                        },
+                                    },
                                 },
                             },
                         },
                     },
                 },
             });
-            yield prisma_config_1.default.auditLog.create({
-                data: {
-                    action: 'SUBJECT_DEACTIVATED',
-                    userId: (_a = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _a !== void 0 ? _a : null,
-                    resourceType: 'SUBJECT',
-                    resourceId: subjectId,
-                    details: JSON.stringify({
-                        force: Boolean(actor === null || actor === void 0 ? void 0 : actor.force),
-                    }),
-                },
-            });
+            if (actor === null || actor === void 0 ? void 0 : actor.userId) {
+                yield prisma_config_1.default.auditLog.create({
+                    data: {
+                        action: client_1.AuditAction.UPDATE,
+                        userId: actor.userId,
+                        module: 'SUBJECT',
+                        description: `Subject deactivated: ${subjectId}`,
+                    },
+                });
+            }
             return buildSubjectResponse(updated, activeEnrollmentCount);
         });
     }
-    static assignTeacher(subjectIdentifier, teacherId, actor) {
+    static assignTeacher(subjectId, teacherId, actor) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a;
-            // Resolve subject by ID or code
-            const subject = typeof subjectIdentifier === 'string' && Number.isNaN(Number(subjectIdentifier))
-                ? yield prisma_config_1.default.subject.findUnique({ where: { code: subjectIdentifier }, select: { id: true } })
-                : yield prisma_config_1.default.subject.findUnique({ where: { id: Number(subjectIdentifier) }, select: { id: true } });
+            const subject = yield prisma_config_1.default.subject.findUnique({ where: { id: subjectId } });
             if (!subject) {
                 throw new AppError_1.AppError('Subject not found.', 404);
             }
             const teacher = yield resolveTeacherReference(teacherId);
             if (!teacher) {
-                throw new AppError_1.AppError('Teacher not found. Use the teacher table id or the linked user id.', 404);
+                throw new AppError_1.AppError('Teacher not found.', 404);
             }
-            const updatedSubject = yield prisma_config_1.default.subject.update({
-                where: { id: subject.id },
-                data: {
-                    teacherId: teacher.id,
+            // Allocate teacher using SubjectAllocation
+            yield prisma_config_1.default.subjectAllocation.upsert({
+                where: {
+                    teacherId_subjectId: {
+                        teacherId: teacher.id,
+                        subjectId,
+                    },
                 },
-                include: {
-                    subjectStreams: {
-                        include: { stream: true },
-                    },
-                    teacher: {
-                        include: { user: { select: { isActive: true } } },
-                    },
+                create: {
+                    teacherId: teacher.id,
+                    subjectId,
+                    status: client_1.SubjectAllocationStatus.ACTIVE,
+                },
+                update: {
+                    status: client_1.SubjectAllocationStatus.ACTIVE,
                 },
             });
-            yield prisma_config_1.default.auditLog.create({
-                data: {
-                    action: 'SUBJECT_TEACHER_ASSIGNED',
-                    userId: (_a = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _a !== void 0 ? _a : null,
-                    resourceType: 'SUBJECT',
-                    resourceId: subject.id,
-                    details: JSON.stringify({ teacherId: teacher.id }),
+            if (actor === null || actor === void 0 ? void 0 : actor.userId) {
+                yield prisma_config_1.default.auditLog.create({
+                    data: {
+                        action: client_1.AuditAction.UPDATE,
+                        userId: actor.userId,
+                        module: 'SUBJECT',
+                        description: `Teacher ${teacher.id} assigned to subject ${subject.subjectName}`,
+                    },
+                });
+            }
+            const updatedSubject = yield prisma_config_1.default.subject.findUnique({
+                where: { id: subjectId },
+                include: {
+                    stream: true,
+                    subjectAllocations: {
+                        include: {
+                            teacher: {
+                                include: {
+                                    user: true,
+                                },
+                            },
+                        },
+                    },
                 },
             });
             return buildSubjectResponse(updatedSubject, 0);
+        });
+    }
+    static getSubjectTeachers(subjectId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const allocations = yield prisma_config_1.default.subjectAllocation.findMany({
+                where: { subjectId, status: client_1.SubjectAllocationStatus.ACTIVE },
+                include: {
+                    teacher: {
+                        include: {
+                            user: {
+                                select: {
+                                    id: true,
+                                    fullName: true,
+                                    email: true,
+                                    phone: true,
+                                    isActive: true,
+                                    profileImage: true,
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            return allocations.map(a => a.teacher);
         });
     }
     static getSubjectStudents(subjectId, actor) {
@@ -763,22 +631,29 @@ class SubjectsService {
                 where: { id: subjectId },
                 select: {
                     id: true,
-                    teacherId: true,
                 },
             });
             if (!subject) {
                 throw new AppError_1.AppError('Subject not found.', 404);
             }
-            if ((actor === null || actor === void 0 ? void 0 : actor.userRole) === client_1.UserRole.TEACHER && actor.userId) {
+            if ((actor === null || actor === void 0 ? void 0 : actor.userRole) === client_1.Role.TEACHER && actor.userId) {
                 const teacher = yield getTeacherProfileByUserId(actor.userId);
-                if ((teacher === null || teacher === void 0 ? void 0 : teacher.id) !== subject.teacherId) {
+                // Ensure the teacher is allocated to this subject
+                const allocation = yield prisma_config_1.default.subjectAllocation.findFirst({
+                    where: {
+                        subjectId,
+                        teacherId: teacher === null || teacher === void 0 ? void 0 : teacher.id,
+                        status: client_1.SubjectAllocationStatus.ACTIVE,
+                    },
+                });
+                if (!allocation) {
                     throw new AppError_1.AppError('You can only view students for your assigned subjects.', 403);
                 }
             }
             const enrollments = yield prisma_config_1.default.enrollment.findMany({
                 where: {
                     subjectId,
-                    isActive: true,
+                    enrollmentStatus: client_1.EnrollmentStatus.ACTIVE,
                 },
                 include: {
                     student: {
@@ -787,32 +662,32 @@ class SubjectsService {
                                 select: {
                                     isActive: true,
                                     email: true,
+                                    fullName: true,
                                 },
                             },
                         },
                     },
                 },
                 orderBy: {
-                    enrolledAt: 'desc',
+                    enrolledDate: 'desc',
                 },
             });
             return {
                 data: enrollments.map((enrollment) => {
-                    var _a, _b;
+                    var _a, _b, _c;
                     return ({
                         enrollmentId: enrollment.id,
                         studentId: enrollment.studentId,
-                        enrolledAt: enrollment.enrolledAt,
-                        isActive: enrollment.isActive,
+                        enrolledAt: enrollment.enrolledDate,
+                        enrollmentStatus: enrollment.enrollmentStatus,
                         student: {
                             id: enrollment.student.id,
                             userId: enrollment.student.userId,
-                            firstName: enrollment.student.firstName,
-                            lastName: enrollment.student.lastName,
+                            name: ((_a = enrollment.student.user) === null || _a === void 0 ? void 0 : _a.fullName) || '',
                             indexNumber: enrollment.student.indexNumber,
                             phone: enrollment.student.phone,
                             address: enrollment.student.address,
-                            isActive: (_b = (_a = enrollment.student.user) === null || _a === void 0 ? void 0 : _a.isActive) !== null && _b !== void 0 ? _b : true,
+                            isActive: (_c = (_b = enrollment.student.user) === null || _b === void 0 ? void 0 : _b.isActive) !== null && _c !== void 0 ? _c : true,
                         },
                     });
                 }),
@@ -822,7 +697,6 @@ class SubjectsService {
     }
     static enrollStudent(subjectId, dto, actor) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a;
             const subject = yield prisma_config_1.default.subject.findUnique({
                 where: { id: subjectId },
                 select: {
@@ -851,45 +725,44 @@ class SubjectsService {
             if (!(student === null || student === void 0 ? void 0 : student.user.isActive)) {
                 throw new AppError_1.AppError('Student not found or is not active.', 404);
             }
-            const existingEnrollment = yield prisma_config_1.default.enrollment.findFirst({
+            const existingEnrollment = yield prisma_config_1.default.enrollment.findUnique({
                 where: {
-                    studentId,
-                    subjectId,
+                    studentId_subjectId: {
+                        studentId,
+                        subjectId,
+                    },
                 },
             });
-            if (existingEnrollment === null || existingEnrollment === void 0 ? void 0 : existingEnrollment.isActive) {
+            if ((existingEnrollment === null || existingEnrollment === void 0 ? void 0 : existingEnrollment.enrollmentStatus) === client_1.EnrollmentStatus.ACTIVE) {
                 throw new AppError_1.AppError('Student is already enrolled in this subject.', 409);
             }
             const enrollment = existingEnrollment
                 ? yield prisma_config_1.default.enrollment.update({
                     where: { id: existingEnrollment.id },
-                    data: { isActive: true },
+                    data: { enrollmentStatus: client_1.EnrollmentStatus.ACTIVE },
                 })
                 : yield prisma_config_1.default.enrollment.create({
                     data: {
                         studentId,
                         subjectId,
-                        isActive: true,
+                        enrollmentStatus: client_1.EnrollmentStatus.ACTIVE,
                     },
                 });
-            yield prisma_config_1.default.auditLog.create({
-                data: {
-                    action: 'SUBJECT_STUDENT_ENROLLED',
-                    userId: (_a = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _a !== void 0 ? _a : null,
-                    resourceType: 'ENROLLMENT',
-                    resourceId: enrollment.id,
-                    details: JSON.stringify({
-                        subjectId,
-                        studentId,
-                    }),
-                },
-            });
+            if (actor === null || actor === void 0 ? void 0 : actor.userId) {
+                yield prisma_config_1.default.auditLog.create({
+                    data: {
+                        action: client_1.AuditAction.CREATE,
+                        userId: actor.userId,
+                        module: 'ENROLLMENT',
+                        description: `Student ${studentId} enrolled in subject ${subjectId}`,
+                    },
+                });
+            }
             return enrollment;
         });
     }
     static unenrollStudent(subjectId, studentId, actor) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a;
             const subject = yield prisma_config_1.default.subject.findUnique({
                 where: { id: subjectId },
                 select: {
@@ -899,7 +772,7 @@ class SubjectsService {
             if (!subject) {
                 throw new AppError_1.AppError('Subject not found.', 404);
             }
-            if ((actor === null || actor === void 0 ? void 0 : actor.userRole) === client_1.UserRole.STUDENT) {
+            if ((actor === null || actor === void 0 ? void 0 : actor.userRole) === client_1.Role.STUDENT) {
                 if (!actor.userId) {
                     throw new AppError_1.AppError('Student profile not found.', 403);
                 }
@@ -908,32 +781,31 @@ class SubjectsService {
                     throw new AppError_1.AppError('You can only unenroll yourself.', 403);
                 }
             }
-            const enrollment = yield prisma_config_1.default.enrollment.findFirst({
+            const enrollment = yield prisma_config_1.default.enrollment.findUnique({
                 where: {
-                    studentId,
-                    subjectId,
-                    isActive: true,
+                    studentId_subjectId: {
+                        studentId,
+                        subjectId,
+                    },
                 },
             });
-            if (!enrollment) {
-                throw new AppError_1.AppError('Enrollment not found.', 404);
+            if (!enrollment || enrollment.enrollmentStatus !== client_1.EnrollmentStatus.ACTIVE) {
+                throw new AppError_1.AppError('Active enrollment not found.', 404);
             }
             const updated = yield prisma_config_1.default.enrollment.update({
                 where: { id: enrollment.id },
-                data: { isActive: false },
+                data: { enrollmentStatus: client_1.EnrollmentStatus.DROPPED },
             });
-            yield prisma_config_1.default.auditLog.create({
-                data: {
-                    action: 'SUBJECT_STUDENT_UNENROLLED',
-                    userId: (_a = actor === null || actor === void 0 ? void 0 : actor.userId) !== null && _a !== void 0 ? _a : null,
-                    resourceType: 'ENROLLMENT',
-                    resourceId: updated.id,
-                    details: JSON.stringify({
-                        subjectId,
-                        studentId,
-                    }),
-                },
-            });
+            if (actor === null || actor === void 0 ? void 0 : actor.userId) {
+                yield prisma_config_1.default.auditLog.create({
+                    data: {
+                        action: client_1.AuditAction.UPDATE,
+                        userId: actor.userId,
+                        module: 'ENROLLMENT',
+                        description: `Student ${studentId} unenrolled from subject ${subjectId}`,
+                    },
+                });
+            }
             return updated;
         });
     }
@@ -949,7 +821,7 @@ class SubjectsService {
             return prisma_config_1.default.enrollment.count({
                 where: {
                     subjectId,
-                    isActive: true,
+                    enrollmentStatus: client_1.EnrollmentStatus.ACTIVE,
                 },
             });
         });

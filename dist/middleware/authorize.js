@@ -18,8 +18,8 @@ function authorize(...allowedRoles) {
     };
 }
 // Convenience middlewares for 4 roles
-exports.adminOnly = authorize(client_1.UserRole.ADMIN);
-exports.adminOrManager = authorize(client_1.UserRole.ADMIN, client_1.UserRole.MANAGER);
-exports.staffOnly = authorize(client_1.UserRole.ADMIN, client_1.UserRole.MANAGER, client_1.UserRole.TEACHER);
-exports.teacherOnly = authorize(client_1.UserRole.TEACHER);
-exports.studentOnly = authorize(client_1.UserRole.STUDENT);
+exports.adminOnly = authorize(client_1.Role.ADMIN);
+exports.adminOrManager = authorize(client_1.Role.ADMIN, client_1.Role.MANAGER);
+exports.staffOnly = authorize(client_1.Role.ADMIN, client_1.Role.MANAGER, client_1.Role.TEACHER);
+exports.teacherOnly = authorize(client_1.Role.TEACHER);
+exports.studentOnly = authorize(client_1.Role.STUDENT);

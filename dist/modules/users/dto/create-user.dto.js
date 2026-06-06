@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createAdminSchema = exports.createStudentSchema = exports.createSupportStaffSchema = exports.createTeacherSchema = exports.createManagerSchema = void 0;
+exports.createAdminSchema = exports.createStudentSchema = exports.createTeacherSchema = exports.createManagerSchema = void 0;
 const zod_1 = require("zod");
 // Email field used across DTOs
 const emailField = zod_1.z
@@ -10,83 +10,53 @@ const emailField = zod_1.z
 // Manager DTO
 exports.createManagerSchema = zod_1.z.object({
     role: zod_1.z.literal('MANAGER'),
-    firstName: zod_1.z.string().min(1, 'First name is required').max(255),
-    lastName: zod_1.z.string().min(1, 'Last name is required').max(255),
-    nicNumber: zod_1.z.string().min(10, 'NIC number is required').max(20),
+    fullName: zod_1.z.string().min(1, 'Full name is required').max(255),
+    nic: zod_1.z.string().min(10, 'NIC number is required').max(20),
     gender: zod_1.z.enum(['MALE', 'FEMALE', 'OTHER']),
     address: zod_1.z.string().min(3, 'Address is required').max(500),
     email: emailField,
     password: zod_1.z.string().min(1, 'Password is required').optional(),
-    phoneNumber: zod_1.z.string().min(10, 'Phone number must be at least 10 digits'),
+    phone: zod_1.z.string().min(10, 'Phone number must be at least 10 digits'),
     salary: zod_1.z.number().positive('Salary must be positive').optional(),
 });
 // Teacher DTO
 exports.createTeacherSchema = zod_1.z.object({
     role: zod_1.z.literal('TEACHER'),
-    firstName: zod_1.z.string().min(1, 'First name is required').max(255),
-    lastName: zod_1.z.string().min(1, 'Last name is required').max(255),
-    nicNumber: zod_1.z.string().min(10, 'NIC number is required').max(20),
+    fullName: zod_1.z.string().min(1, 'Full name is required').max(255),
+    nic: zod_1.z.string().min(10, 'NIC number is required').max(20),
     gender: zod_1.z.enum(['MALE', 'FEMALE', 'OTHER']),
     address: zod_1.z.string().min(3, 'Address is required').max(500),
-    subject: zod_1.z.string().min(1, 'Subject is required').max(255),
+    subjectId: zod_1.z.string().uuid('Subject ID must be a valid UUID').optional(),
     email: emailField,
     password: zod_1.z.string().min(1, 'Password is required').optional(),
-    phoneNumber: zod_1.z.string().min(10, 'Phone number must be at least 10 digits'),
-    salary: zod_1.z.number().positive('Salary must be positive').optional(),
-});
-// Support Staff DTO
-exports.createSupportStaffSchema = zod_1.z.object({
-    role: zod_1.z.literal('SUPPORT_STAFF'),
-    firstName: zod_1.z.string().min(1, 'First name is required').max(255),
-    lastName: zod_1.z.string().min(1, 'Last name is required').max(255),
-    nicNumber: zod_1.z.string().min(1, 'NIC number is required').max(20),
-    gender: zod_1.z.enum(['MALE', 'FEMALE', 'OTHER']),
-    address: zod_1.z.string().min(1, 'Address is required').max(500),
-    roleType: zod_1.z.string().min(1, 'Role is required').max(255),
-    email: emailField,
-    password: zod_1.z.string().min(1, 'Password is required').optional(),
-    phoneNumber: zod_1.z.string().min(10, 'Phone number must be at least 10 digits'),
+    phone: zod_1.z.string().min(10, 'Phone number must be at least 10 digits'),
     salary: zod_1.z.number().positive('Salary must be positive').optional(),
 });
 // Student DTO
 exports.createStudentSchema = zod_1.z.object({
     role: zod_1.z.literal('STUDENT'),
-    firstName: zod_1.z.string().min(1, 'First name is required').max(255),
-    lastName: zod_1.z.string().min(1, 'Last name is required').max(255),
+    fullName: zod_1.z.string().min(1, 'Full name is required').max(255),
     indexNumber: zod_1.z.string().min(1, 'Index number is required').max(255),
     dateOfBirth: zod_1.z.coerce.date(),
     address: zod_1.z.string().min(1, 'Address is required').max(500),
     email: emailField,
     password: zod_1.z.string().min(1, 'Password is required').optional(),
-    phoneNumber: zod_1.z.string().min(10, 'Phone number must be at least 10 digits'),
+    phone: zod_1.z.string().min(10, 'Phone number must be at least 10 digits'),
+    nic: zod_1.z.string().min(10).max(20).optional(),
+    batch: zod_1.z.string().optional(),
 });
-// Admin can create any role - flexible schema
+// Admin DTO
 exports.createAdminSchema = zod_1.z.object({
-    role: zod_1.z.enum(['ADMIN', 'MANAGER', 'TEACHER', 'STUDENT', 'SUPPORT_STAFF']),
-    // Common fields
+    role: zod_1.z.literal('ADMIN'),
+    fullName: zod_1.z.string().min(1, 'Full name is required').max(255),
     email: emailField,
     password: zod_1.z.string().min(1, 'Password is required'),
-    // Manager fields
-    firstName: zod_1.z.string().max(255).optional(),
-    lastName: zod_1.z.string().max(255).optional(),
-    nicNumber: zod_1.z.string().max(20).optional(),
-    gender: zod_1.z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
-    address: zod_1.z.string().max(500).optional(),
-    salary: zod_1.z.number().positive().optional(),
-    // Teacher fields
-    subject: zod_1.z.string().max(255).optional(),
-    // Student fields
-    indexNumber: zod_1.z.string().max(255).optional(),
-    dateOfBirth: zod_1.z.coerce.date().optional(),
-    // Support Staff fields
-    roleType: zod_1.z.string().max(255).optional(),
-    // Common optional
-    phoneNumber: zod_1.z.string().min(10).optional(),
+    phone: zod_1.z.string().min(10).optional(),
+    accessLevel: zod_1.z.number().int().min(1).default(1),
 });
 exports.default = {
     createManagerSchema: exports.createManagerSchema,
     createTeacherSchema: exports.createTeacherSchema,
-    createSupportStaffSchema: exports.createSupportStaffSchema,
     createStudentSchema: exports.createStudentSchema,
     createAdminSchema: exports.createAdminSchema,
 };

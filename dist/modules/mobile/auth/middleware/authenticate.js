@@ -12,7 +12,7 @@ function authenticateMobileStudent(req, _res, next) {
         }
         const token = authHeader.slice(7);
         const payload = (0, jwt_util_1.verifyAccessToken)(token);
-        if (payload.role !== client_1.UserRole.STUDENT) {
+        if (payload.role !== client_1.Role.STUDENT) {
             throw new AppError_1.AppError('Access restricted to student accounts.', 403);
         }
         req.user = payload;
