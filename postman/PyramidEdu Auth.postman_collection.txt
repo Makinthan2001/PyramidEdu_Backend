@@ -1,0 +1,64 @@
+=== Register Admin ===
+URL: POST {{baseUrl}}/api/v1/auth/register
+Instruction: Register a new admin user.
+Body:
+{
+  "email": "admin@test.com",
+  "password": "Password123",
+  "fullName": "Admin Test",
+  "role": "ADMIN"
+}
+
+-------------------------------------------------
+
+=== Login ===
+URL: POST {{baseUrl}}/api/v1/auth/login
+Instruction: Login and receive access and refresh tokens.
+Body:
+{
+  "email": "admin@test.com",
+  "password": "Password123"
+}
+
+-------------------------------------------------
+
+=== Get Me ===
+URL: GET {{baseUrl}}/api/v1/auth/me
+Headers: Authorization: Bearer {{token}}
+Instruction: Get the profile of the currently logged in user.
+
+-------------------------------------------------
+
+=== Change Password ===
+URL: PATCH {{baseUrl}}/api/v1/auth/change-password
+Headers: Authorization: Bearer {{token}}
+Instruction: Change the password for the current user.
+Body:
+{
+  "currentPassword": "Password123",
+  "newPassword": "NewPassword123"
+}
+
+-------------------------------------------------
+
+=== Refresh Token ===
+URL: POST {{baseUrl}}/api/v1/auth/refresh
+Instruction: Get a new access token using a refresh token.
+Body:
+{
+  "refreshToken": "your_refresh_token_here"
+}
+
+-------------------------------------------------
+
+=== Logout ===
+URL: POST {{baseUrl}}/api/v1/auth/logout
+Instruction: Logout and invalidate the refresh token.
+Body:
+{
+  "refreshToken": "your_refresh_token_here",
+  "logoutAll": false
+}
+
+-------------------------------------------------
+

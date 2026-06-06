@@ -1,0 +1,6 @@
+=== Health Check ===
+URL: GET {{baseUrl}}/api/v1/health
+Instruction: Check the health of the API server.
+
+-------------------------------------------------
+

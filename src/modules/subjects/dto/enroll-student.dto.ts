@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 export const enrollStudentSchema = z.object({
-  studentId: z.number().int().positive().optional(),
-  userId: z.number().int().positive().optional(),
+  studentId: z.string().uuid().optional(),
+  userId: z.string().uuid().optional(),
 });
 
 export type EnrollStudentDto = z.infer<typeof enrollStudentSchema>;

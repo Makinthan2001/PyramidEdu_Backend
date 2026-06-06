@@ -12,7 +12,6 @@ import {
   createManagerSchema,
   createTeacherSchema,
   createStudentSchema,
-  createSupportStaffSchema,
   createAdminSchema,
   updateUserSchema,
 } from '../validators/users.validator';
@@ -59,9 +58,6 @@ router.post(
         break;
       case 'STUDENT':
         schema = createStudentSchema;
-        break;
-      case 'SUPPORT_STAFF':
-        schema = createSupportStaffSchema;
         break;
       case 'ADMIN':
         schema = createAdminSchema;

@@ -37,9 +37,9 @@ export function verifyAccessToken(token: string): JwtAccessPayload {
   }
 }
 
-export function generateRefreshToken(userId: number, tokenFamily: string, expiresIn: string = REFRESH_EXPIRES): string {
+export function generateRefreshToken(userId: string, expiresIn: string = REFRESH_EXPIRES): string {
   return jwt.sign(
-    { sub: userId, tokenFamily } satisfies Omit<JwtRefreshPayload, 'iat' | 'exp'>,
+    { sub: userId } satisfies Omit<JwtRefreshPayload, 'iat' | 'exp'>,
     requireSecret(REFRESH_SECRET, 'JWT_REFRESH_SECRET'),
     { expiresIn } as SignOptions,
   );
@@ -56,7 +56,7 @@ export function verifyRefreshToken(token: string): JwtRefreshPayload {
   }
 }
 
-export function generateResetToken(userId: number): string {
+export function generateResetToken(userId: string): string {
   return jwt.sign(
     { sub: userId, purpose: 'password_reset' } satisfies Omit<PasswordResetPayload, 'iat' | 'exp'>,
     requireSecret(RESET_SECRET, 'JWT_RESET_SECRET'),

@@ -1,16 +1,15 @@
-import { UserRole } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 export interface JwtAccessPayload {
-  sub: number;
+  sub: string;
   email: string;
-  role: UserRole;
+  role: Role;
   iat?: number;
   exp?: number;
 }
 
 export interface JwtRefreshPayload {
-  sub: number;
-  tokenFamily: string;
+  sub: string;
   iat?: number;
   exp?: number;
 }
@@ -34,23 +33,19 @@ export interface LoginResult {
 }
 
 export interface SafeUser {
-  id: number;
+  id: string;
   email: string;
-  role: UserRole;
+  role: Role;
   isActive: boolean;
-  forcePasswordChange: boolean;
+  forcePwdChange: boolean;
   createdAt: Date;
-  firstName?: string;
-  lastName?: string;
-  subject?: string;
-  specialization?: string;
   fullName?: string;
   phone?: string;
   address?: string;
 }
 
 export interface PasswordResetPayload {
-  sub: number;
+  sub: string;
   purpose: 'password_reset';
   iat?: number;
   exp?: number;

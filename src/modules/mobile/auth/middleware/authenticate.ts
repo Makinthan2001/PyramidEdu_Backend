@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { UserRole } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { verifyAccessToken } from '../../../../utils/jwt.util';
 import { AppError } from '../../../../utils/AppError';
 
@@ -14,7 +14,7 @@ export function authenticateMobileStudent(req: Request, _res: Response, next: Ne
     const token = authHeader.slice(7);
     const payload = verifyAccessToken(token);
 
-    if (payload.role !== UserRole.STUDENT) {
+    if (payload.role !== Role.STUDENT) {
       throw new AppError('Access restricted to student accounts.', 403);
     }
 

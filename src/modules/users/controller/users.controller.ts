@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { UserRole } from '@prisma/client';
+import { Role } from '@prisma/client';
 import UsersService from '../service/users.service';
 import type { CreateUserDto, UpdateUserDto } from '../dto';
 import type { ChangePasswordDto } from '../dto/change-password.dto';
@@ -20,7 +20,7 @@ export async function getUsers(req: Request, res: Response, next: NextFunction) 
     const role = req.query.role as string;
     const status = req.query.status as string;
 
-    const userRole = (req as any).userRole as UserRole;
+    const userRole = (req as any).userRole as Role;
 
     const result = await UsersService.getUsers({
       page,
@@ -47,7 +47,7 @@ export async function getUsers(req: Request, res: Response, next: NextFunction) 
  */
 export async function getUserById(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id as string);
+    const userId = req.params.id as string;
 
     const user = await UsersService.getUserById(userId);
 
@@ -68,7 +68,7 @@ export async function getUserById(req: Request, res: Response, next: NextFunctio
 export async function createUser(req: Request, res: Response, next: NextFunction) {
   try {
     const dto: CreateUserDto = req.body;
-    const role = dto.role as UserRole;
+    const role = dto.role as Role;
 
     const result = await UsersService.createUser(dto, role);
 
@@ -89,7 +89,7 @@ export async function createUser(req: Request, res: Response, next: NextFunction
  */
 export async function changeMyPassword(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).userId as number;
+    const userId = (req as any).userId as string;
     const dto: ChangePasswordDto = req.body;
 
     await UsersService.changePassword(userId, dto.oldPassword, dto.newPassword);
@@ -109,8 +109,7 @@ export async function changeMyPassword(req: Request, res: Response, next: NextFu
  */
 export async function resetUserPassword(req: Request, res: Response, next: NextFunction) {
   try {
-    const targetUserId = parseInt(req.params.id as string);
-    // Allow admins to provide a specific password in the request body to set for the user.
+    const targetUserId = req.params.id as string;
     const providedPassword = (req.body && typeof req.body.password === 'string' && req.body.password.length > 0)
       ? req.body.password
       : undefined;
@@ -139,7 +138,7 @@ export async function resetUserPassword(req: Request, res: Response, next: NextF
  */
 export async function updateUser(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id as string);
+    const userId = req.params.id as string;
     const dto: UpdateUserDto = req.body;
 
     const user = await UsersService.updateUser(userId, dto);
@@ -160,7 +159,7 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
  */
 export async function deleteUser(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id as string);
+    const userId = req.params.id as string;
 
     const user = await UsersService.deleteUser(userId);
 
@@ -180,7 +179,7 @@ export async function deleteUser(req: Request, res: Response, next: NextFunction
  */
 export async function deactivateUser(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id as string);
+    const userId = req.params.id as string;
 
     const user = await UsersService.deactivateUser(userId);
 
@@ -200,7 +199,7 @@ export async function deactivateUser(req: Request, res: Response, next: NextFunc
  */
 export async function activateUser(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id as string);
+    const userId = req.params.id as string;
 
     const user = await UsersService.activateUser(userId);
 
@@ -220,7 +219,7 @@ export async function activateUser(req: Request, res: Response, next: NextFuncti
  */
 export async function approveStudent(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = parseInt(req.params.id as string);
+    const userId = req.params.id as string;
 
     const user = await UsersService.approveStudent(userId);
 
@@ -242,4 +241,5 @@ export default {
   deleteUser,
   deactivateUser,
   activateUser,
+  approveStudent,
 };

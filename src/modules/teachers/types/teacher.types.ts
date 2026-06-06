@@ -1,19 +1,17 @@
 import { Prisma } from '@prisma/client';
 
 export interface Teacher {
-  id: number;
-  userId: number;
-  firstName: string;
-  lastName: string;
-  nicNumber: string;
-  gender: 'MALE' | 'FEMALE' | 'OTHER';
-  address: string;
-  phone: string;
-  specialization?: string | null;
-  salary?: Prisma.Decimal | number | null | undefined;
+  id: string;
+  userId: string;
+  subjectId?: string | null;
+  nic?: string | null;
+  gender?: 'MALE' | 'FEMALE' | 'OTHER' | null;
+  address?: string | null;
+  phone?: string | null;
+  salary?: Prisma.Decimal | number | null;
   createdAt?: Date;
   updatedAt?: Date;
-  // Optional relations included in service queries
+  deletedAt?: Date | null;
   user?: any;
-  subjects?: any[];
+  subjectAllocations?: any[];
 }

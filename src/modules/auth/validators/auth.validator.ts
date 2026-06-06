@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UserRole } from '@prisma/client';
+import { Role } from '@prisma/client';
 // Import DTOs
 export { LoginDto, loginSchema } from '../dto/login.dto';
 export { ForgotPasswordDto, forgotPasswordSchema } from '../dto/forgot-password.dto';
@@ -18,7 +18,8 @@ const emailField = z.string().email('Please provide a valid email address.');
 export const registerSchema = z.object({
   email: emailField,
   password: passwordField,
-  role: z.nativeEnum(UserRole).refine((role: UserRole) => role !== UserRole.STUDENT, {
+  fullName: z.string().min(2, 'Full name is required.').max(100),
+  role: z.nativeEnum(Role).refine((role: Role) => role !== Role.STUDENT, {
     message: 'Role must be ADMIN, MANAGER, or TEACHER.',
   }),
 });

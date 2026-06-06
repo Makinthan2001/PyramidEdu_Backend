@@ -1,0 +1,33 @@
+=== Get Students ===
+URL: GET {{baseUrl}}/api/v1/students
+Headers: Authorization: Bearer {{token}}
+Instruction: List students with pagination and search.
+
+-------------------------------------------------
+
+=== Get Student By Id ===
+URL: GET {{baseUrl}}/api/v1/students/123
+Headers: Authorization: Bearer {{token}}
+Instruction: Get student details by ID.
+
+-------------------------------------------------
+
+=== Update Student ===
+URL: PATCH {{baseUrl}}/api/v1/students/123
+Headers: Authorization: Bearer {{token}}
+Instruction: Update a student's profile.
+Body:
+{
+  "address": "New Address",
+  "phone": "0712345678"
+}
+
+-------------------------------------------------
+
+=== Get Enrollments ===
+URL: GET {{baseUrl}}/api/v1/students/123/enrollments
+Headers: Authorization: Bearer {{token}}
+Instruction: Get all subject enrollments for a student.
+
+-------------------------------------------------
+
