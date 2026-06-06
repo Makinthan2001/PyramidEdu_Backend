@@ -6,6 +6,7 @@ import {
   canManageUsers, 
   canCreateRole, 
   canAccessUser, 
+  canUpdateUser,
   preventSelfDeactivation 
 } from '../guards/users.guard';
 import {
@@ -95,7 +96,7 @@ router.patch('/:id/reset-password', canManageUsers, controller.resetUserPassword
 router.patch(
   '/:id',
   validate(updateUserSchema),
-  canAccessUser,
+  canUpdateUser,
   controller.updateUser
 );
 
