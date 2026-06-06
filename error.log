@@ -1,0 +1,29 @@
+2026-06-06T17:57:42.531Z PrismaClientValidationError: 
+Invalid `tx.enrollment.create()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\student\service\student.service.ts:236:29
+
+  233 const teacherId = regData.selectedTeacherIds?.[subjectId];
+  234 if (!teacherId) throw new AppError(`Missing teacher for subject ${subjectId}`, 400);
+  235 
+→ 236 await tx.enrollment.create({
+        data: {
+          studentId: "815c327d-9c07-4e34-b0d1-96a702fef47b",
+          subjectId: "24ece495-1de2-4280-b57d-2eac3cb79201",
+          teacherId: "7b1483de-8b60-466b-a449-10335b1496f7",
+          ~~~~~~~~~
+          enrollmentStatus: "ACTIVE",
+      ?   id?: String,
+      ?   enrolledDate?: DateTime,
+      ?   endDate?: DateTime | Null,
+      ?   createdAt?: DateTime,
+      ?   updatedAt?: DateTime
+        }
+      })
+
+Unknown argument `teacherId`. Available options are marked with ?.
+    at throwValidationException (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\core\errorRendering\throwValidationException.ts:46:9)
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:211:7)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
