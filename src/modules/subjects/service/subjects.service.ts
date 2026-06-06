@@ -248,17 +248,17 @@ function buildSubjectResponse(subject: any, activeEnrollmentCount = 0, currentTe
     createdAt: subject.createdAt,
     stream: subject.stream
       ? {
-          id: subject.stream.id,
-          name: subject.stream.streamName,
-          isActive: subject.stream.isActive,
-        }
+        id: subject.stream.id,
+        name: subject.stream.streamName,
+        isActive: subject.stream.isActive,
+      }
       : null,
     teacher: teacher
       ? {
-          id: teacher.id,
-          name: teacher.user?.fullName || '',
-          isActive: teacher.user?.isActive ?? true,
-        }
+        id: teacher.id,
+        name: teacher.user?.fullName || '',
+        isActive: teacher.user?.isActive ?? true,
+      }
       : null,
     activeEnrollmentCount,
     isAssignedToMe: currentTeacherId && teacher ? teacher.id === currentTeacherId : false,
@@ -790,16 +790,16 @@ export class SubjectsService {
 
     const enrollment = existingEnrollment
       ? await prisma.enrollment.update({
-          where: { id: existingEnrollment.id },
-          data: { enrollmentStatus: EnrollmentStatus.ACTIVE },
-        })
+        where: { id: existingEnrollment.id },
+        data: { enrollmentStatus: EnrollmentStatus.ACTIVE },
+      })
       : await prisma.enrollment.create({
-          data: {
-            studentId,
-            subjectId,
-            enrollmentStatus: EnrollmentStatus.ACTIVE,
-          },
-        });
+        data: {
+          studentId,
+          subjectId,
+          enrollmentStatus: EnrollmentStatus.ACTIVE,
+        },
+      });
 
     if (actor?.userId) {
       await prisma.auditLog.create({

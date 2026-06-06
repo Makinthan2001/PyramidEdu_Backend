@@ -28,7 +28,7 @@ function adminOnly(req, res, next) {
     if (!userRole) {
         return next(new AppError_1.AppError('User role not found. Please authenticate first.', 401));
     }
-    if (userRole !== client_1.UserRole.ADMIN) {
+    if (userRole !== client_1.Role.ADMIN) {
         return next(new AppError_1.AppError('Only administrators can access this resource.', 403));
     }
     next();
@@ -41,7 +41,7 @@ function managerOrAdmin(req, res, next) {
     if (!userRole) {
         return next(new AppError_1.AppError('User role not found. Please authenticate first.', 401));
     }
-    const allowedForManagerOrAdmin = [client_1.UserRole.ADMIN, client_1.UserRole.MANAGER];
+    const allowedForManagerOrAdmin = [client_1.Role.ADMIN, client_1.Role.MANAGER];
     if (!allowedForManagerOrAdmin.includes(userRole)) {
         return next(new AppError_1.AppError('Only managers and administrators can access this resource.', 403));
     }

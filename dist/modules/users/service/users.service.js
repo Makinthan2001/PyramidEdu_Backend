@@ -20,43 +20,46 @@ const AppError_1 = require("../../../utils/AppError");
 const userListSelect = {
     id: true,
     email: true,
+    fullName: true,
     role: true,
     isActive: true,
+    phone: true,
+    profileImage: true,
     createdAt: true,
     updatedAt: true,
     student: {
         select: {
-            firstName: true,
-            lastName: true,
             indexNumber: true,
             phone: true,
             address: true,
+            nic: true,
+            gender: true,
+            batch: true,
+            isApproved: true,
         },
     },
     teacher: {
         select: {
-            firstName: true,
-            lastName: true,
-            specialization: true,
+            subjectId: true,
             salary: true,
+            address: true,
+            gender: true,
+            nic: true,
+            phone: true,
         },
     },
     manager: {
         select: {
-            fullName: true,
+            salary: true,
+            address: true,
+            gender: true,
+            nic: true,
+            joiningDate: true,
         },
     },
-    supportStaff: {
+    admin: {
         select: {
-            firstName: true,
-            lastName: true,
-            nicNumber: true,
-            gender: true,
-            address: true,
-            phone: true,
-            fullName: true,
-            roleType: true,
-            salary: true,
+            accessLevel: true,
         },
     },
 };
@@ -64,48 +67,43 @@ function formatUserListItem(user) {
     const response = {
         id: user.id,
         email: user.email,
+        fullName: user.fullName,
         role: user.role,
         isActive: user.isActive,
+        phone: user.phone || null,
+        profileImage: user.profileImage || null,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
     };
     if (user.student) {
-        response.firstName = user.student.firstName;
-        response.lastName = user.student.lastName;
         response.indexNumber = user.student.indexNumber;
-        response.phone = user.student.phone;
-        response.isApproved = Boolean(user.student.isApproved);
+        response.phone = user.student.phone || user.phone;
         response.address = user.student.address;
+        response.nic = user.student.nic;
+        response.gender = user.student.gender;
+        response.batch = user.student.batch;
+        response.isApproved = user.student.isApproved;
     }
     if (user.teacher) {
-        response.firstName = user.teacher.firstName;
-        response.lastName = user.teacher.lastName;
-        response.subject = user.teacher.specialization;
-        response.specialization = user.teacher.specialization;
+        response.subjectId = user.teacher.subjectId;
         response.salary = user.teacher.salary;
+        response.address = user.teacher.address;
+        response.nic = user.teacher.nic;
+        response.gender = user.teacher.gender;
+        response.phone = user.teacher.phone || user.phone;
     }
     if (user.manager) {
-        response.fullName = user.manager.fullName;
+        response.salary = user.manager.salary;
+        response.address = user.manager.address;
+        response.nic = user.manager.nic;
+        response.gender = user.manager.gender;
+        response.joiningDate = user.manager.joiningDate;
     }
-    if (user.supportStaff) {
-        response.firstName = user.supportStaff.firstName;
-        response.lastName = user.supportStaff.lastName;
-        response.nicNumber = user.supportStaff.nicNumber;
-        response.gender = user.supportStaff.gender;
-        response.address = user.supportStaff.address;
-        response.phone = user.supportStaff.phone;
-        response.fullName = user.supportStaff.fullName;
-        response.roleType = user.supportStaff.roleType;
-        response.salary = user.supportStaff.salary;
+    if (user.admin) {
+        response.accessLevel = user.admin.accessLevel;
     }
     return response;
 }
-/**
- * Users Service - Manages user account operations
- */
-/**
- * Users Service - Manages user account operations
- */
 /**
  * Users Service - Manages user account operations
  */
@@ -122,11 +120,10 @@ class UsersService {
             // Filter by role if specified
             if (params.role && params.role !== 'all') {
                 const roleMap = {
-                    managers: client_1.UserRole.MANAGER,
-                    teachers: client_1.UserRole.TEACHER,
-                    students: client_1.UserRole.STUDENT,
-                    supportStaff: client_1.UserRole.SUPPORT_STAFF,
-                    admins: client_1.UserRole.ADMIN,
+                    managers: client_1.Role.MANAGER,
+                    teachers: client_1.Role.TEACHER,
+                    students: client_1.Role.STUDENT,
+                    admins: client_1.Role.ADMIN,
                 };
                 where.role = roleMap[params.role];
             }
@@ -134,9 +131,12 @@ class UsersService {
             if (params.status) {
                 where.isActive = params.status === 'ACTIVE';
             }
-            // Search by email (only field in User table)
+            // Search by email or fullName
             if (params.search) {
-                where.email = { contains: params.search, mode: 'insensitive' };
+                where.OR = [
+                    { email: { contains: params.search, mode: 'insensitive' } },
+                    { fullName: { contains: params.search, mode: 'insensitive' } },
+                ];
             }
             const [users, total] = yield Promise.all([
                 prisma_config_1.default.user.findMany({
@@ -180,7 +180,7 @@ class UsersService {
             const user = yield prisma_config_1.default.user.findUnique({ where: { id: userId }, include: { student: true } });
             if (!user)
                 throw new AppError_1.AppError('User not found.', 404);
-            if (user.role !== client_1.UserRole.STUDENT)
+            if (user.role !== client_1.Role.STUDENT)
                 throw new AppError_1.AppError('Target user is not a student.', 400);
             if (!user.student)
                 throw new AppError_1.AppError('Student profile not found.', 404);
@@ -190,18 +190,15 @@ class UsersService {
                     throw new AppError_1.AppError('Error retrieving updated user.', 500);
                 return formatUserListItem(currentUser);
             }
-            // Cast data to any for isApproved update in case Prisma client types are not yet generated
-            const updatedStudent = yield prisma_config_1.default.student.update({ where: { userId }, data: { isApproved: true } });
+            yield prisma_config_1.default.student.update({ where: { userId }, data: { isApproved: true } });
             yield prisma_config_1.default.auditLog.create({
                 data: {
-                    action: 'STUDENT_APPROVED',
+                    action: client_1.AuditAction.APPROVE,
                     userId,
-                    resourceType: 'STUDENT',
-                    resourceId: updatedStudent.id,
-                    details: `Student approved (userId=${userId})`,
+                    module: 'STUDENT',
+                    description: `Student approved (userId=${userId})`,
                 },
             });
-            // Return updated user summary
             const updatedUser = yield prisma_config_1.default.user.findUnique({ where: { id: userId }, select: userListSelect });
             if (!updatedUser)
                 throw new AppError_1.AppError('Error retrieving updated user.', 500);
@@ -229,7 +226,6 @@ class UsersService {
      */
     static createUser(dto, role) {
         return __awaiter(this, void 0, void 0, function* () {
-            // Check if email already exists
             const existingUser = yield prisma_config_1.default.user.findUnique({
                 where: { email: dto.email.trim().toLowerCase() },
             });
@@ -239,17 +235,16 @@ class UsersService {
             const providedPassword = typeof dto.password === 'string' && dto.password.trim().length > 0
                 ? dto.password.trim()
                 : (0, password_util_1.generateTemporaryPassword)(12);
-            // Hash the password before saving
             const hashedPassword = yield (0, password_util_1.hashPassword)(providedPassword);
-            // Prepare user data
             const userData = {
+                fullName: dto.fullName || `${dto.firstName || ''} ${dto.lastName || ''}`.trim(),
                 email: dto.email.trim().toLowerCase(),
-                passwordHash: hashedPassword,
+                password: hashedPassword,
+                phone: dto.phone || dto.phoneNumber || null,
                 role,
                 isActive: true,
-                forcePasswordChange: true,
+                forcePwdChange: true,
             };
-            // Create user and role-specific record inside a transaction so partial creates don't occur
             let user;
             try {
                 yield prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
@@ -263,70 +258,54 @@ class UsersService {
                             createdAt: true,
                         },
                     });
-                    // Create role-specific record using transactional client
                     switch (role) {
-                        case client_1.UserRole.MANAGER:
+                        case client_1.Role.MANAGER:
                             yield tx.manager.create({
                                 data: {
                                     userId: user.id,
-                                    firstName: dto.firstName,
-                                    lastName: dto.lastName,
-                                    nicNumber: dto.nicNumber,
-                                    gender: dto.gender,
-                                    address: dto.address,
-                                    phone: dto.phoneNumber,
                                     salary: dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null,
-                                    fullName: `${dto.firstName} ${dto.lastName}`.trim(),
+                                    address: dto.address || null,
+                                    gender: dto.gender || null,
+                                    nic: dto.nic || dto.nicNumber || null,
+                                    joiningDate: dto.joiningDate ? new Date(dto.joiningDate) : null,
                                 },
                             });
                             break;
-                        case client_1.UserRole.TEACHER:
+                        case client_1.Role.TEACHER:
                             yield tx.teacher.create({
                                 data: {
                                     userId: user.id,
-                                    firstName: dto.firstName,
-                                    lastName: dto.lastName,
-                                    nicNumber: dto.nicNumber,
-                                    gender: dto.gender,
-                                    address: dto.address,
-                                    phone: dto.phoneNumber,
-                                    specialization: dto.subject,
+                                    subjectId: dto.subjectId || null,
                                     salary: dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null,
+                                    address: dto.address || null,
+                                    gender: dto.gender || null,
+                                    nic: dto.nic || dto.nicNumber || null,
+                                    phone: dto.phone || dto.phoneNumber || null,
                                 },
                             });
                             break;
-                        case client_1.UserRole.STUDENT:
+                        case client_1.Role.STUDENT:
                             yield tx.student.create({
                                 data: {
                                     userId: user.id,
-                                    firstName: dto.firstName,
-                                    lastName: dto.lastName,
-                                    indexNumber: dto.indexNumber,
-                                    dateOfBirth: dto.dateOfBirth,
-                                    phone: dto.phoneNumber,
-                                    address: dto.address,
-                                    // parentId will need to be set separately if parent exists
+                                    indexNumber: dto.indexNumber || null,
+                                    dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
+                                    phone: dto.phone || dto.phoneNumber || null,
+                                    address: dto.address || null,
+                                    gender: dto.gender || null,
+                                    batch: dto.batch || null,
+                                    nic: dto.nic || dto.nicNumber || null,
+                                    isApproved: dto.isApproved || false,
                                 },
                             });
                             break;
-                        case client_1.UserRole.SUPPORT_STAFF:
-                            yield tx.supportStaff.create({
+                        case client_1.Role.ADMIN:
+                            yield tx.admin.create({
                                 data: {
                                     userId: user.id,
-                                    firstName: dto.firstName,
-                                    lastName: dto.lastName,
-                                    nicNumber: dto.nicNumber,
-                                    gender: dto.gender,
-                                    address: dto.address,
-                                    phone: dto.phoneNumber,
-                                    fullName: `${dto.firstName} ${dto.lastName}`.trim(),
-                                    roleType: dto.roleType,
-                                    salary: dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null,
+                                    accessLevel: dto.accessLevel || 1,
                                 },
                             });
-                            break;
-                        case client_1.UserRole.ADMIN:
-                            // ADMIN role doesn't have a separate table
                             break;
                         default:
                             console.warn(`Unknown role: ${role}`);
@@ -337,17 +316,14 @@ class UsersService {
                 console.error('Error during transactional user creation:', error);
                 throw new AppError_1.AppError('Failed to create user account. Please try again.', 500);
             }
-            // Log audit entry
             yield prisma_config_1.default.auditLog.create({
                 data: {
-                    action: 'USER_CREATED',
+                    action: client_1.AuditAction.CREATE,
                     userId: user.id,
-                    resourceType: 'USER',
-                    resourceId: user.id,
-                    details: `User ${user.email} created with role ${role}`,
+                    module: 'USER',
+                    description: `User ${user.email} created with role ${role}`,
                 },
             });
-            // Return created user and temporary password for frontend use
             return { user, temporaryPassword: providedPassword };
         });
     }
@@ -359,24 +335,20 @@ class UsersService {
             const user = yield prisma_config_1.default.user.findUnique({ where: { id: userId } });
             if (!user)
                 throw new AppError_1.AppError('User not found.', 404);
-            // Verify old password
-            const match = yield (0, password_util_1.comparePasswords)(oldPassword, user.passwordHash);
+            const match = yield (0, password_util_1.comparePasswords)(oldPassword, user.password);
             if (!match)
                 throw new AppError_1.AppError('Current password is incorrect.', 401);
-            // Hash new password and update
             const hashed = yield (0, password_util_1.hashPassword)(newPassword);
             yield prisma_config_1.default.user.update({
                 where: { id: userId },
-                data: { passwordHash: hashed, forcePasswordChange: false },
+                data: { password: hashed, forcePwdChange: false },
             });
-            // Log audit
             yield prisma_config_1.default.auditLog.create({
                 data: {
-                    action: 'PASSWORD_CHANGED',
+                    action: client_1.AuditAction.UPDATE,
                     userId,
-                    resourceType: 'USER',
-                    resourceId: userId,
-                    details: 'User changed own password',
+                    module: 'USER',
+                    description: 'User changed own password',
                 },
             });
             return true;
@@ -394,16 +366,15 @@ class UsersService {
             const hashed = yield (0, password_util_1.hashPassword)(temporaryPassword);
             const updated = yield prisma_config_1.default.user.update({
                 where: { id: targetUserId },
-                data: { passwordHash: hashed, forcePasswordChange: true },
+                data: { password: hashed, forcePwdChange: true },
                 select: { id: true, email: true, role: true, isActive: true, createdAt: true },
             });
             yield prisma_config_1.default.auditLog.create({
                 data: {
-                    action: 'PASSWORD_RESET',
+                    action: client_1.AuditAction.UPDATE,
                     userId: targetUserId,
-                    resourceType: 'USER',
-                    resourceId: targetUserId,
-                    details: 'Admin reset user password',
+                    module: 'USER',
+                    description: 'Admin reset user password',
                 },
             });
             return { user: updated, temporaryPassword };
@@ -418,21 +389,19 @@ class UsersService {
             const user = yield prisma_config_1.default.user.findUnique({ where: { id: targetUserId } });
             if (!user)
                 throw new AppError_1.AppError('User not found.', 404);
-            // Normalize password (trim) before hashing to match createUser behavior
             const normalized = newPassword.trim();
             const hashed = yield (0, password_util_1.hashPassword)(normalized);
             const updated = yield prisma_config_1.default.user.update({
                 where: { id: targetUserId },
-                data: { passwordHash: hashed, forcePasswordChange: true },
+                data: { password: hashed, forcePwdChange: true },
                 select: { id: true, email: true, role: true, isActive: true, createdAt: true },
             });
             yield prisma_config_1.default.auditLog.create({
                 data: {
-                    action: 'PASSWORD_SET_BY_ADMIN',
+                    action: client_1.AuditAction.UPDATE,
                     userId: targetUserId,
-                    resourceType: 'USER',
-                    resourceId: targetUserId,
-                    details: 'Admin set user password',
+                    module: 'USER',
+                    description: 'Admin set user password',
                 },
             });
             return { user: updated, temporaryPassword: newPassword };
@@ -449,13 +418,12 @@ class UsersService {
                     manager: true,
                     teacher: true,
                     student: true,
-                    supportStaff: true,
+                    admin: true,
                 },
             });
             if (!user) {
                 throw new AppError_1.AppError('User not found.', 404);
             }
-            // Check if new email is already in use by another user
             if (dto.email && dto.email !== user.email) {
                 const existingEmail = yield prisma_config_1.default.user.findUnique({
                     where: { email: dto.email.toLowerCase() },
@@ -465,189 +433,113 @@ class UsersService {
                 }
             }
             const updateData = {};
-            // Only update fields that exist in User table
             if (dto.email)
                 updateData.email = dto.email.toLowerCase();
+            if (dto.fullName)
+                updateData.fullName = dto.fullName;
+            else if (dto.firstName || dto.lastName) {
+                const existingFirstName = dto.firstName || '';
+                const existingLastName = dto.lastName || '';
+                updateData.fullName = `${existingFirstName} ${existingLastName}`.trim();
+            }
             if (dto.phoneNumber)
-                updateData.phoneNumber = dto.phoneNumber;
-            // Update User table if there are changes
+                updateData.phone = dto.phoneNumber;
             if (Object.keys(updateData).length > 0) {
                 yield prisma_config_1.default.user.update({
                     where: { id: userId },
                     data: updateData,
                 });
             }
-            // Update role-specific table based on user's role
             try {
                 switch (user.role) {
-                    case client_1.UserRole.MANAGER:
-                        if (dto.firstName || dto.lastName || dto.nicNumber || dto.gender || dto.address || dto.phoneNumber || dto.salary) {
-                            const managerUpdateData = {};
-                            if (dto.firstName)
-                                managerUpdateData.firstName = dto.firstName;
-                            if (dto.lastName)
-                                managerUpdateData.lastName = dto.lastName;
-                            if (dto.nicNumber)
-                                managerUpdateData.nicNumber = dto.nicNumber;
-                            if (dto.gender)
-                                managerUpdateData.gender = dto.gender;
-                            if (dto.address)
-                                managerUpdateData.address = dto.address;
-                            if (dto.phoneNumber)
-                                managerUpdateData.phone = dto.phoneNumber;
-                            if (dto.salary !== undefined)
-                                managerUpdateData.salary = dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null;
-                            if (dto.firstName || dto.lastName) {
-                                const managerRecord = user.manager;
-                                const existingFirstName = dto.firstName || (managerRecord === null || managerRecord === void 0 ? void 0 : managerRecord.firstName) || '';
-                                const existingLastName = dto.lastName || (managerRecord === null || managerRecord === void 0 ? void 0 : managerRecord.lastName) || '';
-                                managerUpdateData.fullName = `${existingFirstName} ${existingLastName}`.trim();
-                            }
+                    case client_1.Role.MANAGER: {
+                        const managerUpdateData = {};
+                        if (dto.nicNumber !== undefined)
+                            managerUpdateData.nic = dto.nicNumber;
+                        if (dto.gender !== undefined)
+                            managerUpdateData.gender = dto.gender;
+                        if (dto.address !== undefined)
+                            managerUpdateData.address = dto.address;
+                        if (dto.salary !== undefined)
+                            managerUpdateData.salary = dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null;
+                        if (Object.keys(managerUpdateData).length > 0) {
                             yield prisma_config_1.default.manager.update({
                                 where: { userId },
                                 data: managerUpdateData,
                             });
                         }
                         break;
-                    case client_1.UserRole.TEACHER:
-                        if (dto.firstName || dto.lastName || dto.subject) {
-                            const teacherUpdateData = {};
-                            if (dto.firstName)
-                                teacherUpdateData.firstName = dto.firstName;
-                            if (dto.lastName)
-                                teacherUpdateData.lastName = dto.lastName;
-                            if (dto.subject)
-                                teacherUpdateData.specialization = dto.subject;
+                    }
+                    case client_1.Role.TEACHER: {
+                        const teacherUpdateData = {};
+                        if (dto.subject !== undefined)
+                            teacherUpdateData.subjectId = dto.subject; // assume subjectId is passed in dto.subject
+                        if (dto.nicNumber !== undefined)
+                            teacherUpdateData.nic = dto.nicNumber;
+                        if (dto.gender !== undefined)
+                            teacherUpdateData.gender = dto.gender;
+                        if (dto.address !== undefined)
+                            teacherUpdateData.address = dto.address;
+                        if (dto.salary !== undefined)
+                            teacherUpdateData.salary = dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null;
+                        if (dto.phoneNumber !== undefined)
+                            teacherUpdateData.phone = dto.phoneNumber;
+                        if (Object.keys(teacherUpdateData).length > 0) {
                             yield prisma_config_1.default.teacher.update({
                                 where: { userId },
                                 data: teacherUpdateData,
                             });
                         }
                         break;
-                    case client_1.UserRole.STUDENT:
-                        if (dto.firstName || dto.lastName || dto.indexNumber || dto.address || dto.parentName || dto.parentPhone) {
-                            const studentUpdateData = {};
-                            if (dto.firstName)
-                                studentUpdateData.firstName = dto.firstName;
-                            if (dto.lastName)
-                                studentUpdateData.lastName = dto.lastName;
-                            if (dto.indexNumber)
-                                studentUpdateData.indexNumber = dto.indexNumber;
-                            if (dto.address)
-                                studentUpdateData.address = dto.address;
-                            if (dto.parentName)
-                                studentUpdateData.parentName = dto.parentName;
-                            if (dto.parentPhone)
-                                studentUpdateData.phone = dto.parentPhone;
+                    }
+                    case client_1.Role.STUDENT: {
+                        const studentUpdateData = {};
+                        if (dto.indexNumber !== undefined)
+                            studentUpdateData.indexNumber = dto.indexNumber;
+                        if (dto.address !== undefined)
+                            studentUpdateData.address = dto.address;
+                        if (dto.phoneNumber !== undefined)
+                            studentUpdateData.phone = dto.phoneNumber;
+                        if (dto.gender !== undefined)
+                            studentUpdateData.gender = dto.gender;
+                        if (dto.nicNumber !== undefined)
+                            studentUpdateData.nic = dto.nicNumber;
+                        if (dto.roleType !== undefined)
+                            studentUpdateData.batch = dto.roleType; // map roleType to batch if it represents the class batch
+                        if (Object.keys(studentUpdateData).length > 0) {
                             yield prisma_config_1.default.student.update({
                                 where: { userId },
                                 data: studentUpdateData,
                             });
                         }
                         break;
-                    case client_1.UserRole.SUPPORT_STAFF:
-                        if (dto.firstName || dto.lastName || dto.nicNumber || dto.gender || dto.address || dto.phoneNumber || dto.roleType || dto.salary) {
-                            const supportUpdateData = {};
-                            if (dto.firstName)
-                                supportUpdateData.firstName = dto.firstName;
-                            if (dto.lastName)
-                                supportUpdateData.lastName = dto.lastName;
-                            if (dto.nicNumber)
-                                supportUpdateData.nicNumber = dto.nicNumber;
-                            if (dto.gender)
-                                supportUpdateData.gender = dto.gender;
-                            if (dto.address)
-                                supportUpdateData.address = dto.address;
-                            if (dto.phoneNumber)
-                                supportUpdateData.phone = dto.phoneNumber;
-                            if (dto.roleType)
-                                supportUpdateData.roleType = dto.roleType;
-                            if (dto.firstName || dto.lastName) {
-                                const supportRecord = user.supportStaff;
-                                const existingFirstName = dto.firstName || (supportRecord === null || supportRecord === void 0 ? void 0 : supportRecord.firstName) || '';
-                                const existingLastName = dto.lastName || (supportRecord === null || supportRecord === void 0 ? void 0 : supportRecord.lastName) || '';
-                                supportUpdateData.fullName = `${existingFirstName} ${existingLastName}`.trim();
-                            }
-                            if (dto.salary !== undefined)
-                                supportUpdateData.salary = dto.salary ? new client_1.Prisma.Decimal(dto.salary) : null;
-                            yield prisma_config_1.default.supportStaff.update({
-                                where: { userId },
-                                data: supportUpdateData,
-                            });
-                        }
-                        break;
+                    }
                 }
             }
             catch (error) {
                 console.error('Error updating role-specific record:', error);
-                // Continue - return user data even if role update fails
             }
-            // Fetch updated user with role-specific data
             const updatedUserWithData = yield prisma_config_1.default.user.findUnique({
                 where: { id: userId },
                 include: {
                     student: true,
                     teacher: true,
                     manager: true,
-                    supportStaff: true,
+                    admin: true,
                 },
             });
             if (!updatedUserWithData) {
                 throw new AppError_1.AppError('Error retrieving updated user.', 500);
             }
-            // Merge response with role-specific data
-            const response = {
-                id: updatedUserWithData.id,
-                email: updatedUserWithData.email,
-                role: updatedUserWithData.role,
-                isActive: updatedUserWithData.isActive,
-                updatedAt: updatedUserWithData.updatedAt,
-            };
-            if (updatedUserWithData.student) {
-                response.firstName = updatedUserWithData.student.firstName;
-                response.lastName = updatedUserWithData.student.lastName;
-                response.indexNumber = updatedUserWithData.student.indexNumber;
-                response.phone = updatedUserWithData.student.phone;
-                response.address = updatedUserWithData.student.address;
-            }
-            if (updatedUserWithData.teacher) {
-                response.firstName = updatedUserWithData.teacher.firstName;
-                response.lastName = updatedUserWithData.teacher.lastName;
-                response.specialization = updatedUserWithData.teacher.specialization;
-            }
-            if (updatedUserWithData.manager) {
-                const manager = updatedUserWithData.manager;
-                response.firstName = manager.firstName;
-                response.lastName = manager.lastName;
-                response.nicNumber = manager.nicNumber;
-                response.gender = manager.gender;
-                response.address = manager.address;
-                response.phone = manager.phone;
-                response.salary = manager.salary;
-                response.fullName = manager.fullName;
-            }
-            if (updatedUserWithData.supportStaff) {
-                const supportStaff = updatedUserWithData.supportStaff;
-                response.firstName = supportStaff.firstName;
-                response.lastName = supportStaff.lastName;
-                response.nicNumber = supportStaff.nicNumber;
-                response.gender = supportStaff.gender;
-                response.address = supportStaff.address;
-                response.phone = supportStaff.phone;
-                response.fullName = supportStaff.fullName;
-                response.roleType = supportStaff.roleType;
-            }
-            // Log audit entry
             yield prisma_config_1.default.auditLog.create({
                 data: {
-                    action: 'USER_UPDATED',
+                    action: client_1.AuditAction.UPDATE,
                     userId,
-                    resourceType: 'USER',
-                    resourceId: userId,
-                    details: `User ${user.email} updated`,
+                    module: 'USER',
+                    description: `User ${user.email} updated`,
                 },
             });
-            return response;
+            return formatUserListItem(updatedUserWithData);
         });
     }
     /**
@@ -671,14 +563,12 @@ class UsersService {
                     isActive: true,
                 },
             });
-            // Log audit entry
             yield prisma_config_1.default.auditLog.create({
                 data: {
-                    action: 'USER_DEACTIVATED',
+                    action: client_1.AuditAction.UPDATE,
                     userId,
-                    resourceType: 'USER',
-                    resourceId: userId,
-                    details: `User ${user.email} deactivated`,
+                    module: 'USER',
+                    description: `User ${user.email} deactivated`,
                 },
             });
             return deactivatedUser;
@@ -705,14 +595,12 @@ class UsersService {
                     isActive: true,
                 },
             });
-            // Log audit entry
             yield prisma_config_1.default.auditLog.create({
                 data: {
-                    action: 'USER_ACTIVATED',
+                    action: client_1.AuditAction.UPDATE,
                     userId,
-                    resourceType: 'USER',
-                    resourceId: userId,
-                    details: `User ${user.email} activated`,
+                    module: 'USER',
+                    description: `User ${user.email} activated`,
                 },
             });
             return activatedUser;
@@ -727,23 +615,20 @@ class UsersService {
             if (!user) {
                 throw new AppError_1.AppError('User not found.', 404);
             }
-            // Soft delete - set isActive to false
             const deletedUser = yield prisma_config_1.default.user.update({
                 where: { id: userId },
-                data: { isActive: false },
+                data: { isActive: false, deletedAt: new Date() },
                 select: {
                     id: true,
                     email: true,
                 },
             });
-            // Log audit entry
             yield prisma_config_1.default.auditLog.create({
                 data: {
-                    action: 'USER_DELETED',
+                    action: client_1.AuditAction.DELETE,
                     userId,
-                    resourceType: 'USER',
-                    resourceId: userId,
-                    details: `User ${user.email} deleted (soft delete)`,
+                    module: 'USER',
+                    description: `User ${user.email} deleted (soft delete)`,
                 },
             });
             return deletedUser;

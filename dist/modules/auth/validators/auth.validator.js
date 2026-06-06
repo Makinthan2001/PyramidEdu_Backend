@@ -22,7 +22,8 @@ const emailField = zod_1.z.string().email('Please provide a valid email address.
 exports.registerSchema = zod_1.z.object({
     email: emailField,
     password: passwordField,
-    role: zod_1.z.nativeEnum(client_1.UserRole).refine((role) => role !== client_1.UserRole.STUDENT, {
+    fullName: zod_1.z.string().min(2, 'Full name is required.').max(100),
+    role: zod_1.z.nativeEnum(client_1.Role).refine((role) => role !== client_1.Role.STUDENT, {
         message: 'Role must be ADMIN, MANAGER, or TEACHER.',
     }),
 });

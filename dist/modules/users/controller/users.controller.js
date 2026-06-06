@@ -65,7 +65,7 @@ function getUsers(req, res, next) {
 function getUserById(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const userId = parseInt(req.params.id);
+            const userId = req.params.id;
             const user = yield users_service_1.default.getUserById(userId);
             res.status(200).json({
                 success: true,
@@ -128,8 +128,7 @@ function changeMyPassword(req, res, next) {
 function resetUserPassword(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const targetUserId = parseInt(req.params.id);
-            // Allow admins to provide a specific password in the request body to set for the user.
+            const targetUserId = req.params.id;
             const providedPassword = (req.body && typeof req.body.password === 'string' && req.body.password.length > 0)
                 ? req.body.password
                 : undefined;
@@ -159,7 +158,7 @@ function resetUserPassword(req, res, next) {
 function updateUser(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const userId = parseInt(req.params.id);
+            const userId = req.params.id;
             const dto = req.body;
             const user = yield users_service_1.default.updateUser(userId, dto);
             res.status(200).json({
@@ -180,7 +179,7 @@ function updateUser(req, res, next) {
 function deleteUser(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const userId = parseInt(req.params.id);
+            const userId = req.params.id;
             const user = yield users_service_1.default.deleteUser(userId);
             res.status(200).json({
                 success: true,
@@ -200,7 +199,7 @@ function deleteUser(req, res, next) {
 function deactivateUser(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const userId = parseInt(req.params.id);
+            const userId = req.params.id;
             const user = yield users_service_1.default.deactivateUser(userId);
             res.status(200).json({
                 success: true,
@@ -220,7 +219,7 @@ function deactivateUser(req, res, next) {
 function activateUser(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const userId = parseInt(req.params.id);
+            const userId = req.params.id;
             const user = yield users_service_1.default.activateUser(userId);
             res.status(200).json({
                 success: true,
@@ -240,7 +239,7 @@ function activateUser(req, res, next) {
 function approveStudent(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const userId = parseInt(req.params.id);
+            const userId = req.params.id;
             const user = yield users_service_1.default.approveStudent(userId);
             res.status(200).json({
                 success: true,
@@ -261,4 +260,5 @@ exports.default = {
     deleteUser,
     deactivateUser,
     activateUser,
+    approveStudent,
 };

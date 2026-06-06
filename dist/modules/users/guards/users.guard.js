@@ -19,7 +19,7 @@ const prisma_config_1 = __importDefault(require("../../../config/prisma.config")
  */
 function isUserOwner(req, res, next) {
     const userId = req.userId;
-    const targetUserId = parseInt(req.params.id);
+    const targetUserId = req.params.id;
     if (!userId) {
         return next(new AppError_1.AppError('User not authenticated.', 401));
     }
@@ -36,12 +36,12 @@ function isUserOwner(req, res, next) {
 function canAccessUser(req, res, next) {
     const userRole = req.userRole;
     const userId = req.userId;
-    const targetUserId = parseInt(req.params.id);
+    const targetUserId = req.params.id;
     if (!userId || !userRole) {
         return next(new AppError_1.AppError('User not authenticated.', 401));
     }
     // ADMIN can access anyone
-    if (userRole === client_1.UserRole.ADMIN) {
+    if (userRole === client_1.Role.ADMIN) {
         return next();
     }
     // Others can only access their own profile
@@ -62,32 +62,28 @@ function canManageUsers(req, res, next) {
         return next(new AppError_1.AppError('User not authenticated.', 401));
     }
     // ADMIN has full access
-    if (userRole === client_1.UserRole.ADMIN) {
+    if (userRole === client_1.Role.ADMIN) {
         return next();
     }
     // MANAGER can manage students
-    if (userRole === client_1.UserRole.MANAGER) {
-        // If this request targets a specific user (has :id), ensure the target is a STUDENT
-        const targetIdRaw = req.params.id;
-        if (targetIdRaw) {
-            const targetId = parseInt(targetIdRaw);
-            if (!Number.isNaN(targetId)) {
-                prisma_config_1.default.user.findUnique({ where: { id: targetId }, select: { role: true } })
-                    .then((target) => {
-                    if (!target) {
-                        return next(new AppError_1.AppError('Target user not found.', 404));
-                    }
-                    if (target.role !== client_1.UserRole.STUDENT) {
-                        return next(new AppError_1.AppError('Managers can only manage student accounts.', 403));
-                    }
-                    return next();
-                })
-                    .catch((err) => {
-                    console.error('Error fetching target user for permission check:', err);
-                    return next(new AppError_1.AppError('Unable to verify permissions at this time.', 500));
-                });
-                return;
-            }
+    if (userRole === client_1.Role.MANAGER) {
+        const targetUserId = req.params.id;
+        if (targetUserId) {
+            prisma_config_1.default.user.findUnique({ where: { id: targetUserId }, select: { role: true } })
+                .then((target) => {
+                if (!target) {
+                    return next(new AppError_1.AppError('Target user not found.', 404));
+                }
+                if (target.role !== client_1.Role.STUDENT) {
+                    return next(new AppError_1.AppError('Managers can only manage student accounts.', 403));
+                }
+                return next();
+            })
+                .catch((err) => {
+                console.error('Error fetching target user for permission check:', err);
+                return next(new AppError_1.AppError('Unable to verify permissions at this time.', 500));
+            });
+            return;
         }
         // For non-targeted requests (e.g., listing), allow manager to proceed (service-level filters will apply)
         return next();
@@ -108,11 +104,11 @@ function canCreateRole(req, res, next) {
         return next(new AppError_1.AppError('User not authenticated.', 401));
     }
     // ADMIN can create all roles
-    if (userRole === client_1.UserRole.ADMIN) {
+    if (userRole === client_1.Role.ADMIN) {
         return next();
     }
     // MANAGER can only create STUDENT users
-    if (userRole === client_1.UserRole.MANAGER && targetRole === client_1.UserRole.STUDENT) {
+    if (userRole === client_1.Role.MANAGER && targetRole === client_1.Role.STUDENT) {
         return next();
     }
     // Others cannot create users
@@ -124,12 +120,12 @@ function canCreateRole(req, res, next) {
 function preventSelfDeactivation(req, res, next) {
     const userId = req.userId;
     const userRole = req.userRole;
-    const targetUserId = parseInt(req.params.id);
+    const targetUserId = req.params.id;
     if (!userId || !userRole) {
         return next(new AppError_1.AppError('User not authenticated.', 401));
     }
     // ADMIN can deactivate anyone including themselves
-    if (userRole === client_1.UserRole.ADMIN) {
+    if (userRole === client_1.Role.ADMIN) {
         return next();
     }
     // Non-admin users cannot deactivate themselves

@@ -41,26 +41,25 @@ const validate_1 = require("../../../middleware/validate");
 const controller = __importStar(require("../controller/teachers.controller"));
 const teachers_validator_1 = require("../validators/teachers.validator");
 const router = (0, express_1.Router)();
-// Public (no auth) – optional list could be restricted, but we keep it protected
 // Protected routes
 router.use(jwt_guard_1.jwtGuard);
 // ADMIN & MANAGER can list all teachers
-router.get('/', (0, role_guard_1.roleGuard)(client_1.UserRole.ADMIN, client_1.UserRole.MANAGER), controller.getTeachers);
+router.get('/', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN, client_1.Role.MANAGER), controller.getTeachers);
 // Get teacher by ID – ADMIN, MANAGER, or the teacher themselves
-router.get('/:id', (0, role_guard_1.roleGuard)(client_1.UserRole.ADMIN, client_1.UserRole.MANAGER, client_1.UserRole.TEACHER), controller.getTeacherById);
+router.get('/:id', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN, client_1.Role.MANAGER, client_1.Role.TEACHER), controller.getTeacherById);
 // Create teacher – ADMIN only
-router.post('/', (0, role_guard_1.roleGuard)(client_1.UserRole.ADMIN), (0, validate_1.validate)(teachers_validator_1.teachersValidator.createTeacherSchema), controller.createTeacher);
+router.post('/', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN), (0, validate_1.validate)(teachers_validator_1.teachersValidator.createTeacherSchema), controller.createTeacher);
 // Update teacher – ADMIN or MANAGER
-router.patch('/:id', (0, role_guard_1.roleGuard)(client_1.UserRole.ADMIN, client_1.UserRole.MANAGER), (0, validate_1.validate)(teachers_validator_1.teachersValidator.updateTeacherSchema), controller.updateTeacher);
+router.patch('/:id', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN, client_1.Role.MANAGER), (0, validate_1.validate)(teachers_validator_1.teachersValidator.updateTeacherSchema), controller.updateTeacher);
 // Delete (soft) teacher – ADMIN only
-router.delete('/:id', (0, role_guard_1.roleGuard)(client_1.UserRole.ADMIN), controller.deleteTeacher);
+router.delete('/:id', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN), controller.deleteTeacher);
 // Self‑service routes for the logged‑in teacher
-router.get('/me', (0, role_guard_1.roleGuard)(client_1.UserRole.TEACHER), controller.getMyProfile);
-router.patch('/me', (0, role_guard_1.roleGuard)(client_1.UserRole.TEACHER), (0, validate_1.validate)(teachers_validator_1.teachersValidator.updateTeacherSchema), controller.updateMyProfile);
+router.get('/me', (0, role_guard_1.roleGuard)(client_1.Role.TEACHER), controller.getMyProfile);
+router.patch('/me', (0, role_guard_1.roleGuard)(client_1.Role.TEACHER), (0, validate_1.validate)(teachers_validator_1.teachersValidator.updateTeacherSchema), controller.updateMyProfile);
 // Teacher's subjects list – ADMIN, MANAGER, TEACHER (own)
-router.get('/:id/subjects', (0, role_guard_1.roleGuard)(client_1.UserRole.ADMIN, client_1.UserRole.MANAGER, client_1.UserRole.TEACHER), controller.getTeacherSubjects);
+router.get('/:id/subjects', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN, client_1.Role.MANAGER, client_1.Role.TEACHER), controller.getTeacherSubjects);
 // Salary update – ADMIN only
-router.patch('/:id/salary', (0, role_guard_1.roleGuard)(client_1.UserRole.ADMIN), controller.updateSalary);
+router.patch('/:id/salary', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN), controller.updateSalary);
 // Assign subject – ADMIN or MANAGER
-router.patch('/:id/subjects', (0, role_guard_1.roleGuard)(client_1.UserRole.ADMIN, client_1.UserRole.MANAGER), (0, validate_1.validate)(teachers_validator_1.teachersValidator.assignSubjectSchema), controller.assignSubject);
+router.patch('/:id/subjects', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN, client_1.Role.MANAGER), (0, validate_1.validate)(teachers_validator_1.teachersValidator.assignSubjectSchema), controller.assignSubject);
 exports.default = router;

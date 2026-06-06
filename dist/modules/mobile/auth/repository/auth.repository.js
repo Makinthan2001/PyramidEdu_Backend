@@ -18,14 +18,14 @@ exports.MobileAuthRepository = {
             include: { student: true },
         });
     },
-    findRefreshTokenByHash(tokenHash) {
-        return prisma_config_1.default.refreshToken.findUnique({ where: { tokenHash } });
+    findRefreshTokenByToken(token) {
+        return prisma_config_1.default.refreshToken.findUnique({ where: { token } });
     },
     createRefreshToken(data) {
         return prisma_config_1.default.refreshToken.create({ data });
     },
-    deleteRefreshTokenByHash(tokenHash) {
-        return prisma_config_1.default.refreshToken.deleteMany({ where: { tokenHash } });
+    deleteRefreshTokenByToken(token) {
+        return prisma_config_1.default.refreshToken.delete({ where: { token } });
     },
     deleteRefreshTokensByUserId(userId) {
         return prisma_config_1.default.refreshToken.deleteMany({ where: { userId } });

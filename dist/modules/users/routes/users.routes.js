@@ -74,9 +74,6 @@ router.post('/', users_guard_1.canManageUsers, (req, res, next) => {
         case 'STUDENT':
             schema = users_validator_1.createStudentSchema;
             break;
-        case 'SUPPORT_STAFF':
-            schema = users_validator_1.createSupportStaffSchema;
-            break;
         case 'ADMIN':
             schema = users_validator_1.createAdminSchema;
             break;

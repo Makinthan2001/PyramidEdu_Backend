@@ -47,8 +47,8 @@ function getSubjects(req, res, next) {
             const userId = req.userId;
             const result = yield subjects_service_1.default.getSubjects({
                 active: parseBoolean(req.query.active),
-                teacherId: req.query.teacherId ? Number(req.query.teacherId) : undefined,
-                streamId: req.query.streamId ? Number(req.query.streamId) : undefined,
+                teacherId: req.query.teacherId,
+                streamId: req.query.streamId,
                 search: req.query.search || undefined,
                 userRole,
                 userId,
@@ -97,8 +97,8 @@ function getAvailableSubjects(req, res, next) {
 function getTeachersForSubject(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const subjectId = Number(req.query.subjectId);
-            if (!Number.isFinite(subjectId)) {
+            const subjectId = req.query.subjectId;
+            if (!subjectId) {
                 res.status(400).json({
                     success: false,
                     message: 'subjectId query parameter is required',
@@ -175,7 +175,7 @@ function createSubject(req, res, next) {
 function updateSubject(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const subjectId = Number(req.params.id);
+            const subjectId = req.params.id;
             const dto = req.body;
             const userId = req.userId;
             const subject = yield subjects_service_1.default.updateSubject(subjectId, dto, { userId });
@@ -193,10 +193,10 @@ function updateSubject(req, res, next) {
 function deactivateSubject(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const subjectId = Number(req.params.id);
+            const subjectId = req.params.id;
             const userId = req.userId;
             const userRole = req.userRole;
-            const force = userRole === client_1.UserRole.ADMIN && parseBoolean(req.query.force) === true;
+            const force = userRole === client_1.Role.ADMIN && parseBoolean(req.query.force) === true;
             const subject = yield subjects_service_1.default.deactivateSubject(subjectId, {
                 userId,
                 force,
@@ -215,11 +215,10 @@ function deactivateSubject(req, res, next) {
 function assignTeacher(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const rawId = req.params.id;
-            const subjectIdentifier = Array.isArray(rawId) ? rawId[0] : rawId; // normalize to string
-            const teacherId = Number(Array.isArray(req.body.teacherId) ? req.body.teacherId[0] : req.body.teacherId);
+            const subjectId = req.params.id;
+            const teacherId = Array.isArray(req.body.teacherId) ? req.body.teacherId[0] : req.body.teacherId;
             const userId = req.userId;
-            const subject = yield subjects_service_1.default.assignTeacher(subjectIdentifier, teacherId, { userId });
+            const subject = yield subjects_service_1.default.assignTeacher(subjectId, teacherId, { userId });
             res.status(200).json({
                 success: true,
                 message: 'Teacher assigned successfully',
@@ -234,7 +233,7 @@ function assignTeacher(req, res, next) {
 function getSubjectStudents(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const subjectId = Number(req.params.id);
+            const subjectId = req.params.id;
             const userRole = req.userRole;
             const userId = req.userId;
             const result = yield subjects_service_1.default.getSubjectStudents(subjectId, {
@@ -255,7 +254,7 @@ function getSubjectStudents(req, res, next) {
 function enrollStudent(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const subjectId = Number(req.params.id);
+            const subjectId = req.params.id;
             const dto = req.body;
             const userRole = req.userRole;
             const userId = req.userId;
@@ -277,8 +276,8 @@ function enrollStudent(req, res, next) {
 function unenrollStudent(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const subjectId = Number(req.params.id);
-            const studentId = Number(req.params.sid);
+            const subjectId = req.params.id;
+            const studentId = req.params.sid;
             const userRole = req.userRole;
             const userId = req.userId;
             const enrollment = yield subjects_service_1.default.unenrollStudent(subjectId, studentId, {
@@ -299,7 +298,7 @@ function unenrollStudent(req, res, next) {
 function getEnrollmentCount(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const subjectId = Number(req.params.id);
+            const subjectId = req.params.id;
             const count = yield subjects_service_1.default.getEnrollmentCount(subjectId);
             res.status(200).json({
                 success: true,

@@ -40,8 +40,8 @@ function verifyAccessToken(token) {
         throw new AppError_1.AppError('Invalid access token.', 401);
     }
 }
-function generateRefreshToken(userId, tokenFamily, expiresIn = REFRESH_EXPIRES) {
-    return jsonwebtoken_1.default.sign({ sub: userId, tokenFamily }, requireSecret(REFRESH_SECRET, 'JWT_REFRESH_SECRET'), { expiresIn });
+function generateRefreshToken(userId, expiresIn = REFRESH_EXPIRES) {
+    return jsonwebtoken_1.default.sign({ sub: userId }, requireSecret(REFRESH_SECRET, 'JWT_REFRESH_SECRET'), { expiresIn });
 }
 function verifyRefreshToken(token) {
     try {
