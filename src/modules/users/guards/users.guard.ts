@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { UserRole } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { AppError } from '../../../utils/AppError';
 import prisma from '../../../config/prisma.config';
 
@@ -11,8 +11,8 @@ import prisma from '../../../config/prisma.config';
  * Check if user is trying to access their own profile
  */
 export function isUserOwner(req: Request, res: Response, next: NextFunction) {
-  const userId = (req as any).userId as number | undefined;
-  const targetUserId = parseInt(req.params.id as string);
+  const userId = (req as any).userId as string | undefined;
+  const targetUserId = req.params.id as string;
 
   if (!userId) {
     return next(new AppError('User not authenticated.', 401));
@@ -36,16 +36,16 @@ export function isUserOwner(req: Request, res: Response, next: NextFunction) {
  * Others: can only access their own profile
  */
 export function canAccessUser(req: Request, res: Response, next: NextFunction) {
-  const userRole = (req as any).userRole as UserRole | undefined;
-  const userId = (req as any).userId as number | undefined;
-  const targetUserId = parseInt(req.params.id as string);
+  const userRole = (req as any).userRole as Role | undefined;
+  const userId = (req as any).userId as string | undefined;
+  const targetUserId = req.params.id as string;
 
   if (!userId || !userRole) {
     return next(new AppError('User not authenticated.', 401));
   }
 
   // ADMIN can access anyone
-  if (userRole === UserRole.ADMIN) {
+  if (userRole === Role.ADMIN) {
     return next();
   }
 
@@ -66,40 +66,36 @@ export function canAccessUser(req: Request, res: Response, next: NextFunction) {
  * Others: forbidden
  */
 export function canManageUsers(req: Request, res: Response, next: NextFunction) {
-  const userRole = (req as any).userRole as UserRole | undefined;
+  const userRole = (req as any).userRole as Role | undefined;
 
   if (!userRole) {
     return next(new AppError('User not authenticated.', 401));
   }
 
   // ADMIN has full access
-  if (userRole === UserRole.ADMIN) {
+  if (userRole === Role.ADMIN) {
     return next();
   }
 
   // MANAGER can manage students
-  if (userRole === UserRole.MANAGER) {
-    // If this request targets a specific user (has :id), ensure the target is a STUDENT
-    const targetIdRaw = req.params.id;
-    if (targetIdRaw) {
-      const targetId = parseInt(targetIdRaw as string);
-      if (!Number.isNaN(targetId)) {
-        prisma.user.findUnique({ where: { id: targetId }, select: { role: true } })
-          .then((target) => {
-            if (!target) {
-              return next(new AppError('Target user not found.', 404));
-            }
-            if (target.role !== UserRole.STUDENT) {
-              return next(new AppError('Managers can only manage student accounts.', 403));
-            }
-            return next();
-          })
-          .catch((err) => {
-            console.error('Error fetching target user for permission check:', err);
-            return next(new AppError('Unable to verify permissions at this time.', 500));
-          });
-        return;
-      }
+  if (userRole === Role.MANAGER) {
+    const targetUserId = req.params.id as string;
+    if (targetUserId) {
+      prisma.user.findUnique({ where: { id: targetUserId }, select: { role: true } })
+        .then((target) => {
+          if (!target) {
+            return next(new AppError('Target user not found.', 404));
+          }
+          if (target.role !== Role.STUDENT) {
+            return next(new AppError('Managers can only manage student accounts.', 403));
+          }
+          return next();
+        })
+        .catch((err) => {
+          console.error('Error fetching target user for permission check:', err);
+          return next(new AppError('Unable to verify permissions at this time.', 500));
+        });
+      return;
     }
 
     // For non-targeted requests (e.g., listing), allow manager to proceed (service-level filters will apply)
@@ -122,20 +118,20 @@ export function canManageUsers(req: Request, res: Response, next: NextFunction) 
  * Others: forbidden
  */
 export function canCreateRole(req: Request, res: Response, next: NextFunction) {
-  const userRole = (req as any).userRole as UserRole | undefined;
-  const targetRole = req.body.role as UserRole | undefined;
+  const userRole = (req as any).userRole as Role | undefined;
+  const targetRole = req.body.role as Role | undefined;
 
   if (!userRole) {
     return next(new AppError('User not authenticated.', 401));
   }
 
   // ADMIN can create all roles
-  if (userRole === UserRole.ADMIN) {
+  if (userRole === Role.ADMIN) {
     return next();
   }
 
   // MANAGER can only create STUDENT users
-  if (userRole === UserRole.MANAGER && targetRole === UserRole.STUDENT) {
+  if (userRole === Role.MANAGER && targetRole === Role.STUDENT) {
     return next();
   }
 
@@ -152,16 +148,16 @@ export function canCreateRole(req: Request, res: Response, next: NextFunction) {
  * Prevent self-deactivation by non-admin users
  */
 export function preventSelfDeactivation(req: Request, res: Response, next: NextFunction) {
-  const userId = (req as any).userId as number | undefined;
-  const userRole = (req as any).userRole as UserRole | undefined;
-  const targetUserId = parseInt(req.params.id as string);
+  const userId = (req as any).userId as string | undefined;
+  const userRole = (req as any).userRole as Role | undefined;
+  const targetUserId = req.params.id as string;
 
   if (!userId || !userRole) {
     return next(new AppError('User not authenticated.', 401));
   }
 
   // ADMIN can deactivate anyone including themselves
-  if (userRole === UserRole.ADMIN) {
+  if (userRole === Role.ADMIN) {
     return next();
   }
 

@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-
 import TeachersService from '../service/teachers.service';
 import { CreateTeacherDto, UpdateTeacherDto, AssignSubjectDto } from '../dto/index';
 
@@ -12,9 +11,8 @@ export async function getTeachers(req: Request, res: Response, next: NextFunctio
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const search = req.query.search as string | undefined;
-    const specialization = req.query.specialization as string | undefined;
 
-    const result = await TeachersService.getTeachers({ page, limit, search, specialization });
+    const result = await TeachersService.getTeachers({ page, limit, search });
     res.status(200).json({ success: true, message: 'Teachers retrieved', data: result });
   } catch (error) {
     next(error);
@@ -27,7 +25,7 @@ export async function getTeachers(req: Request, res: Response, next: NextFunctio
  */
 export async function getTeacherById(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = Number(req.params.id);
+    const id = req.params.id as string;
     const teacher = await TeachersService.getTeacherById(id);
     if (!teacher) {
       return res.status(404).json({ success: false, message: 'Teacher not found' });
@@ -58,7 +56,7 @@ export async function createTeacher(req: Request, res: Response, next: NextFunct
  */
 export async function updateTeacher(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = Number(req.params.id);
+    const id = req.params.id as string;
     const dto: UpdateTeacherDto = req.body;
     const teacher = await TeachersService.updateTeacher(id, dto);
     res.status(200).json({ success: true, message: 'Teacher updated', data: teacher });
@@ -73,7 +71,7 @@ export async function updateTeacher(req: Request, res: Response, next: NextFunct
  */
 export async function deleteTeacher(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = Number(req.params.id);
+    const id = req.params.id as string;
     const teacher = await TeachersService.deleteTeacher(id);
     res.status(200).json({ success: true, message: 'Teacher deleted (soft)', data: teacher });
   } catch (error) {
@@ -87,10 +85,10 @@ export async function deleteTeacher(req: Request, res: Response, next: NextFunct
  */
 export async function getMyProfile(req: Request, res: Response, next: NextFunction) {
   try {
-    const teacherId = (req as any).teacherId as number; // set by auth middleware
-    const teacher = await TeachersService.getTeacherById(teacherId);
+    const userId = (req as any).userId as string;
+    const teacher = await TeachersService.getTeacherByUserId(userId);
     if (!teacher) {
-      return res.status(404).json({ success: false, message: 'Teacher not found' });
+      return res.status(404).json({ success: false, message: 'Teacher profile not found' });
     }
     res.status(200).json({ success: true, message: 'Profile retrieved', data: teacher });
   } catch (error) {
@@ -104,10 +102,14 @@ export async function getMyProfile(req: Request, res: Response, next: NextFuncti
  */
 export async function updateMyProfile(req: Request, res: Response, next: NextFunction) {
   try {
-    const teacherId = (req as any).teacherId as number;
+    const userId = (req as any).userId as string;
+    const teacher = await TeachersService.getTeacherByUserId(userId);
+    if (!teacher) {
+      return res.status(404).json({ success: false, message: 'Teacher profile not found' });
+    }
     const dto: UpdateTeacherDto = req.body;
-    const teacher = await TeachersService.updateTeacher(teacherId, dto);
-    res.status(200).json({ success: true, message: 'Profile updated', data: teacher });
+    const updatedTeacher = await TeachersService.updateTeacher(teacher.id, dto);
+    res.status(200).json({ success: true, message: 'Profile updated', data: updatedTeacher });
   } catch (error) {
     next(error);
   }
@@ -119,12 +121,12 @@ export async function updateMyProfile(req: Request, res: Response, next: NextFun
  */
 export async function getTeacherSubjects(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = Number(req.params.id);
+    const id = req.params.id as string;
     const teacher = await TeachersService.getTeacherById(id);
     if (!teacher) {
       return res.status(404).json({ success: false, message: 'Teacher not found' });
     }
-    const subjects = teacher.subjects ?? [];
+    const subjects = teacher.subjectAllocations?.map((alloc: any) => alloc.subject) ?? [];
     res.status(200).json({ success: true, message: 'Subjects retrieved', data: subjects });
   } catch (error) {
     next(error);
@@ -137,7 +139,7 @@ export async function getTeacherSubjects(req: Request, res: Response, next: Next
  */
 export async function updateSalary(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = Number(req.params.id);
+    const id = req.params.id as string;
     const { salary } = req.body as { salary?: number };
     const teacher = await TeachersService.updateTeacher(id, { salary } as any);
     res.status(200).json({ success: true, message: 'Salary updated', data: teacher });
@@ -152,7 +154,7 @@ export async function updateSalary(req: Request, res: Response, next: NextFuncti
  */
 export async function assignSubject(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = Number(req.params.id);
+    const id = req.params.id as string;
     const dto: AssignSubjectDto = req.body;
     await TeachersService.assignSubject(id, dto);
     res.status(200).json({ success: true, message: 'Subject assigned' });

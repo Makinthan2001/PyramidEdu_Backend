@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const assignSubjectSchema = z.object({
-  subjectId: z.number().int().positive('Subject ID must be a positive integer'),
+  subjectId: z.string().uuid('subjectId must be a valid UUID'),
 });
 
 export type AssignSubjectDto = z.infer<typeof assignSubjectSchema>;

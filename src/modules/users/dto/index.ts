@@ -1,12 +1,10 @@
 export {
   createManagerSchema,
   createTeacherSchema,
-  createSupportStaffSchema,
   createStudentSchema,
   createAdminSchema,
   type CreateManagerDto,
   type CreateTeacherDto,
-  type CreateSupportStaffDto,
   type CreateStudentDto,
   type CreateAdminDto,
   type CreateUserDto,

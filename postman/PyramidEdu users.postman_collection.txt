@@ -1,0 +1,64 @@
+=== Get Users ===
+URL: GET {{baseUrl}}/api/v1/users
+Headers: Authorization: Bearer {{token}}
+Instruction: List all users.
+
+-------------------------------------------------
+
+=== Create User ===
+URL: POST {{baseUrl}}/api/v1/users
+Headers: Authorization: Bearer {{token}}
+Instruction: Create a new user (Manager/Teacher/Student).
+Body:
+{
+  "role": "MANAGER",
+  "fullName": "Manager Test",
+  "email": "manager@test.com",
+  "password": "Password123",
+  "phone": "0770000000",
+  "nic": "123456789V",
+  "gender": "MALE",
+  "address": "Address"
+}
+
+-------------------------------------------------
+
+=== Get User By Id ===
+URL: GET {{baseUrl}}/api/v1/users/123
+Headers: Authorization: Bearer {{token}}
+Instruction: Get user details.
+
+-------------------------------------------------
+
+=== Update User ===
+URL: PATCH {{baseUrl}}/api/v1/users/123
+Headers: Authorization: Bearer {{token}}
+Instruction: Update user profile.
+Body:
+{
+  "fullName": "Updated Name"
+}
+
+-------------------------------------------------
+
+=== Deactivate User ===
+URL: PATCH {{baseUrl}}/api/v1/users/123/deactivate
+Headers: Authorization: Bearer {{token}}
+Instruction: Deactivate a user account.
+
+-------------------------------------------------
+
+=== Activate User ===
+URL: PATCH {{baseUrl}}/api/v1/users/123/activate
+Headers: Authorization: Bearer {{token}}
+Instruction: Activate a user account.
+
+-------------------------------------------------
+
+=== Delete User ===
+URL: DELETE {{baseUrl}}/api/v1/users/123
+Headers: Authorization: Bearer {{token}}
+Instruction: Soft delete a user account.
+
+-------------------------------------------------
+

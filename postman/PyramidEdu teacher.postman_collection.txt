@@ -1,0 +1,49 @@
+=== Get Teachers ===
+URL: GET {{baseUrl}}/api/v1/teachers
+Headers: Authorization: Bearer {{token}}
+Instruction: List all teachers.
+
+-------------------------------------------------
+
+=== Create Teacher ===
+URL: POST {{baseUrl}}/api/v1/teachers
+Headers: Authorization: Bearer {{token}}
+Instruction: Create a new teacher.
+Body:
+{
+  "email": "teacher@test.com",
+  "password": "Password123",
+  "fullName": "Teacher Test",
+  "nic": "987654321V",
+  "gender": "MALE",
+  "address": "Teacher Addr",
+  "phone": "0771122334"
+}
+
+-------------------------------------------------
+
+=== Get Teacher By Id ===
+URL: GET {{baseUrl}}/api/v1/teachers/123
+Headers: Authorization: Bearer {{token}}
+Instruction: Get teacher details.
+
+-------------------------------------------------
+
+=== Update Teacher ===
+URL: PATCH {{baseUrl}}/api/v1/teachers/123
+Headers: Authorization: Bearer {{token}}
+Instruction: Update teacher profile.
+Body:
+{
+  "phone": "0779988776"
+}
+
+-------------------------------------------------
+
+=== Get Teacher Subjects ===
+URL: GET {{baseUrl}}/api/v1/teachers/123/subjects
+Headers: Authorization: Bearer {{token}}
+Instruction: Get all subjects assigned to a teacher.
+
+-------------------------------------------------
+

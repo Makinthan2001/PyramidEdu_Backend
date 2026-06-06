@@ -1,0 +1,50 @@
+=== Get Subjects ===
+URL: GET {{baseUrl}}/api/v1/subjects
+Instruction: List all subjects.
+
+-------------------------------------------------
+
+=== Create Subject ===
+URL: POST {{baseUrl}}/api/v1/subjects
+Headers: Authorization: Bearer {{token}}
+Instruction: Create a new subject.
+Body:
+{
+  "subjectName": "Mathematics",
+  "subjectCode": "MATH101",
+  "streamId": "uuid",
+  "grade": "10",
+  "fee": 1500
+}
+
+-------------------------------------------------
+
+=== Get Subject By Id ===
+URL: GET {{baseUrl}}/api/v1/subjects/123
+Instruction: Get subject details.
+
+-------------------------------------------------
+
+=== Assign Teacher ===
+URL: PATCH {{baseUrl}}/api/v1/subjects/123/assign-teacher
+Headers: Authorization: Bearer {{token}}
+Instruction: Assign a teacher to a subject.
+Body:
+{
+  "teacherId": "uuid"
+}
+
+-------------------------------------------------
+
+=== Enroll Student ===
+URL: POST {{baseUrl}}/api/v1/subjects/123/enroll
+Headers: Authorization: Bearer {{token}}
+Instruction: Enroll a student in a subject.
+Body:
+{
+  "studentId": "uuid",
+  "enrollmentType": "ONLINE"
+}
+
+-------------------------------------------------
+
