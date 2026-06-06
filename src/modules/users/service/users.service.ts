@@ -44,6 +44,7 @@ const userListSelect = {
   },
   teacher: {
     select: {
+      id: true,
       subjectId: true,
       salary: true,
       address: true,
@@ -92,7 +93,9 @@ function formatUserListItem(user: any) {
   }
 
   if (user.teacher) {
+    response.teacherProfileId = user.teacher.id;
     response.subjectId = user.teacher.subjectId;
+    response.subject = (user.teacher as any).__subjectName ?? null;
     response.salary = user.teacher.salary;
     response.address = user.teacher.address;
     response.nic = user.teacher.nic;
@@ -165,6 +168,24 @@ export class UsersService {
 
     const formattedUsers = users.map(formatUserListItem);
 
+    // Resolve subject names for teachers in a single batch query
+    const teacherSubjectIds = formattedUsers
+      .filter((u) => u.subjectId)
+      .map((u) => u.subjectId as string);
+
+    if (teacherSubjectIds.length > 0) {
+      const subjects = await prisma.subject.findMany({
+        where: { id: { in: teacherSubjectIds } },
+        select: { id: true, subjectName: true },
+      });
+      const subjectMap = new Map(subjects.map((s) => [s.id, s.subjectName]));
+      formattedUsers.forEach((u) => {
+        if (u.subjectId) {
+          u.subject = subjectMap.get(u.subjectId) ?? null;
+        }
+      });
+    }
+
     return {
       data: formattedUsers,
       total,
@@ -187,7 +208,18 @@ export class UsersService {
       throw new AppError('User not found.', 404);
     }
 
-    return formatUserListItem(user);
+    const formatted = formatUserListItem(user);
+
+    // Resolve subject name for teacher
+    if (formatted.subjectId) {
+      const subject = await prisma.subject.findUnique({
+        where: { id: formatted.subjectId },
+        select: { subjectName: true },
+      });
+      formatted.subject = subject?.subjectName ?? null;
+    }
+
+    return formatted;
   }
 
   /**

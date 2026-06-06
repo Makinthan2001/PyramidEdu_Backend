@@ -32,28 +32,41 @@ const userProfileInclude = {
     admin: true,
 };
 function toSafeUser(user) {
-    const response = {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        isActive: user.isActive,
-        forcePwdChange: user.forcePwdChange,
-        createdAt: user.createdAt,
-        phone: user.phone || undefined,
-    };
-    if (user.student) {
-        response.phone = user.student.phone || response.phone;
-        response.address = user.student.address || undefined;
-    }
-    if (user.teacher) {
-        response.phone = user.teacher.phone || response.phone;
-        response.address = user.teacher.address || undefined;
-    }
-    if (user.manager) {
-        response.address = user.manager.address || undefined;
-    }
-    return response;
+    return __awaiter(this, void 0, void 0, function* () {
+        const response = {
+            id: user.id,
+            email: user.email,
+            fullName: user.fullName,
+            role: user.role,
+            isActive: user.isActive,
+            forcePwdChange: user.forcePwdChange,
+            createdAt: user.createdAt,
+            phone: user.phone || undefined,
+        };
+        if (user.student) {
+            response.phone = user.student.phone || response.phone;
+            response.address = user.student.address || undefined;
+        }
+        if (user.teacher) {
+            response.phone = user.teacher.phone || response.phone;
+            response.address = user.teacher.address || undefined;
+            response.teacherProfileId = user.teacher.id;
+            if (user.teacher.subjectId) {
+                response.subjectId = user.teacher.subjectId;
+                const subject = yield prisma_config_1.default.subject.findUnique({
+                    where: { id: user.teacher.subjectId },
+                    select: { subjectName: true },
+                });
+                if (subject) {
+                    response.subject = subject.subjectName;
+                }
+            }
+        }
+        if (user.manager) {
+            response.address = user.manager.address || undefined;
+        }
+        return response;
+    });
 }
 function registerUser(dto) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -96,7 +109,7 @@ function registerUser(dto) {
                 });
             }
         }));
-        return toSafeUser(user);
+        return yield toSafeUser(user);
     });
 }
 function loginUser(dto) {
@@ -138,7 +151,7 @@ function loginUser(dto) {
             },
         });
         return {
-            user: toSafeUser(user),
+            user: yield toSafeUser(user),
             tokens: { accessToken, refreshToken },
         };
     });
@@ -198,7 +211,7 @@ function getCurrentUser(userId) {
         if (!user) {
             throw new AppError_1.AppError('User not found.', 404);
         }
-        return toSafeUser(user);
+        return yield toSafeUser(user);
     });
 }
 function changePassword(userId, dto) {
