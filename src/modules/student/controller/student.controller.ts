@@ -48,6 +48,7 @@ export async function verifyOtpAndRegister(req: Request, res: Response, next: Ne
       },
     });
   } catch (error) {
+    console.error('VERIFY OTP ERROR:', error);
     next(error);
   }
 }

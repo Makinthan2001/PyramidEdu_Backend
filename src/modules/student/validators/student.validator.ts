@@ -11,7 +11,7 @@ export const initiateRegistrationSchema = z.object({
   
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  indexNumber: z.string().optional(),
+  nic: z.string().optional(),
   
   parentName: z.string().min(1, 'Parent name is required'),
   parentRelation: z.string().min(1, 'Parent relation is required'),

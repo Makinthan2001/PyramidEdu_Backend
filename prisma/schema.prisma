@@ -257,6 +257,7 @@ model Teacher {
   exams           Exam[]
   quizzes         Quiz[]
   results         Result[]
+  enrollments     Enrollment[]
 
   @@map("teachers")
 }
@@ -442,6 +443,7 @@ model Enrollment {
   id               String           @id @default(uuid())
   studentId        String           @map("student_id")
   subjectId        String           @map("subject_id")
+  teacherId        String?          @map("teacher_id")
   enrolledDate     DateTime         @default(now()) @map("enrolled_date")
   endDate          DateTime?        @map("end_date")
   enrollmentStatus EnrollmentStatus @default(ACTIVE) @map("enrollment_status")
@@ -450,6 +452,7 @@ model Enrollment {
 
   student          Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   subject          Subject  @relation(fields: [subjectId], references: [id])
+  teacher          Teacher? @relation(fields: [teacherId], references: [id])
 
   @@unique([studentId, subjectId])
   @@index([studentId])

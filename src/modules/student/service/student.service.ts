@@ -15,12 +15,12 @@ export class StudentService {
       throw new AppError('Email is already registered.', 400);
     }
 
-    if (dto.indexNumber) {
+    if (dto.nic) {
       const existingStudent = await prisma.student.findUnique({
-        where: { indexNumber: dto.indexNumber },
+        where: { nic: dto.nic },
       });
       if (existingStudent) {
-        throw new AppError('Index number is already registered.', 400);
+        throw new AppError('NIC is already registered.', 400);
       }
     }
 
@@ -182,13 +182,35 @@ export class StudentService {
         },
       });
 
+      // Calculate the next indexNumber
+      const batchPrefix = `STD${regData.alExamBatch}`;
+      const latestStudent = await tx.student.findFirst({
+        where: { indexNumber: { startsWith: batchPrefix } },
+        orderBy: { indexNumber: 'desc' },
+      });
+      
+      let nextRunningNum = 1;
+      if (latestStudent && latestStudent.indexNumber) {
+        const lastNumStr = latestStudent.indexNumber.slice(-4);
+        const lastNum = parseInt(lastNumStr, 10);
+        if (!isNaN(lastNum)) {
+          nextRunningNum = lastNum + 1;
+        }
+      }
+      const newIndexNumber = `${batchPrefix}${nextRunningNum.toString().padStart(4, '0')}`;
+      
+      // Generate unique QR code token
+      const qrToken = `QR-${newIndexNumber}-${Math.random().toString(36).substring(2, 10)}`;
+
       // Create Student with isApproved = false
       const student = await tx.student.create({
         data: {
           userId: user.id,
           parentId,
           streamId: regData.selectedStreamId,
-          indexNumber: regData.indexNumber || null,
+          indexNumber: newIndexNumber,
+          nic: regData.nic || null,
+          qrCode: qrToken,
           dateOfBirth: new Date(regData.dateOfBirth),
           address: regData.address,
           phone: regData.phone,
@@ -198,12 +220,24 @@ export class StudentService {
         },
       });
 
+      // Create corresponding QRCode record
+      await tx.qRCode.create({
+        data: {
+          studentId: student.id,
+          qrToken: qrToken,
+        }
+      });
+
       // Create Enrollments
       for (const subjectId of regData.selectedCourseIds) {
+        const teacherId = regData.selectedTeacherIds?.[subjectId];
+        if (!teacherId) throw new AppError(`Missing teacher for subject ${subjectId}`, 400);
+        
         await tx.enrollment.create({
           data: {
             studentId: student.id,
             subjectId,
+            teacherId,
             enrollmentStatus: 'ACTIVE',
           },
         });
