@@ -10,6 +10,7 @@ import { validateEnv } from './utils/validateEnv';
 import authRouter from './modules/auth';
 import healthRouter from './modules/health';
 import mobileRouter from './modules/mobile';
+import studentRouter from './modules/student/routes/student.routes';
 import usersRouter from './modules/users';
 import subjectsRouter from './modules/subjects';
 
@@ -78,6 +79,9 @@ app.use('/api/v1/users', usersRouter);
 
 // Subjects routes
 app.use('/api/v1/subjects', subjectsRouter);
+
+// Student routes
+app.use('/api/v1/students', studentRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);
