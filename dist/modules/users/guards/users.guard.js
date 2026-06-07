@@ -1,10 +1,20 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isUserOwner = isUserOwner;
 exports.canAccessUser = canAccessUser;
+exports.canUpdateUser = canUpdateUser;
 exports.canManageUsers = canManageUsers;
 exports.canCreateRole = canCreateRole;
 exports.preventSelfDeactivation = preventSelfDeactivation;
@@ -49,6 +59,51 @@ function canAccessUser(req, res, next) {
         return next(new AppError_1.AppError('You can only access your own profile.', 403));
     }
     next();
+}
+/**
+ * Check if user can UPDATE another user's profile
+ * ADMIN: can update anyone
+ * MANAGER: can update any non-ADMIN user (teachers, students, support staff)
+ * Others: can only update their own profile
+ */
+function canUpdateUser(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const userRole = req.userRole;
+        const userId = req.userId;
+        const targetUserId = req.params.id;
+        if (!userId || !userRole) {
+            return next(new AppError_1.AppError('User not authenticated.', 401));
+        }
+        // ADMIN can update anyone
+        if (userRole === client_1.Role.ADMIN) {
+            return next();
+        }
+        // Users can always update their own profile
+        if (userId === targetUserId) {
+            return next();
+        }
+        // MANAGER can update any non-ADMIN user
+        if (userRole === client_1.Role.MANAGER) {
+            try {
+                const target = yield prisma_config_1.default.user.findUnique({
+                    where: { id: targetUserId },
+                    select: { role: true },
+                });
+                if (!target) {
+                    return next(new AppError_1.AppError('Target user not found.', 404));
+                }
+                if (target.role === client_1.Role.ADMIN) {
+                    return next(new AppError_1.AppError('Managers cannot update admin accounts.', 403));
+                }
+                return next();
+            }
+            catch (err) {
+                console.error('Error checking target user role:', err);
+                return next(new AppError_1.AppError('Unable to verify permissions.', 500));
+            }
+        }
+        return next(new AppError_1.AppError('You do not have permission to update this user.', 403));
+    });
 }
 /**
  * Check if user can manage users (create, update, delete)
@@ -138,6 +193,7 @@ function preventSelfDeactivation(req, res, next) {
 exports.default = {
     isUserOwner,
     canAccessUser,
+    canUpdateUser,
     canManageUsers,
     canCreateRole,
     preventSelfDeactivation,

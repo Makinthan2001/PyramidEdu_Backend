@@ -24,7 +24,7 @@ const userProfileInclude = {
   admin: true,
 };
 
-function toSafeUser(user: any): SafeUser {
+async function toSafeUser(user: any): Promise<SafeUser> {
   const response: SafeUser = {
     id: user.id,
     email: user.email,
@@ -44,6 +44,17 @@ function toSafeUser(user: any): SafeUser {
   if (user.teacher) {
     response.phone = user.teacher.phone || response.phone;
     response.address = user.teacher.address || undefined;
+    response.teacherProfileId = user.teacher.id;
+    if (user.teacher.subjectId) {
+      response.subjectId = user.teacher.subjectId;
+      const subject = await prisma.subject.findUnique({
+        where: { id: user.teacher.subjectId },
+        select: { subjectName: true },
+      });
+      if (subject) {
+        response.subject = subject.subjectName;
+      }
+    }
   }
 
   if (user.manager) {
@@ -95,7 +106,7 @@ export async function registerUser(dto: RegisterDto): Promise<SafeUser> {
     }
   });
 
-  return toSafeUser(user);
+  return await toSafeUser(user);
 }
 
 export async function loginUser(dto: LoginDto): Promise<LoginResult> {
@@ -143,7 +154,7 @@ export async function loginUser(dto: LoginDto): Promise<LoginResult> {
   });
 
   return {
-    user: toSafeUser(user),
+    user: await toSafeUser(user),
     tokens: { accessToken, refreshToken },
   };
 }
@@ -208,7 +219,7 @@ export async function getCurrentUser(userId: string): Promise<SafeUser> {
   if (!user) {
     throw new AppError('User not found.', 404);
   }
-  return toSafeUser(user);
+  return await toSafeUser(user);
 }
 
 export async function changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {

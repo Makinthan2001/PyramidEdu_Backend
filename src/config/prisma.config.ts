@@ -13,6 +13,11 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 let prismaInstance: PrismaClient;
 
+// Force Prisma to recreate instance on hot reload during schema development
+if (process.env.NODE_ENV !== "production") {
+  delete (global as any).prisma;
+}
+
 if (process.env.NODE_ENV === "production") {
   const adapter = new PrismaNeon({ connectionString });
   prismaInstance = new PrismaClient({

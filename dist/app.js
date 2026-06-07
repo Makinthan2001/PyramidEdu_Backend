@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 require("dotenv/config");
 const express_1 = __importDefault(require("express"));
+const path_1 = __importDefault(require("path"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const cors_1 = __importDefault(require("cors"));
 const morgan_1 = __importDefault(require("morgan"));
@@ -19,6 +20,7 @@ const student_routes_1 = __importDefault(require("./modules/student/routes/stude
 const users_1 = __importDefault(require("./modules/users"));
 const subjects_1 = __importDefault(require("./modules/subjects"));
 const manager_1 = __importDefault(require("./modules/manager"));
+const study_materials_1 = __importDefault(require("./modules/study-materials"));
 (0, validateEnv_1.validateEnv)();
 const app = (0, express_1.default)();
 // Secure security headers
@@ -55,6 +57,8 @@ const authBasePaths = ['/api/v1/auth', '/api/auth'];
 // Apply rate limiter to auth routes
 app.use(['/api/v1/auth/login', '/api/auth/login', '/api/v1/mobile/auth/login'], authRateLimiter);
 app.use(['/api/v1/auth/register', '/api/auth/register'], authRateLimiter);
+// Serve static files from the uploads directory
+app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../uploads')));
 app.get('/', (req, res) => {
     res.send('PyramidEdu Backend Running');
 });
@@ -73,6 +77,8 @@ app.use('/api/v1/subjects', subjects_1.default);
 app.use('/api/v1/students', student_routes_1.default);
 // Manager routes
 app.use('/api/v1/manager', manager_1.default);
+// Study Materials routes
+app.use('/api/v1/study-materials', study_materials_1.default);
 // centralized error handler - must be last
 app.use(errorHandler_1.default);
 exports.default = app;

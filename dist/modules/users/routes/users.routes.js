@@ -100,7 +100,7 @@ router.patch('/:id/reset-password', users_guard_1.canManageUsers, controller.res
  * PATCH /api/v1/users/:id
  * Update user details
  */
-router.patch('/:id', (0, validate_1.validate)(users_validator_1.updateUserSchema), users_guard_1.canAccessUser, controller.updateUser);
+router.patch('/:id', (0, validate_1.validate)(users_validator_1.updateUserSchema), users_guard_1.canUpdateUser, controller.updateUser);
 /**
  * DELETE /api/v1/users/:id
  * Soft-delete user account (deactivate)

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import path from 'path';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -14,6 +15,7 @@ import studentRouter from './modules/student/routes/student.routes';
 import usersRouter from './modules/users';
 import subjectsRouter from './modules/subjects';
 import managerRouter from './modules/manager';
+import studyMaterialsRouter from './modules/study-materials';
 
 validateEnv();
 
@@ -60,6 +62,9 @@ const authBasePaths = ['/api/v1/auth', '/api/auth'];
 app.use(['/api/v1/auth/login', '/api/auth/login', '/api/v1/mobile/auth/login'], authRateLimiter);
 app.use(['/api/v1/auth/register', '/api/auth/register'], authRateLimiter);
 
+// Serve static files from the uploads directory
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 app.get('/', (req, res) => {
   res.send('PyramidEdu Backend Running');
@@ -86,6 +91,8 @@ app.use('/api/v1/students', studentRouter);
 
 // Manager routes
 app.use('/api/v1/manager', managerRouter);
+// Study Materials routes
+app.use('/api/v1/study-materials', studyMaterialsRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);
