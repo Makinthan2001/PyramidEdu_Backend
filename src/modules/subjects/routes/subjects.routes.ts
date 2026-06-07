@@ -22,6 +22,7 @@ router.get('/teachers', controller.getTeachersForSubject);
 router.use(jwtGuard);
 
 router.post('/streams', roleGuard(Role.ADMIN, Role.MANAGER), validate(createStreamSchema), controller.createStream);
+router.patch('/streams/:id', roleGuard(Role.ADMIN, Role.MANAGER), controller.updateStream);
 
 router.get('/', controller.getSubjects);
 router.get('/:id', controller.getSubjectById);

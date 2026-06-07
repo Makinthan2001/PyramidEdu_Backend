@@ -16,6 +16,8 @@ export const updateSubjectSchema = z.object({
     .max(20, 'Subject code must not exceed 20 characters')
     .optional(),
   feeAmount: feeAmountSchema.optional(),
+  // Accept either an array of stream IDs (preferred) or a single streamId (backwards compat)
+  streamIds: z.array(z.string().uuid()).optional(),
   streamId: z.string().uuid('Stream ID must be a valid UUID').optional(),
   isActive: z.boolean().optional(),
 });

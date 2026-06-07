@@ -11,30 +11,13 @@ const connectionString = `${process.env.DATABASE_URL}`;
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-let prismaInstance: PrismaClient;
-
-// Force Prisma to recreate instance on hot reload during schema development
-if (process.env.NODE_ENV !== "production") {
-  delete (global as any).prisma;
-}
-
-if (process.env.NODE_ENV === "production") {
+if (!globalForPrisma.prisma) {
   const adapter = new PrismaNeon({ connectionString });
-  prismaInstance = new PrismaClient({
+  globalForPrisma.prisma = new PrismaClient({
     adapter,
     log: ["error", "warn"],
   });
-} else {
-  if (!globalForPrisma.prisma) {
-    const adapter = new PrismaNeon({ connectionString });
-    globalForPrisma.prisma = new PrismaClient({
-      adapter,
-      log: ["error", "warn"],
-    });
-  }
-  prismaInstance = globalForPrisma.prisma;
 }
 
-export const prisma = prismaInstance;
+export const prisma = globalForPrisma.prisma;
 export default prisma;
-
