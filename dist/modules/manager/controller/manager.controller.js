@@ -69,6 +69,60 @@ class ManagerController {
             }
         });
     }
+    static getApprovedStudents(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const data = yield manager_service_1.ManagerService.getApprovedStudents();
+                res.status(200).json({ success: true, data });
+            }
+            catch (error) {
+                next(error);
+            }
+        });
+    }
+    static toggleStudentStatus(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { id } = req.params;
+                yield manager_service_1.ManagerService.toggleStudentStatus(id);
+                res.status(200).json({ success: true, message: 'Student status toggled successfully.' });
+            }
+            catch (error) {
+                next(error);
+            }
+        });
+    }
+    static updateStudent(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { id } = req.params;
+                const data = req.body;
+                yield manager_service_1.ManagerService.updateStudent(id, data);
+                res.status(200).json({ success: true, message: 'Student details updated successfully.' });
+            }
+            catch (error) {
+                next(error);
+            }
+        });
+    }
+    static reEnrollStudent(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            try {
+                const { id } = req.params;
+                const data = req.body;
+                const actorId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id; // Assuming auth middleware sets this
+                if (!actorId) {
+                    throw new AppError_1.AppError('Unauthorized: Manager ID required for re-enrollment.', 401);
+                }
+                yield manager_service_1.ManagerService.reEnrollStudent(id, data, actorId);
+                res.status(200).json({ success: true, message: 'Student re-enrolled successfully.' });
+            }
+            catch (error) {
+                next(error);
+            }
+        });
+    }
 }
 exports.ManagerController = ManagerController;
 exports.default = ManagerController;

@@ -207,10 +207,13 @@ class StudentService {
                         address: regData.address,
                         phone: regData.phone,
                         gender: regData.gender === 'MALE' ? 'MALE' : regData.gender === 'FEMALE' ? 'FEMALE' : 'OTHER',
+                        school: regData.school || null,
                         batch: regData.alExamBatch,
                         approvalStatus: 'PENDING',
                         paymentStatus: 'PENDING',
                         totalFeeAmount: totalFeeAmount,
+                        feeEffectiveDate: new Date(),
+                        lastFeeUpdateDate: new Date(),
                     },
                 });
                 // Create corresponding QRCode record

@@ -725,12 +725,11 @@ class SubjectsService {
             if (!(student === null || student === void 0 ? void 0 : student.user.isActive)) {
                 throw new AppError_1.AppError('Student not found or is not active.', 404);
             }
-            const existingEnrollment = yield prisma_config_1.default.enrollment.findUnique({
+            const existingEnrollment = yield prisma_config_1.default.enrollment.findFirst({
                 where: {
-                    studentId_subjectId: {
-                        studentId,
-                        subjectId,
-                    },
+                    studentId,
+                    subjectId,
+                    enrollmentStatus: client_1.EnrollmentStatus.ACTIVE,
                 },
             });
             if ((existingEnrollment === null || existingEnrollment === void 0 ? void 0 : existingEnrollment.enrollmentStatus) === client_1.EnrollmentStatus.ACTIVE) {
@@ -781,12 +780,11 @@ class SubjectsService {
                     throw new AppError_1.AppError('You can only unenroll yourself.', 403);
                 }
             }
-            const enrollment = yield prisma_config_1.default.enrollment.findUnique({
+            const enrollment = yield prisma_config_1.default.enrollment.findFirst({
                 where: {
-                    studentId_subjectId: {
-                        studentId,
-                        subjectId,
-                    },
+                    studentId,
+                    subjectId,
+                    enrollmentStatus: client_1.EnrollmentStatus.ACTIVE,
                 },
             });
             if (!enrollment || enrollment.enrollmentStatus !== client_1.EnrollmentStatus.ACTIVE) {

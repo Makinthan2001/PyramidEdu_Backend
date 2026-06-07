@@ -22,6 +22,7 @@ class ManagerService {
     static getRegisteredStudents() {
         return __awaiter(this, void 0, void 0, function* () {
             const students = yield prisma_config_1.default.student.findMany({
+                where: { approvalStatus: 'PENDING' },
                 orderBy: { createdAt: 'desc' },
                 include: {
                     user: {
@@ -43,12 +44,56 @@ class ManagerService {
                 return ({
                     id: student.id,
                     studentName: student.user.fullName,
+                    indexNumber: student.indexNumber,
                     email: student.user.email,
                     stream: ((_a = student.stream) === null || _a === void 0 ? void 0 : _a.streamName) || 'N/A',
+                    qrCode: student.qrCode,
                     totalFeeAmount: Number(student.totalFeeAmount),
                     paymentStatus: student.paymentStatus,
                     approvalStatus: student.approvalStatus,
                     registeredDate: student.createdAt,
+                });
+            });
+        });
+    }
+    /**
+     * Get all approved students for Student Management
+     */
+    static getApprovedStudents() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const students = yield prisma_config_1.default.student.findMany({
+                where: { approvalStatus: 'APPROVED' },
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    user: {
+                        select: {
+                            fullName: true,
+                            email: true,
+                            isActive: true,
+                        },
+                    },
+                    stream: {
+                        select: {
+                            streamName: true,
+                        },
+                    },
+                    fees: {
+                        orderBy: { monthYear: 'desc' },
+                        take: 1,
+                    },
+                },
+            });
+            return students.map((student) => {
+                var _a;
+                return ({
+                    id: student.id,
+                    studentName: student.user.fullName,
+                    indexNumber: student.indexNumber,
+                    email: student.user.email,
+                    stream: ((_a = student.stream) === null || _a === void 0 ? void 0 : _a.streamName) || 'N/A',
+                    qrCode: student.qrCode,
+                    isActive: student.user.isActive,
+                    monthlyFeeStatus: student.fees.length > 0 ? student.fees[0].status : 'UNPAID',
                 });
             });
         });
@@ -84,6 +129,16 @@ class ManagerService {
                             },
                         },
                     },
+                    fees: {
+                        orderBy: { monthYear: 'desc' },
+                        include: { payments: true }
+                    },
+                    enrollmentHistories: {
+                        orderBy: { changedAt: 'desc' },
+                        include: {
+                            changedBy: { select: { fullName: true } }
+                        }
+                    },
                 },
             });
             if (!student) {
@@ -100,6 +155,50 @@ class ManagerService {
             const student = yield prisma_config_1.default.student.findUnique({ where: { id } });
             if (!student)
                 throw new AppError_1.AppError('Student not found.', 404);
+            if (paymentStatus === 'PAID' && student.paymentStatus !== 'PAID') {
+                return prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+                    const updatedStudent = yield tx.student.update({
+                        where: { id },
+                        data: { paymentStatus },
+                    });
+                    // Determine the current month
+                    const now = new Date();
+                    const monthYear = new Date(now.getFullYear(), now.getMonth(), 1);
+                    // Create the Fee record for the first month
+                    const fee = yield tx.fee.upsert({
+                        where: {
+                            studentId_monthYear: {
+                                studentId: id,
+                                monthYear: monthYear,
+                            },
+                        },
+                        update: {
+                            paid: student.totalFeeAmount,
+                            status: 'PAID',
+                        },
+                        create: {
+                            studentId: id,
+                            total: student.totalFeeAmount,
+                            paid: student.totalFeeAmount,
+                            status: 'PAID',
+                            monthYear: monthYear,
+                            dueDate: new Date(now.getFullYear(), now.getMonth(), 10), // Example due date
+                        },
+                    });
+                    // Record the payment transaction
+                    yield tx.payment.create({
+                        data: {
+                            studentId: id,
+                            feeId: fee.id,
+                            amount: student.totalFeeAmount,
+                            paymentMethod: 'CASH', // Defaulting to CASH for manual manager approval, or can be extended
+                            paymentStatus: 'VERIFIED',
+                            paymentDate: new Date(),
+                        },
+                    });
+                    return updatedStudent;
+                }));
+            }
             return prisma_config_1.default.student.update({
                 where: { id },
                 data: { paymentStatus },
@@ -114,10 +213,213 @@ class ManagerService {
             const student = yield prisma_config_1.default.student.findUnique({ where: { id } });
             if (!student)
                 throw new AppError_1.AppError('Student not found.', 404);
+            if (approvalStatus === 'APPROVED') {
+                return prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+                    const updatedStudent = yield tx.student.update({
+                        where: { id },
+                        data: { approvalStatus, enrolledAt: new Date() },
+                    });
+                    yield tx.user.update({
+                        where: { id: student.userId },
+                        data: { status: 'ACTIVE', isActive: true },
+                    });
+                    return updatedStudent;
+                }));
+            }
             return prisma_config_1.default.student.update({
                 where: { id },
                 data: { approvalStatus },
             });
+        });
+    }
+    /**
+     * Toggle student's active status
+     */
+    static toggleStudentStatus(id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const student = yield prisma_config_1.default.student.findUnique({ where: { id } });
+            if (!student)
+                throw new AppError_1.AppError('Student not found.', 404);
+            const user = yield prisma_config_1.default.user.findUnique({ where: { id: student.userId } });
+            if (!user)
+                throw new AppError_1.AppError('User not found.', 404);
+            return prisma_config_1.default.user.update({
+                where: { id: user.id },
+                data: { isActive: !user.isActive, status: !user.isActive ? 'ACTIVE' : 'INACTIVE' },
+            });
+        });
+    }
+    /**
+     * Update student details
+     */
+    static updateStudent(id, data) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const student = yield prisma_config_1.default.student.findUnique({
+                where: { id },
+                include: { enrollments: true, parent: true },
+            });
+            if (!student)
+                throw new AppError_1.AppError('Student not found.', 404);
+            return prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+                // 1. Update User
+                if (data.fullName || data.phone || data.email) {
+                    yield tx.user.update({
+                        where: { id: student.userId },
+                        data: Object.assign(Object.assign(Object.assign({}, (data.fullName && { fullName: data.fullName })), (data.phone && { phone: data.phone })), (data.email && { email: data.email })),
+                    });
+                }
+                // 2. Update Parent
+                if (data.parentName || data.parentPhone || data.parentOccupation) {
+                    if (student.parentId) {
+                        yield tx.parent.update({
+                            where: { id: student.parentId },
+                            data: Object.assign(Object.assign(Object.assign({}, (data.parentName && { parentName: data.parentName })), (data.parentPhone && { phone: data.parentPhone })), (data.parentOccupation && { occupation: data.parentOccupation })),
+                        });
+                    }
+                }
+                // 3. Update Student (Common details)
+                yield tx.student.update({
+                    where: { id },
+                    data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (data.school !== undefined && { school: data.school })), (data.address && { address: data.address })), (data.dateOfBirth && { dateOfBirth: new Date(data.dateOfBirth) })), (data.gender && { gender: data.gender })), (data.streamId && { streamId: data.streamId })),
+                });
+                // 4. Update Enrollments (Subjects & Teachers)
+                if (data.subjects && Array.isArray(data.subjects)) {
+                    if (data.subjects.length < 1 || data.subjects.length > 3) {
+                        throw new AppError_1.AppError('A student must select between 1 and 3 subjects.', 400);
+                    }
+                    // Delete existing enrollments
+                    yield tx.enrollment.deleteMany({
+                        where: { studentId: id },
+                    });
+                    // Calculate new total fee amount
+                    let totalFee = 0;
+                    for (const sub of data.subjects) {
+                        const subject = yield tx.subject.findUnique({ where: { id: sub.subjectId } });
+                        if (!subject)
+                            throw new AppError_1.AppError(`Subject not found: ${sub.subjectId}`, 404);
+                        totalFee += Number(subject.feeAmount);
+                        yield tx.enrollment.create({
+                            data: {
+                                studentId: id,
+                                subjectId: sub.subjectId,
+                                teacherId: sub.teacherId,
+                                enrollmentStatus: 'ACTIVE',
+                            },
+                        });
+                    }
+                    // Update total fee
+                    yield tx.student.update({
+                        where: { id },
+                        data: {
+                            totalFeeAmount: totalFee,
+                            lastFeeUpdateDate: new Date(),
+                        },
+                    });
+                }
+                return { success: true };
+            }));
+        });
+    }
+    /**
+     * Re-Enroll Student
+     */
+    static reEnrollStudent(id, data, actorId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const student = yield prisma_config_1.default.student.findUnique({
+                where: { id },
+                include: {
+                    enrollments: {
+                        where: { enrollmentStatus: 'ACTIVE' },
+                        include: { subject: true, teacher: { include: { user: true } } },
+                    },
+                    stream: true,
+                },
+            });
+            if (!student)
+                throw new AppError_1.AppError('Student not found.', 404);
+            return prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+                var _a;
+                // 1. Snapshot previous data
+                const previousStream = ((_a = student.stream) === null || _a === void 0 ? void 0 : _a.streamName) || null;
+                const previousMonthlyFee = student.totalFeeAmount;
+                const previousSubjects = student.enrollments.map(e => {
+                    var _a;
+                    return ({
+                        subjectId: e.subjectId,
+                        subjectName: e.subject.subjectName,
+                        teacherId: e.teacherId,
+                        teacherName: ((_a = e.teacher) === null || _a === void 0 ? void 0 : _a.user.fullName) || null,
+                        feeAmount: e.subject.feeAmount,
+                    });
+                });
+                // 2. Mark existing ACTIVE enrollments as COMPLETED and set endDate
+                const effectiveDate = new Date(data.effectiveDate);
+                yield tx.enrollment.updateMany({
+                    where: { studentId: id, enrollmentStatus: 'ACTIVE' },
+                    data: {
+                        enrollmentStatus: 'COMPLETED',
+                        endDate: effectiveDate,
+                    },
+                });
+                // 3. Create new Enrollments and calculate new fee
+                if (!data.subjects || !Array.isArray(data.subjects) || data.subjects.length < 1 || data.subjects.length > 3) {
+                    throw new AppError_1.AppError('A student must select between 1 and 3 subjects.', 400);
+                }
+                let newMonthlyFee = 0;
+                const newSubjectsData = [];
+                for (const sub of data.subjects) {
+                    const subject = yield tx.subject.findUnique({ where: { id: sub.subjectId } });
+                    if (!subject)
+                        throw new AppError_1.AppError(`Subject not found: ${sub.subjectId}`, 404);
+                    let teacherName = null;
+                    if (sub.teacherId) {
+                        const teacher = yield tx.teacher.findUnique({ where: { id: sub.teacherId }, include: { user: true } });
+                        if (teacher)
+                            teacherName = teacher.user.fullName;
+                    }
+                    newMonthlyFee += Number(subject.feeAmount);
+                    newSubjectsData.push({
+                        subjectId: subject.id,
+                        subjectName: subject.subjectName,
+                        teacherId: sub.teacherId || null,
+                        teacherName,
+                        feeAmount: subject.feeAmount,
+                    });
+                    yield tx.enrollment.create({
+                        data: {
+                            studentId: id,
+                            subjectId: sub.subjectId,
+                            teacherId: sub.teacherId || null,
+                            enrollmentStatus: 'ACTIVE',
+                            enrolledDate: effectiveDate,
+                        },
+                    });
+                }
+                // 4. Update Student record
+                yield tx.student.update({
+                    where: { id },
+                    data: {
+                        streamId: data.streamId,
+                        totalFeeAmount: newMonthlyFee,
+                        lastFeeUpdateDate: effectiveDate,
+                    },
+                });
+                // 5. Create History Record
+                yield tx.enrollmentHistory.create({
+                    data: {
+                        studentId: id,
+                        previousStream,
+                        previousSubjects,
+                        previousMonthlyFee,
+                        newStream: data.newStreamName || null,
+                        newSubjects: newSubjectsData,
+                        newMonthlyFee,
+                        effectiveDate,
+                        changedById: actorId,
+                    },
+                });
+                return { success: true };
+            }));
         });
     }
 }
