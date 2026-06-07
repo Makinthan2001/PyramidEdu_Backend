@@ -14,6 +14,7 @@ import mobileRouter from './modules/mobile';
 import studentRouter from './modules/student/routes/student.routes';
 import usersRouter from './modules/users';
 import subjectsRouter from './modules/subjects';
+import managerRouter from './modules/manager';
 import studyMaterialsRouter from './modules/study-materials';
 
 validateEnv();
@@ -88,6 +89,8 @@ app.use('/api/v1/subjects', subjectsRouter);
 // Student routes
 app.use('/api/v1/students', studentRouter);
 
+// Manager routes
+app.use('/api/v1/manager', managerRouter);
 // Study Materials routes
 app.use('/api/v1/study-materials', studyMaterialsRouter);
 

@@ -202,7 +202,14 @@ export class StudentService {
       // Generate unique QR code token
       const qrToken = `QR-${newIndexNumber}-${Math.random().toString(36).substring(2, 10)}`;
 
-      // Create Student with isApproved = false
+      // Fetch subjects to calculate total fee
+      const subjects = await tx.subject.findMany({
+        where: { id: { in: regData.selectedCourseIds } },
+        select: { feeAmount: true }
+      });
+      const totalFeeAmount = subjects.reduce((sum, s) => sum + Number(s.feeAmount), 0);
+
+      // Create Student with approvalStatus = PENDING
       const student = await tx.student.create({
         data: {
           userId: user.id,
@@ -216,7 +223,9 @@ export class StudentService {
           phone: regData.phone,
           gender: regData.gender === 'MALE' ? 'MALE' : regData.gender === 'FEMALE' ? 'FEMALE' : 'OTHER',
           batch: regData.alExamBatch,
-          isApproved: false,
+          approvalStatus: 'PENDING',
+          paymentStatus: 'PENDING',
+          totalFeeAmount: totalFeeAmount,
         },
       });
 

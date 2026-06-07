@@ -35,7 +35,7 @@ const userListSelect = {
             nic: true,
             gender: true,
             batch: true,
-            isApproved: true,
+            approvalStatus: true,
         },
     },
     teacher: {
@@ -84,7 +84,7 @@ function formatUserListItem(user) {
         response.nic = user.student.nic;
         response.gender = user.student.gender;
         response.batch = user.student.batch;
-        response.isApproved = user.student.isApproved;
+        response.approvalStatus = user.student.approvalStatus;
     }
     if (user.teacher) {
         response.teacherProfileId = user.teacher.id;
@@ -204,7 +204,7 @@ class UsersService {
         });
     }
     /**
-     * Approve a student profile (set isApproved = true)
+     * Approve a student profile (set approvalStatus = APPROVED)
      */
     static approveStudent(userId) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -215,13 +215,13 @@ class UsersService {
                 throw new AppError_1.AppError('Target user is not a student.', 400);
             if (!user.student)
                 throw new AppError_1.AppError('Student profile not found.', 404);
-            if (user.student.isApproved) {
+            if (user.student.approvalStatus === 'APPROVED') {
                 const currentUser = yield prisma_config_1.default.user.findUnique({ where: { id: userId }, select: userListSelect });
                 if (!currentUser)
                     throw new AppError_1.AppError('Error retrieving updated user.', 500);
                 return formatUserListItem(currentUser);
             }
-            yield prisma_config_1.default.student.update({ where: { userId }, data: { isApproved: true } });
+            yield prisma_config_1.default.student.update({ where: { userId }, data: { approvalStatus: 'APPROVED' } });
             yield prisma_config_1.default.auditLog.create({
                 data: {
                     action: client_1.AuditAction.APPROVE,
@@ -326,7 +326,7 @@ class UsersService {
                                     gender: dto.gender || null,
                                     batch: dto.batch || null,
                                     nic: dto.nic || dto.nicNumber || null,
-                                    isApproved: dto.isApproved || false,
+                                    approvalStatus: dto.approvalStatus || 'PENDING',
                                 },
                             });
                             break;

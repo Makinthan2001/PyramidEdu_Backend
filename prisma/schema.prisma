@@ -55,6 +55,18 @@ enum AttendanceMethod {
   MANUAL
 }
 
+enum RegistrationPaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum PaymentStatus {
   PENDING
   VERIFIED
@@ -279,7 +291,9 @@ model Student {
   attendancePercentage  Decimal   @default(0) @db.Decimal(5, 2) @map("attendance_percentage")
   performanceStatus     PerformanceLevel? @map("performance_status")
   trendStatus           TrendStatus?      @map("trend_status")
-  isApproved            Boolean   @default(false) @map("is_approved")
+  approvalStatus        ApprovalStatus    @default(PENDING) @map("approval_status")
+  paymentStatus         RegistrationPaymentStatus @default(PENDING) @map("payment_status")
+  totalFeeAmount        Decimal   @default(0) @db.Decimal(12, 2) @map("total_fee_amount")
   enrolledAt            DateTime? @map("enrolled_at")
   deletedAt             DateTime? @map("deleted_at")
   createdAt             DateTime  @default(now()) @map("created_at")
@@ -302,7 +316,7 @@ model Student {
 
   @@index([streamId])
   @@index([batch])
-  @@index([isApproved])
+  @@index([approvalStatus])
   @@map("students")
 }
 
