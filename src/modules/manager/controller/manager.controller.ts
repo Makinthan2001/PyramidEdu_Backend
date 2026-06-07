@@ -54,6 +54,56 @@ export class ManagerController {
       next(error);
     }
   }
+  static async getApprovedStudents(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await ManagerService.getApprovedStudents();
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async toggleStudentStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      await ManagerService.toggleStudentStatus(id as string);
+      res.status(200).json({ success: true, message: 'Student status toggled successfully.' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateStudent(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const data = req.body;
+      await ManagerService.updateStudent(id as string, data);
+      res.status(200).json({ success: true, message: 'Student details updated successfully.' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async reEnrollStudent(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const data = req.body;
+      
+      console.log('RE-ENROLL REQ USER:', (req as any).user);
+      console.log('RE-ENROLL REQ USER ID:', (req as any).userId);
+      
+      const actorId = (req as any).user?.sub || (req as any).user?.id || (req as any).userId;
+      
+      if (!actorId) {
+        throw new AppError('Unauthorized: Manager ID required for re-enrollment.', 401);
+      }
+
+      await ManagerService.reEnrollStudent(id as string, data, actorId);
+      res.status(200).json({ success: true, message: 'Student re-enrolled successfully.' });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export default ManagerController;

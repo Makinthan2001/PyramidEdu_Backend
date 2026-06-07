@@ -775,12 +775,11 @@ export class SubjectsService {
       throw new AppError('Student not found or is not active.', 404);
     }
 
-    const existingEnrollment = await prisma.enrollment.findUnique({
+    const existingEnrollment = await prisma.enrollment.findFirst({
       where: {
-        studentId_subjectId: {
-          studentId,
-          subjectId,
-        },
+        studentId,
+        subjectId,
+        enrollmentStatus: EnrollmentStatus.ACTIVE,
       },
     });
 
@@ -839,12 +838,11 @@ export class SubjectsService {
       }
     }
 
-    const enrollment = await prisma.enrollment.findUnique({
+    const enrollment = await prisma.enrollment.findFirst({
       where: {
-        studentId_subjectId: {
-          studentId,
-          subjectId,
-        },
+        studentId,
+        subjectId,
+        enrollmentStatus: EnrollmentStatus.ACTIVE,
       },
     });
 

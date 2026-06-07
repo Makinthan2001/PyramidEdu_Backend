@@ -10,6 +10,7 @@ exports.initiateRegistrationSchema = zod_1.z.object({
     gender: zod_1.z.enum(['MALE', 'FEMALE', 'OTHER']),
     phone: zod_1.z.string().min(10, 'Phone number must be at least 10 characters'),
     address: zod_1.z.string().min(1, 'Address is required'),
+    school: zod_1.z.string().min(1, 'School is required'),
     email: zod_1.z.string().email('Invalid email address'),
     password: zod_1.z.string().min(8, 'Password must be at least 8 characters'),
     nic: zod_1.z.string().optional(),
