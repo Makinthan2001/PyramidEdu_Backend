@@ -42,6 +42,9 @@ export interface SafeUser {
   fullName?: string;
   phone?: string;
   address?: string;
+  subject?: string;
+  subjectId?: string;
+  teacherProfileId?: string;
 }
 
 export interface PasswordResetPayload {

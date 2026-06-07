@@ -60,6 +60,54 @@ export function canAccessUser(req: Request, res: Response, next: NextFunction) {
 }
 
 /**
+ * Check if user can UPDATE another user's profile
+ * ADMIN: can update anyone
+ * MANAGER: can update any non-ADMIN user (teachers, students, support staff)
+ * Others: can only update their own profile
+ */
+export async function canUpdateUser(req: Request, res: Response, next: NextFunction) {
+  const userRole = (req as any).userRole as Role | undefined;
+  const userId = (req as any).userId as string | undefined;
+  const targetUserId = req.params.id as string;
+
+  if (!userId || !userRole) {
+    return next(new AppError('User not authenticated.', 401));
+  }
+
+  // ADMIN can update anyone
+  if (userRole === Role.ADMIN) {
+    return next();
+  }
+
+  // Users can always update their own profile
+  if (userId === targetUserId) {
+    return next();
+  }
+
+  // MANAGER can update any non-ADMIN user
+  if (userRole === Role.MANAGER) {
+    try {
+      const target = await prisma.user.findUnique({
+        where: { id: targetUserId },
+        select: { role: true },
+      });
+      if (!target) {
+        return next(new AppError('Target user not found.', 404));
+      }
+      if (target.role === Role.ADMIN) {
+        return next(new AppError('Managers cannot update admin accounts.', 403));
+      }
+      return next();
+    } catch (err) {
+      console.error('Error checking target user role:', err);
+      return next(new AppError('Unable to verify permissions.', 500));
+    }
+  }
+
+  return next(new AppError('You do not have permission to update this user.', 403));
+}
+
+/**
  * Check if user can manage users (create, update, delete)
  * ADMIN: can manage all
  * MANAGER: can only manage STUDENT users
@@ -178,6 +226,7 @@ export function preventSelfDeactivation(req: Request, res: Response, next: NextF
 export default {
   isUserOwner,
   canAccessUser,
+  canUpdateUser,
   canManageUsers,
   canCreateRole,
   preventSelfDeactivation,
