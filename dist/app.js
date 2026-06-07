@@ -15,8 +15,10 @@ const validateEnv_1 = require("./utils/validateEnv");
 const auth_1 = __importDefault(require("./modules/auth"));
 const health_1 = __importDefault(require("./modules/health"));
 const mobile_1 = __importDefault(require("./modules/mobile"));
+const student_routes_1 = __importDefault(require("./modules/student/routes/student.routes"));
 const users_1 = __importDefault(require("./modules/users"));
 const subjects_1 = __importDefault(require("./modules/subjects"));
+const manager_1 = __importDefault(require("./modules/manager"));
 (0, validateEnv_1.validateEnv)();
 const app = (0, express_1.default)();
 // Secure security headers
@@ -67,6 +69,10 @@ app.use('/api/v1/mobile', mobile_1.default);
 app.use('/api/v1/users', users_1.default);
 // Subjects routes
 app.use('/api/v1/subjects', subjects_1.default);
+// Student routes
+app.use('/api/v1/students', student_routes_1.default);
+// Manager routes
+app.use('/api/v1/manager', manager_1.default);
 // centralized error handler - must be last
 app.use(errorHandler_1.default);
 exports.default = app;

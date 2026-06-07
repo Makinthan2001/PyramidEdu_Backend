@@ -39,7 +39,7 @@ const userListSelect = {
       nic: true,
       gender: true,
       batch: true,
-      isApproved: true,
+      approvalStatus: true,
     },
   },
   teacher: {
@@ -88,7 +88,7 @@ function formatUserListItem(user: any) {
     response.nic = user.student.nic;
     response.gender = user.student.gender;
     response.batch = user.student.batch;
-    response.isApproved = user.student.isApproved;
+    response.approvalStatus = user.student.approvalStatus;
   }
 
   if (user.teacher) {
@@ -191,7 +191,7 @@ export class UsersService {
   }
 
   /**
-   * Approve a student profile (set isApproved = true)
+   * Approve a student profile (set approvalStatus = APPROVED)
    */
   static async approveStudent(userId: string) {
     const user = await prisma.user.findUnique({ where: { id: userId }, include: { student: true } });
@@ -199,13 +199,13 @@ export class UsersService {
     if (user.role !== Role.STUDENT) throw new AppError('Target user is not a student.', 400);
     if (!user.student) throw new AppError('Student profile not found.', 404);
 
-    if (user.student.isApproved) {
+    if (user.student.approvalStatus === 'APPROVED') {
       const currentUser = await prisma.user.findUnique({ where: { id: userId }, select: userListSelect });
       if (!currentUser) throw new AppError('Error retrieving updated user.', 500);
       return formatUserListItem(currentUser);
     }
 
-    await prisma.student.update({ where: { userId }, data: { isApproved: true } });
+    await prisma.student.update({ where: { userId }, data: { approvalStatus: 'APPROVED' } });
 
     await prisma.auditLog.create({
       data: {
@@ -317,7 +317,7 @@ export class UsersService {
                 gender: dto.gender || null,
                 batch: dto.batch || null,
                 nic: dto.nic || dto.nicNumber || null,
-                isApproved: dto.isApproved || false,
+                approvalStatus: dto.approvalStatus || 'PENDING',
               },
             });
             break;

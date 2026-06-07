@@ -59,7 +59,7 @@ function loginStudent(dto) {
             throw new AppError_1.AppError('Invalid email or password.', 401);
         }
         // Ensure student profile has been approved
-        if (!user.student || user.student.isApproved === false) {
+        if (!user.student || user.student.approvalStatus !== 'APPROVED') {
             throw new AppError_1.AppError('Your account is pending approval. Please contact the school administration.', 403);
         }
         const accessToken = (0, jwt_util_1.generateAccessToken)({ sub: user.id, email: user.email, role: user.role }, MOBILE_ACCESS_EXPIRES);

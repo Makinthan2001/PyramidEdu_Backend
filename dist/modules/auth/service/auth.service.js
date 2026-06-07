@@ -123,7 +123,7 @@ function loginUser(dto) {
         }
         if (user.role === client_1.Role.STUDENT) {
             const student = yield prisma_config_1.default.student.findUnique({ where: { userId: user.id } });
-            if (!student || student.isApproved === false) {
+            if (!student || student.approvalStatus !== 'APPROVED') {
                 throw new AppError_1.AppError('Your account is pending approval. Please contact the administration.', 403);
             }
         }

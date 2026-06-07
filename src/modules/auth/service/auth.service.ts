@@ -125,7 +125,7 @@ export async function loginUser(dto: LoginDto): Promise<LoginResult> {
 
   if (user.role === Role.STUDENT) {
     const student = await prisma.student.findUnique({ where: { userId: user.id } });
-    if (!student || student.isApproved === false) {
+    if (!student || student.approvalStatus !== 'APPROVED') {
       throw new AppError('Your account is pending approval. Please contact the administration.', 403);
     }
   }

@@ -13,6 +13,7 @@ import mobileRouter from './modules/mobile';
 import studentRouter from './modules/student/routes/student.routes';
 import usersRouter from './modules/users';
 import subjectsRouter from './modules/subjects';
+import managerRouter from './modules/manager';
 
 validateEnv();
 
@@ -82,6 +83,9 @@ app.use('/api/v1/subjects', subjectsRouter);
 
 // Student routes
 app.use('/api/v1/students', studentRouter);
+
+// Manager routes
+app.use('/api/v1/manager', managerRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);

@@ -76,7 +76,7 @@ export async function loginStudent(dto: LoginDto): Promise<MobileLoginResult> {
   }
 
   // Ensure student profile has been approved
-  if (!user.student || user.student.isApproved === false) {
+  if (!user.student || user.student.approvalStatus !== 'APPROVED') {
     throw new AppError('Your account is pending approval. Please contact the school administration.', 403);
   }
 

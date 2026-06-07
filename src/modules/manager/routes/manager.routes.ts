@@ -1,0 +1,16 @@
+import { Router } from 'express';
+import { ManagerController } from '../controller/manager.controller';
+import { authenticate } from '../../../middleware/authenticate';
+import { adminOrManager } from '../../../middleware/authorize';
+
+const router = Router();
+
+// All manager routes require authentication and manager/admin role
+router.use(authenticate, adminOrManager);
+
+router.get('/registered-students', ManagerController.getRegisteredStudents);
+router.get('/registered-students/:id', ManagerController.getRegisteredStudentById);
+router.patch('/registered-students/:id/payment-status', ManagerController.updatePaymentStatus);
+router.patch('/registered-students/:id/approval-status', ManagerController.updateApprovalStatus);
+
+export default router;
