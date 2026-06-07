@@ -5,6 +5,7 @@ export const initiateRegistrationSchema = z.object({
   lastName: z.string().min(1, 'Last name is required'),
   dateOfBirth: z.string().min(1, 'Date of birth is required'),
   alExamBatch: z.string().min(1, 'A/L exam batch is required'),
+  batchId: z.string().optional(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
   phone: z.string().min(10, 'Phone number must be at least 10 characters'),
   address: z.string().min(1, 'Address is required'),

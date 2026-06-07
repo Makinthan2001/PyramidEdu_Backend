@@ -158,6 +158,8 @@ async function resolveStudentReference(referenceId: string) {
   return null;
 }
 
+
+
 async function findSubjectByIdentifier(identifier: string) {
   // Try finding by UUID
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
@@ -165,7 +167,7 @@ async function findSubjectByIdentifier(identifier: string) {
     const subjectById = await prisma.subject.findUnique({
       where: { id: identifier },
       include: {
-        stream: true,
+        streams: true,
         subjectAllocations: {
           where: { status: SubjectAllocationStatus.ACTIVE },
           include: {
@@ -187,7 +189,7 @@ async function findSubjectByIdentifier(identifier: string) {
   return prisma.subject.findUnique({
     where: { subjectCode: identifier },
     include: {
-      stream: true,
+      streams: true,
       subjectAllocations: {
         where: { status: SubjectAllocationStatus.ACTIVE },
         include: {
@@ -239,6 +241,10 @@ function buildSubjectResponse(subject: any, activeEnrollmentCount = 0, currentTe
   const activeAllocation = subject.subjectAllocations?.find((alloc: any) => alloc.status === SubjectAllocationStatus.ACTIVE);
   const teacher = activeAllocation?.teacher;
 
+  // Support both streams[] (many-to-many) and legacy single stream
+  const streamsArray: any[] = subject.streams ?? (subject.stream ? [subject.stream] : []);
+  const primaryStream = streamsArray[0] ?? null;
+
   return {
     id: subject.id,
     name: subject.subjectName,
@@ -246,11 +252,18 @@ function buildSubjectResponse(subject: any, activeEnrollmentCount = 0, currentTe
     feePerMonth: decimalToNumber(subject.feeAmount),
     isActive: subject.isActive,
     createdAt: subject.createdAt,
-    stream: subject.stream
+    // Full array for multi-stream display
+    streams: streamsArray.map((s: any) => ({
+      id: s.id,
+      name: s.streamName,
+      isActive: s.isActive,
+    })),
+    // Legacy single-stream field for backwards compat
+    stream: primaryStream
       ? {
-        id: subject.stream.id,
-        name: subject.stream.streamName,
-        isActive: subject.stream.isActive,
+        id: primaryStream.id,
+        name: primaryStream.streamName,
+        isActive: primaryStream.isActive,
       }
       : null,
     teacher: teacher
@@ -289,6 +302,9 @@ export class SubjectsService {
     return prisma.stream.findMany({
       where: { isActive: true },
       orderBy: { streamName: 'asc' },
+      include: {
+        batches: true,
+      },
     });
   }
 
@@ -297,14 +313,14 @@ export class SubjectsService {
       where: { isActive: true },
       orderBy: { subjectName: 'asc' },
       include: {
-        stream: true,
+        streams: true,
       },
     });
 
     return subjects.map((sub) => ({
       id: sub.id,
       name: sub.subjectName,
-      streamName: sub.stream.streamName,
+      streamName: sub.streams[0]?.streamName ?? '',
       feePerMonth: decimalToNumber(sub.feeAmount),
     }));
   }
@@ -313,6 +329,12 @@ export class SubjectsService {
     const stream = await prisma.stream.create({
       data: {
         streamName: dto.name,
+        batches: dto.batchIds && dto.batchIds.length > 0 ? {
+          connect: dto.batchIds.map(id => ({ id }))
+        } : undefined,
+      },
+      include: {
+        batches: true,
       },
     });
 
@@ -330,20 +352,40 @@ export class SubjectsService {
     return stream;
   }
 
+  static async updateStream(streamId: string, streamName: string, batchIds?: string[]) {
+    return prisma.stream.update({
+      where: { id: streamId },
+      data: { 
+        streamName,
+        batches: batchIds ? {
+          set: batchIds.map(id => ({ id }))
+        } : undefined
+      },
+      include: {
+        batches: true
+      }
+    });
+  }
+
   static async createSubject(dto: CreateSubjectDto, actor?: { userId?: string }) {
     const requestedCode = dto.subjectCode ? dto.subjectCode.toUpperCase() : generateSubjectCode(dto.subjectName);
     const code = await ensureUniqueSubjectCode(requestedCode);
+
+    // Resolve stream IDs from either streamIds array or single streamId
+    const streamIds = dto.streamIds?.length ? dto.streamIds : (dto.streamId ? [dto.streamId] : []);
 
     const subject = await prisma.subject.create({
       data: {
         subjectName: dto.subjectName,
         subjectCode: code,
         feeAmount: new Prisma.Decimal(dto.feeAmount),
-        streamId: dto.streamId,
         isActive: dto.isActive ?? true,
+        streams: streamIds.length > 0 ? {
+          connect: streamIds.map((id) => ({ id })),
+        } : undefined,
       },
       include: {
-        stream: true,
+        streams: true,
         subjectAllocations: {
           include: {
             teacher: {
@@ -387,7 +429,7 @@ export class SubjectsService {
     }
 
     if (params.streamId) {
-      where.streamId = params.streamId;
+      where.streams = { some: { id: params.streamId } };
     }
 
     if (params.search) {
@@ -397,44 +439,51 @@ export class SubjectsService {
       ];
     }
 
-    const [subjects, currentTeacher] = await Promise.all([
-      prisma.subject.findMany({
-        where,
-        orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
-        include: {
-          stream: true,
-          subjectAllocations: {
-            include: {
-              teacher: {
-                include: {
-                  user: {
-                    select: {
-                      isActive: true,
-                      fullName: true,
+    try {
+      const [subjects, currentTeacher] = await Promise.all([
+        prisma.subject.findMany({
+          where,
+          orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
+          include: {
+            streams: true,
+            subjectAllocations: {
+              include: {
+                teacher: {
+                  include: {
+                    user: {
+                      select: {
+                        isActive: true,
+                        fullName: true,
+                      },
                     },
                   },
                 },
               },
             },
           },
-        },
-      }),
-      params.userRole === Role.TEACHER && params.userId ? getTeacherProfileByUserId(params.userId) : Promise.resolve(null),
-    ]);
+        }),
+        params.userRole === Role.TEACHER && params.userId ? getTeacherProfileByUserId(params.userId) : Promise.resolve(null),
+      ]);
 
-    const subjectIds = subjects.map((subject) => subject.id);
-    const activeCounts = await getActiveEnrollmentCountMap(subjectIds);
+      const subjectIds = subjects.map((subject) => subject.id);
+      const activeCounts = await getActiveEnrollmentCountMap(subjectIds);
 
-    return {
-      data: subjects.map((subject) =>
-        buildSubjectResponse(subject, activeCounts.get(subject.id) ?? 0, currentTeacher?.id ?? undefined)
-      ),
-      total: subjects.length,
-      page: 1,
-      limit: subjects.length,
-      hasMore: false,
-    };
+      return {
+        data: subjects.map((subject) =>
+          buildSubjectResponse(subject, activeCounts.get(subject.id) ?? 0, currentTeacher?.id ?? undefined)
+        ),
+        total: subjects.length,
+        page: 1,
+        limit: subjects.length,
+        hasMore: false,
+      };
+    } catch (err: any) {
+      console.error('[getSubjects] Prisma/DB error:', err?.message ?? err);
+      throw err;
+    }
   }
+
+
 
   static async getSubjectByIdentifier(identifier: string, actor?: { userRole?: Role; userId?: string }) {
     const subject = await findSubjectByIdentifier(identifier);
@@ -488,15 +537,19 @@ export class SubjectsService {
       data.isActive = dto.isActive;
     }
 
-    if (dto.streamId !== undefined) {
-      data.stream = { connect: { id: dto.streamId } };
+    if (dto.streamId !== undefined || dto.streamIds !== undefined) {
+      // Resolve stream IDs from either streamIds array or single streamId
+      const streamIds = dto.streamIds?.length ? dto.streamIds : (dto.streamId ? [dto.streamId] : []);
+      if (streamIds.length > 0) {
+        data.streams = { set: streamIds.map((id) => ({ id })) };
+      }
     }
 
     const updated = await prisma.subject.update({
       where: { id: subjectId },
       data,
       include: {
-        stream: true,
+        streams: true,
         subjectAllocations: {
           include: {
             teacher: {
@@ -586,7 +639,7 @@ export class SubjectsService {
     return buildSubjectResponse(updated, activeEnrollmentCount);
   }
 
-  static async assignTeacher(subjectId: string, teacherId: string, actor?: { userId?: string }) {
+  static async assignTeacher(subjectId: string, teacherId: string, batchIds?: string[], actor?: { userId?: string }) {
     const subject = await prisma.subject.findUnique({ where: { id: subjectId } });
     if (!subject) {
       throw new AppError('Subject not found.', 404);
@@ -609,9 +662,19 @@ export class SubjectsService {
         teacherId: teacher.id,
         subjectId,
         status: SubjectAllocationStatus.ACTIVE,
+        ...(batchIds && {
+          batches: {
+            connect: batchIds.map((id) => ({ id })),
+          },
+        }),
       },
       update: {
         status: SubjectAllocationStatus.ACTIVE,
+        ...(batchIds && {
+          batches: {
+            set: batchIds.map((id) => ({ id })),
+          },
+        }),
       },
     });
 

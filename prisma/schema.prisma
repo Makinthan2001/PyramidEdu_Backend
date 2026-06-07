@@ -287,6 +287,7 @@ model Student {
   gender               Gender?
   school               String?
   batch                String?
+  batchId              String?                   @map("batch_id")
   nic                  String?                   @unique
   qrCode               String?                   @unique @map("qr_code") // permanent QR token
   rewardPoints         Int                       @default(0) @map("reward_points")
@@ -306,6 +307,7 @@ model Student {
   user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent                 Parent?                 @relation(fields: [parentId], references: [id])
   stream                 Stream?                 @relation(fields: [streamId], references: [id])
+  batchRecord            Batch?                  @relation(fields: [batchId], references: [id])
   enrollments            Enrollment[]
   attendances            Attendance[]
   qrCodes                QRCode[]
@@ -321,6 +323,7 @@ model Student {
 
   @@index([streamId])
   @@index([batch])
+  @@index([batchId])
   @@index([approvalStatus])
   @@map("students")
 }
@@ -400,6 +403,7 @@ model Stream {
 
   subjects Subject[]
   students Student[]
+  batches  Batch[]
 
   @@map("streams")
 }
@@ -409,12 +413,11 @@ model Subject {
   subjectName String   @map("subject_name")
   subjectCode String   @unique @map("subject_code")
   feeAmount   Decimal  @map("fee_amount") @db.Decimal(12, 2)
-  streamId    String   @map("stream_id")
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  stream             Stream              @relation(fields: [streamId], references: [id])
+  streams            Stream[]
   enrollments        Enrollment[]
   studyMaterials     StudyMaterial[]
   quizzes            Quiz[]
@@ -423,7 +426,6 @@ model Subject {
   subjectAllocations SubjectAllocation[]
   courseSchedules    CourseSchedule[]
 
-  @@index([streamId])
   @@map("subjects")
 }
 
@@ -437,6 +439,7 @@ model SubjectAllocation {
 
   teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  batches Batch[]
 
   @@unique([teacherId, subjectId])
   @@map("subject_allocations")
@@ -499,24 +502,27 @@ model EnrollmentHistory {
 }
 
 model StudyMaterial {
-  id          String   @id @default(uuid())
-  teacherId   String   @map("teacher_id")
-  subjectId   String   @map("subject_id")
-  title       String
-  fileUrls    String[] @map("file_urls")
-  text        String?  @db.Text
-  status      String   @default("Pending Review")
-  batch       String?
-  uploadedAt  DateTime @default(now()) @map("uploaded_at")
-  deletedAt   DateTime? @map("deleted_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         String    @id @default(uuid())
+  teacherId  String    @map("teacher_id")
+  subjectId  String    @map("subject_id")
+  title      String
+  fileUrls   String[]  @map("file_urls")
+  text       String?   @db.Text
+  status     String    @default("Pending Review")
+  batch      String?
+  batchId    String?   @map("batch_id")
+  uploadedAt DateTime  @default(now()) @map("uploaded_at")
+  deletedAt  DateTime? @map("deleted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  teacher Teacher @relation(fields: [teacherId], references: [id])
-  subject Subject @relation(fields: [subjectId], references: [id])
+  teacher     Teacher @relation(fields: [teacherId], references: [id])
+  subject     Subject @relation(fields: [subjectId], references: [id])
+  batchRecord Batch?  @relation(fields: [batchId], references: [id])
 
   @@index([subjectId])
   @@index([teacherId])
+  @@index([batchId])
   @@map("study_materials")
 }
 
@@ -526,6 +532,8 @@ model Assignment {
   title       String
   description String?   @db.Text
   fileUrl     String?   @map("file_url")
+  batch       String?
+  batchId     String?   @map("batch_id")
   dueDate     DateTime  @map("due_date")
   totalMarks  Int       @default(100) @map("total_marks")
   isPublished Boolean   @default(false) @map("is_published")
@@ -534,9 +542,11 @@ model Assignment {
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   subject     Subject                @relation(fields: [subjectId], references: [id])
+  batchRecord Batch?                 @relation(fields: [batchId], references: [id])
   submissions AssignmentSubmission[]
 
   @@index([subjectId])
+  @@index([batchId])
   @@map("assignments")
 }
 
@@ -596,6 +606,8 @@ model Exam {
   isApproved  Boolean   @default(false) @map("is_approved")
   startTime   DateTime? @map("start_time")
   duration    Int? // minutes
+  batch       String?
+  batchId     String?   @map("batch_id")
   deletedAt   DateTime? @map("deleted_at")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
@@ -603,11 +615,13 @@ model Exam {
   subject       Subject        @relation(fields: [subjectId], references: [id])
   teacher       Teacher        @relation(fields: [teacherId], references: [id])
   term          AcademicTerm?  @relation(fields: [termId], references: [id])
+  batchRecord   Batch?         @relation(fields: [batchId], references: [id])
   results       Result[]
   examSchedules ExamSchedule[]
 
   @@index([subjectId])
   @@index([examDate])
+  @@index([batchId])
   @@map("exams")
 }
 
@@ -958,6 +972,7 @@ model Announcement {
   title       String
   content     String             @db.Text
   target      AnnouncementTarget @default(ALL)
+  batchId     String?            @map("batch_id")
   publishDate DateTime           @map("publish_date")
   expiryDate  DateTime?          @map("expiry_date")
   isActive    Boolean            @default(true) @map("is_active")
@@ -965,10 +980,12 @@ model Announcement {
   createdAt   DateTime           @default(now()) @map("created_at")
   updatedAt   DateTime           @updatedAt @map("updated_at")
 
-  admin Admin @relation(fields: [adminId], references: [id])
+  admin       Admin  @relation(fields: [adminId], references: [id])
+  batchRecord Batch? @relation(fields: [batchId], references: [id])
 
   @@index([target])
   @@index([publishDate])
+  @@index([batchId])
   @@map("announcements")
 }
 
@@ -1057,4 +1074,26 @@ model SupportStaff {
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
   @@map("support_staff")
+}
+
+// ─────────────────────────────────────────────────────────────
+// BATCHES
+// ─────────────────────────────────────────────────────────────
+
+model Batch {
+  id        String   @id @default(uuid())
+  batchName String   @unique @map("batch_name")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  students           Student[]
+  materials          StudyMaterial[]
+  assignments        Assignment[]
+  exams              Exam[]
+  announcements      Announcement[]
+  streams            Stream[]
+  subjectAllocations SubjectAllocation[]
+
+  @@map("batches")
 }

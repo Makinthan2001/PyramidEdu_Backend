@@ -115,6 +115,28 @@ export async function createStream(req: Request, res: Response, next: NextFuncti
   }
 }
 
+export async function updateStream(req: Request, res: Response, next: NextFunction) {
+  try {
+    const streamId = req.params.id as string;
+    const { name, batchIds } = req.body as { name: string, batchIds?: string[] };
+
+    if (!name?.trim()) {
+      res.status(400).json({ success: false, message: 'Stream name is required' });
+      return;
+    }
+
+    const stream = await SubjectsService.updateStream(streamId, name.trim(), batchIds);
+
+    res.status(200).json({
+      success: true,
+      message: 'Stream updated successfully',
+      data: stream,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getSubjectById(req: Request, res: Response, next: NextFunction) {
   try {
     const identifier = String(req.params.id);
@@ -197,9 +219,10 @@ export async function assignTeacher(req: Request, res: Response, next: NextFunct
   try {
     const subjectId = req.params.id as string;
     const teacherId = Array.isArray(req.body.teacherId) ? req.body.teacherId[0] : (req.body.teacherId as string);
+    const batchIds = req.body.batchIds as string[] | undefined;
     const userId = (req as any).userId as string | undefined;
 
-    const subject = await SubjectsService.assignTeacher(subjectId, teacherId, { userId });
+    const subject = await SubjectsService.assignTeacher(subjectId, teacherId, batchIds, { userId });
 
     res.status(200).json({
       success: true,
@@ -296,6 +319,7 @@ export default {
   getAvailableSubjects,
   getStreams,
   createStream,
+  updateStream,
   getSubjects,
   getSubjectById,
   createSubject,

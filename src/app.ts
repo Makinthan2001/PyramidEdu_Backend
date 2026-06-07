@@ -16,6 +16,7 @@ import usersRouter from './modules/users';
 import subjectsRouter from './modules/subjects';
 import managerRouter from './modules/manager';
 import studyMaterialsRouter from './modules/study-materials';
+import batchesRouter from './modules/batches';
 
 validateEnv();
 
@@ -93,6 +94,8 @@ app.use('/api/v1/students', studentRouter);
 app.use('/api/v1/manager', managerRouter);
 // Study Materials routes
 app.use('/api/v1/study-materials', studyMaterialsRouter);
+// Batches routes
+app.use('/api/v1/batches', batchesRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);

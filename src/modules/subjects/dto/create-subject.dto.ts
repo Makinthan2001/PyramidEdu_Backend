@@ -16,8 +16,13 @@ export const createSubjectSchema = z.object({
     .max(20, 'Subject code must not exceed 20 characters')
     .optional(),
   feeAmount: feeAmountSchema,
-  streamId: z.string().uuid('Stream ID must be a valid UUID'),
+  // Accept either an array of stream IDs (preferred) or a single streamId (backwards compat)
+  streamIds: z.array(z.string().uuid()).min(1, 'At least one stream is required').optional(),
+  streamId: z.string().uuid('Stream ID must be a valid UUID').optional(),
   isActive: z.boolean().optional(),
+}).refine((data) => data.streamIds?.length || data.streamId, {
+  message: 'At least one stream must be provided',
+  path: ['streamIds'],
 });
 
 export type CreateSubjectDto = z.infer<typeof createSubjectSchema>;
