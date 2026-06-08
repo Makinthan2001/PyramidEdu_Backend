@@ -472,5 +472,214 @@ export class AttendanceService {
       absenteesMarked: absentRecords.length,
     };
   }
+
+  static async getManagerAttendanceSummary(page: number = 1, limit: number = 10, search?: string) {
+    const skip = (page - 1) * limit;
+
+    const whereClause: any = {};
+    if (search) {
+      whereClause.OR = [
+        { user: { fullName: { contains: search, mode: 'insensitive' } } },
+        { indexNumber: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const students = await prisma.student.findMany({
+      where: whereClause,
+      skip,
+      take: limit,
+      include: {
+        user: { select: { fullName: true } },
+        attendances: {
+          orderBy: { attendanceDate: 'desc' },
+          take: 7,
+          select: { attendanceStatus: true, attendanceDate: true }
+        }
+      },
+      orderBy: { indexNumber: 'asc' }
+    });
+
+    const totalCount = await prisma.student.count({ where: whereClause });
+
+    const formatted = students.map(student => {
+      const last7 = [...student.attendances].reverse();
+      return {
+        studentId: student.id,
+        studentName: student.user?.fullName || 'Unknown',
+        indexNumber: student.indexNumber || 'N/A',
+        mostRecentStatus: last7.length > 0 ? last7[last7.length - 1].attendanceStatus : 'N/A',
+        last7Days: last7.map(a => a.attendanceStatus),
+      };
+    });
+
+    return {
+      data: formatted,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit) || 1
+    };
+  }
+
+  static async getManagerStudentDetails(studentId: string, filters: { fromDate?: string; toDate?: string; subjectId?: string }) {
+    const whereClause: any = { studentId };
+
+    if (filters.fromDate || filters.toDate) {
+      whereClause.attendanceDate = {};
+      if (filters.fromDate) {
+        whereClause.attendanceDate.gte = new Date(filters.fromDate);
+      }
+      if (filters.toDate) {
+        const to = new Date(filters.toDate);
+        to.setHours(23, 59, 59, 999);
+        whereClause.attendanceDate.lte = to;
+      }
+    }
+
+    if (filters.subjectId) {
+      whereClause.subjectId = filters.subjectId;
+    }
+
+    const attendances = await prisma.attendance.findMany({
+      where: whereClause,
+      include: {
+        teacher: { select: { user: { select: { fullName: true } } } },
+      },
+      orderBy: { attendanceDate: 'desc' },
+    });
+
+    const allSubjects = await prisma.subject.findMany({ select: { id: true, subjectName: true } });
+    const subjectMap = new Map(allSubjects.map(s => [s.id, s.subjectName]));
+
+    const studentInfo = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        user: { select: { fullName: true } },
+        enrollments: {
+          where: { enrollmentStatus: 'ACTIVE' },
+          include: {
+            subject: { select: { subjectName: true } },
+            teacher: { select: { user: { select: { fullName: true } } } },
+          }
+        }
+      }
+    });
+
+    return {
+      studentInfo: studentInfo ? {
+        studentName: studentInfo.user?.fullName,
+        indexNumber: studentInfo.indexNumber,
+        subjects: studentInfo.enrollments.map(e => ({
+          subjectName: e.subject.subjectName,
+          teacherName: e.teacher?.user?.fullName || 'Unknown'
+        }))
+      } : null,
+      attendances: attendances.map(a => ({
+        id: a.id,
+        date: a.attendanceDate.toISOString().split('T')[0],
+        time: a.scannedTime ? a.scannedTime.toISOString().split('T')[1].substring(0,5) : (a.markedAt ? a.markedAt.toISOString().split('T')[1].substring(0,5) : 'N/A'),
+        subject: subjectMap.get(a.subjectId) || 'Unknown',
+        teacher: a.teacher?.user?.fullName || 'N/A',
+        status: a.attendanceStatus,
+        method: a.attendanceMethod,
+      }))
+    };
+  }
+
+  static async getTeacherAttendanceSummary(teacherId: string, page: number = 1, limit: number = 10, search?: string) {
+    const skip = (page - 1) * limit;
+
+    const enrollments = await prisma.enrollment.findMany({
+       where: { teacherId, enrollmentStatus: 'ACTIVE' },
+       select: { studentId: true, subjectId: true }
+    });
+    
+    const studentIds = Array.from(new Set(enrollments.map(e => e.studentId)));
+    const subjectIds = Array.from(new Set(enrollments.map(e => e.subjectId)));
+
+    const whereClause: any = {
+      id: { in: studentIds }
+    };
+
+    if (search) {
+      whereClause.OR = [
+        { user: { fullName: { contains: search, mode: 'insensitive' } } },
+        { indexNumber: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const students = await prisma.student.findMany({
+      where: whereClause,
+      skip,
+      take: limit,
+      include: {
+        user: { select: { fullName: true } },
+        attendances: {
+          where: { subjectId: { in: subjectIds }, teacherId },
+          orderBy: { attendanceDate: 'desc' },
+          take: 7,
+          select: { attendanceStatus: true, attendanceDate: true }
+        }
+      },
+      orderBy: { indexNumber: 'asc' }
+    });
+
+    const totalCount = await prisma.student.count({ where: whereClause });
+
+    const formatted = students.map(student => {
+      const last7 = [...student.attendances].reverse();
+      return {
+        studentId: student.id,
+        studentName: student.user?.fullName || 'Unknown',
+        indexNumber: student.indexNumber || 'N/A',
+        mostRecentStatus: last7.length > 0 ? last7[last7.length - 1].attendanceStatus : 'N/A',
+        last7Days: last7.map(a => a.attendanceStatus),
+      };
+    });
+
+    return {
+      data: formatted,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit) || 1
+    };
+  }
+
+  static async getTeacherStudentDetails(teacherId: string, studentId: string, filters: { fromDate?: string; toDate?: string }) {
+    const whereClause: any = { 
+      studentId,
+      teacherId
+    };
+
+    if (filters.fromDate || filters.toDate) {
+      whereClause.attendanceDate = {};
+      if (filters.fromDate) {
+        whereClause.attendanceDate.gte = new Date(filters.fromDate);
+      }
+      if (filters.toDate) {
+        const to = new Date(filters.toDate);
+        to.setHours(23, 59, 59, 999);
+        whereClause.attendanceDate.lte = to;
+      }
+    }
+
+    const attendances = await prisma.attendance.findMany({
+      where: whereClause,
+      orderBy: { attendanceDate: 'desc' },
+    });
+
+    const allSubjects = await prisma.subject.findMany({ select: { id: true, subjectName: true } });
+    const subjectMap = new Map(allSubjects.map(s => [s.id, s.subjectName]));
+
+    return {
+      attendances: attendances.map(a => ({
+        id: a.id,
+        date: a.attendanceDate.toISOString().split('T')[0],
+        time: a.scannedTime ? a.scannedTime.toISOString().split('T')[1].substring(0,5) : (a.markedAt ? a.markedAt.toISOString().split('T')[1].substring(0,5) : 'N/A'),
+        subject: subjectMap.get(a.subjectId) || 'Unknown',
+        status: a.attendanceStatus,
+        method: a.attendanceMethod,
+      }))
+    };
+  }
 }
 

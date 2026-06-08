@@ -64,4 +64,34 @@ router.post(
   AttendanceController.markManual
 );
 
+// Manager Monitoring Routes
+router.get(
+  '/manager/summary',
+  authenticate,
+  authorize(Role.ADMIN, Role.MANAGER),
+  AttendanceController.getManagerSummary
+);
+
+router.get(
+  '/manager/student/:studentId',
+  authenticate,
+  authorize(Role.ADMIN, Role.MANAGER),
+  AttendanceController.getManagerStudentDetails
+);
+
+// Teacher Monitoring Routes
+router.get(
+  '/teacher/summary',
+  authenticate,
+  authorize(Role.TEACHER),
+  AttendanceController.getTeacherSummary
+);
+
+router.get(
+  '/teacher/student/:studentId',
+  authenticate,
+  authorize(Role.TEACHER),
+  AttendanceController.getTeacherStudentDetails
+);
+
 export default router;

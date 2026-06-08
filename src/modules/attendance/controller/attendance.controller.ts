@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AttendanceService } from '../service/attendance.service';
 import { AppError } from '../../../utils/AppError';
+import prisma from '../../../config/prisma.config';
 
 export class AttendanceController {
   static async markByQR(req: Request, res: Response, next: NextFunction) {
@@ -149,6 +150,85 @@ export class AttendanceController {
         message: 'Attendance saved successfully.',
         data: results,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getManagerSummary(req: Request, res: Response, next: NextFunction) {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = req.query.search as string;
+
+      const result = await AttendanceService.getManagerAttendanceSummary(page, limit, search);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getManagerStudentDetails(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { studentId } = req.params;
+      const filters = {
+        fromDate: req.query.fromDate as string,
+        toDate: req.query.toDate as string,
+        subjectId: req.query.subjectId as string,
+      };
+
+      const result = await AttendanceService.getManagerStudentDetails(studentId as string, filters);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      require('fs').appendFileSync('error.log', String(error?.stack || error) + '\n');
+      next(error);
+    }
+  }
+
+  static async getTeacherSummary(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.sub;
+      if (!userId) {
+        throw new AppError('User authentication failed. Missing user ID.', 401);
+      }
+
+      // Find the teacher ID from the user ID
+      const teacher = await prisma.teacher.findUnique({ where: { userId } });
+      if (!teacher) {
+        throw new AppError('Teacher profile not found.', 404);
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = req.query.search as string;
+
+      const result = await AttendanceService.getTeacherAttendanceSummary(teacher.id, page, limit, search);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getTeacherStudentDetails(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.sub;
+      if (!userId) {
+        throw new AppError('User authentication failed. Missing user ID.', 401);
+      }
+
+      const teacher = await prisma.teacher.findUnique({ where: { userId } });
+      if (!teacher) {
+        throw new AppError('Teacher profile not found.', 404);
+      }
+
+      const { studentId } = req.params;
+      const filters = {
+        fromDate: req.query.fromDate as string,
+        toDate: req.query.toDate as string,
+      };
+
+      const result = await AttendanceService.getTeacherStudentDetails(teacher.id, studentId as string, filters);
+      res.status(200).json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
