@@ -271,6 +271,7 @@ model Teacher {
   quizzes            Quiz[]
   results            Result[]
   enrollments        Enrollment[]
+  attendances        Attendance[]
 
   @@map("teachers")
 }
@@ -701,6 +702,7 @@ model Attendance {
   id               String           @id @default(uuid())
   studentId        String           @map("student_id")
   subjectId        String           @map("subject_id")
+  teacherId        String?          @map("teacher_id")
   sessionId        String?          @map("session_id")
   qrCodeId         String?          @map("qr_code_id")
   attendanceDate   DateTime         @map("attendance_date")
@@ -714,6 +716,7 @@ model Attendance {
   updatedAt        DateTime         @updatedAt @map("updated_at")
 
   student Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher Teacher?           @relation(fields: [teacherId], references: [id])
   qrCode  QRCode?            @relation(fields: [qrCodeId], references: [id])
   session AttendanceSession? @relation(fields: [sessionId], references: [id])
 
