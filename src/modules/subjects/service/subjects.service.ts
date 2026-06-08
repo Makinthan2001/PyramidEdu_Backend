@@ -321,6 +321,7 @@ export class SubjectsService {
       id: sub.id,
       name: sub.subjectName,
       streamName: sub.streams[0]?.streamName ?? '',
+      streams: sub.streams.map(s => ({ id: s.id, name: s.streamName, streamName: s.streamName })),
       feePerMonth: decimalToNumber(sub.feeAmount),
     }));
   }
@@ -607,7 +608,7 @@ export class SubjectsService {
         isActive: false,
       },
       include: {
-        stream: true,
+        streams: true,
         subjectAllocations: {
           include: {
             teacher: {
@@ -692,7 +693,7 @@ export class SubjectsService {
     const updatedSubject = await prisma.subject.findUnique({
       where: { id: subjectId },
       include: {
-        stream: true,
+        streams: true,
         subjectAllocations: {
           include: {
             teacher: {
