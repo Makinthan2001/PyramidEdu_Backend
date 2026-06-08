@@ -14,6 +14,10 @@ router.use(jwtGuard);
 // ADMIN & MANAGER can list all teachers
 router.get('/', roleGuard(Role.ADMIN, Role.MANAGER), controller.getTeachers);
 
+// Self‑service routes for the logged‑in teacher
+router.get('/me', roleGuard(Role.TEACHER), controller.getMyProfile);
+router.patch('/me', roleGuard(Role.TEACHER), validate(teachersValidator.updateTeacherSchema), controller.updateMyProfile);
+
 // Get teacher by ID – ADMIN, MANAGER, or the teacher themselves
 router.get('/:id', roleGuard(Role.ADMIN, Role.MANAGER, Role.TEACHER), controller.getTeacherById);
 
@@ -25,10 +29,6 @@ router.patch('/:id', roleGuard(Role.ADMIN, Role.MANAGER), validate(teachersValid
 
 // Delete (soft) teacher – ADMIN only
 router.delete('/:id', roleGuard(Role.ADMIN), controller.deleteTeacher);
-
-// Self‑service routes for the logged‑in teacher
-router.get('/me', roleGuard(Role.TEACHER), controller.getMyProfile);
-router.patch('/me', roleGuard(Role.TEACHER), validate(teachersValidator.updateTeacherSchema), controller.updateMyProfile);
 
 // Teacher's subjects list – ADMIN, MANAGER, TEACHER (own)
 router.get('/:id/subjects', roleGuard(Role.ADMIN, Role.MANAGER, Role.TEACHER), controller.getTeacherSubjects);

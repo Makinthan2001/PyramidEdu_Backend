@@ -19,6 +19,8 @@ import studyMaterialsRouter from './modules/study-materials';
 import batchesRouter from './modules/batches';
 import { qrRoutes } from './modules/qr';
 import { attendanceRoutes } from './modules/attendance';
+import examsRouter from './modules/exams';
+import teachersRouter from './modules/teachers';
 
 validateEnv();
 
@@ -100,6 +102,12 @@ app.use('/api/v1/study-materials', studyMaterialsRouter);
 app.use('/api/v1/batches', batchesRouter);
 app.use('/api/v1/qr', qrRoutes);
 app.use('/api/v1/attendance', attendanceRoutes);
+
+// Teachers routes
+app.use('/api/v1/teachers', teachersRouter);
+
+// Exams routes
+app.use('/api/v1/exams', examsRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);

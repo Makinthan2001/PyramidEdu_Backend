@@ -48,7 +48,7 @@ class TeachersService {
     }
     static getTeacherById(id) {
         return __awaiter(this, void 0, void 0, function* () {
-            return prisma_config_1.default.teacher.findFirst({
+            const teacher = yield prisma_config_1.default.teacher.findFirst({
                 where: { id, deletedAt: null },
                 include: {
                     user: true,
@@ -59,11 +59,18 @@ class TeachersService {
                     },
                 },
             });
+            if (teacher && teacher.subjectId) {
+                const primarySubject = yield prisma_config_1.default.subject.findUnique({
+                    where: { id: teacher.subjectId }
+                });
+                return Object.assign(Object.assign({}, teacher), { primarySubject });
+            }
+            return teacher;
         });
     }
     static getTeacherByUserId(userId) {
         return __awaiter(this, void 0, void 0, function* () {
-            return prisma_config_1.default.teacher.findFirst({
+            const teacher = yield prisma_config_1.default.teacher.findFirst({
                 where: { userId, deletedAt: null },
                 include: {
                     user: true,
@@ -74,6 +81,13 @@ class TeachersService {
                     },
                 },
             });
+            if (teacher && teacher.subjectId) {
+                const primarySubject = yield prisma_config_1.default.subject.findUnique({
+                    where: { id: teacher.subjectId }
+                });
+                return Object.assign(Object.assign({}, teacher), { primarySubject });
+            }
+            return teacher;
         });
     }
     static createTeacher(dto) {

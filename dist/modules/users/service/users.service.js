@@ -17,6 +17,8 @@ const client_1 = require("@prisma/client");
 const prisma_config_1 = __importDefault(require("../../../config/prisma.config"));
 const password_util_1 = require("../../../utils/password.util");
 const AppError_1 = require("../../../utils/AppError");
+const promises_1 = __importDefault(require("fs/promises"));
+const path_1 = __importDefault(require("path"));
 const userListSelect = {
     id: true,
     email: true,
@@ -663,6 +665,44 @@ class UsersService {
                 },
             });
             return deletedUser;
+        });
+    }
+    /**
+     * Update profile image
+     */
+    static updateProfileImage(userId, imageUrl) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const user = yield prisma_config_1.default.user.findUnique({
+                where: { id: userId },
+                select: { profileImage: true, email: true },
+            });
+            if (!user) {
+                throw new AppError_1.AppError('User not found.', 404);
+            }
+            // If there is an old profile image, try to delete it to save space
+            if (user.profileImage && user.profileImage.startsWith('/uploads/profile/')) {
+                try {
+                    const oldImagePath = path_1.default.join(__dirname, '../../../../', user.profileImage);
+                    yield promises_1.default.unlink(oldImagePath);
+                }
+                catch (err) {
+                    console.error(`Failed to delete old profile image: ${user.profileImage}`, err);
+                    // Continue even if delete fails
+                }
+            }
+            const updatedUser = yield prisma_config_1.default.user.update({
+                where: { id: userId },
+                data: { profileImage: imageUrl },
+            });
+            yield prisma_config_1.default.auditLog.create({
+                data: {
+                    action: client_1.AuditAction.UPDATE,
+                    userId,
+                    module: 'USER',
+                    description: `User ${user.email} updated profile image`,
+                },
+            });
+            return formatUserListItem(updatedUser);
         });
     }
 }

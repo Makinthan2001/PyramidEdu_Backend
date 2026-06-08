@@ -22,6 +22,9 @@ exports.deleteUser = deleteUser;
 exports.deactivateUser = deactivateUser;
 exports.activateUser = activateUser;
 exports.approveStudent = approveStudent;
+exports.getProfile = getProfile;
+exports.updateProfile = updateProfile;
+exports.uploadProfileImage = uploadProfileImage;
 const users_service_1 = __importDefault(require("../service/users.service"));
 /**
  * Users Controller - Handles user account operations
@@ -252,6 +255,79 @@ function approveStudent(req, res, next) {
         }
     });
 }
+/**
+ * GET /api/v1/users/profile
+ * Get current user profile
+ */
+function getProfile(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const userId = req.userId;
+            const user = yield users_service_1.default.getUserById(userId);
+            res.status(200).json({
+                success: true,
+                message: 'Profile retrieved successfully',
+                data: user,
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
+/**
+ * PUT /api/v1/users/profile
+ * Update current user profile
+ */
+function updateProfile(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const userId = req.userId;
+            const dto = req.body;
+            const user = yield users_service_1.default.updateUser(userId, dto);
+            res.status(200).json({
+                success: true,
+                message: 'Profile updated successfully',
+                data: user,
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
+/**
+ * POST /api/v1/users/profile/image
+ * Upload profile image
+ */
+function uploadProfileImage(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        try {
+            const userId = req.userId;
+            if (!req.file) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No image file provided',
+                });
+            }
+            const role = ((_a = req.userRole) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || 'misc';
+            const imageUrl = `/uploads/profile/${role}/${req.file.filename}`;
+            const updatedUser = yield users_service_1.default.updateProfileImage(userId, imageUrl);
+            res.status(200).json({
+                success: true,
+                message: 'Profile image uploaded successfully',
+                data: {
+                    profileImage: imageUrl,
+                    user: updatedUser
+                },
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
 exports.default = {
     getUsers,
     getUserById,
@@ -261,4 +337,7 @@ exports.default = {
     deactivateUser,
     activateUser,
     approveStudent,
+    getProfile,
+    updateProfile,
+    uploadProfileImage,
 };

@@ -40,7 +40,7 @@ export class TeachersService {
   }
 
   static async getTeacherById(id: string): Promise<any | null> {
-    return prisma.teacher.findFirst({
+    const teacher = await prisma.teacher.findFirst({
       where: { id, deletedAt: null },
       include: {
         user: true,
@@ -51,10 +51,21 @@ export class TeachersService {
         },
       },
     });
+
+    if (teacher && teacher.subjectId) {
+      const primarySubject = await prisma.subject.findUnique({
+        where: { id: teacher.subjectId }
+      });
+      return {
+        ...teacher,
+        primarySubject
+      };
+    }
+    return teacher;
   }
 
   static async getTeacherByUserId(userId: string): Promise<any | null> {
-    return prisma.teacher.findFirst({
+    const teacher = await prisma.teacher.findFirst({
       where: { userId, deletedAt: null },
       include: {
         user: true,
@@ -65,6 +76,17 @@ export class TeachersService {
         },
       },
     });
+
+    if (teacher && teacher.subjectId) {
+      const primarySubject = await prisma.subject.findUnique({
+        where: { id: teacher.subjectId }
+      });
+      return {
+        ...teacher,
+        primarySubject
+      };
+    }
+    return teacher;
   }
 
   static async createTeacher(dto: CreateTeacherDto): Promise<CustomTeacher> {

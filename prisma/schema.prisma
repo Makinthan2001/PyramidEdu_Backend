@@ -90,6 +90,12 @@ enum ExamType {
   MOCK
 }
 
+enum QuestionType {
+  MCQ
+  TRUE_FALSE
+  SHORT_ANSWER
+}
+
 enum PerformanceLevel {
   EXCELLENT
   GOOD
@@ -318,6 +324,7 @@ model Student {
   payments               Payment[]
   fees                   Fee[]
   results                Result[]
+  examSubmissions        ExamSubmission[]
   assignmentSubmissions  AssignmentSubmission[]
   performancePredictions PerformancePrediction[]
   aiRecommendations      AIRecommendation[]
@@ -617,12 +624,14 @@ model Exam {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  subject       Subject        @relation(fields: [subjectId], references: [id])
-  teacher       Teacher        @relation(fields: [teacherId], references: [id])
-  term          AcademicTerm?  @relation(fields: [termId], references: [id])
-  batchRecord   Batch?         @relation(fields: [batchId], references: [id])
+  subject       Subject          @relation(fields: [subjectId], references: [id])
+  teacher       Teacher          @relation(fields: [teacherId], references: [id])
+  term          AcademicTerm?    @relation(fields: [termId], references: [id])
+  batchRecord   Batch?           @relation(fields: [batchId], references: [id])
   results       Result[]
   examSchedules ExamSchedule[]
+  questions     Question[]
+  submissions   ExamSubmission[]
 
   @@index([subjectId])
   @@index([examDate])
@@ -642,6 +651,54 @@ model ExamSchedule {
   term AcademicTerm @relation(fields: [termId], references: [id])
 
   @@map("exam_schedules")
+}
+
+model Question {
+  id            String       @id @default(uuid())
+  examId        String       @map("exam_id")
+  questionText  String       @map("question_text") @db.Text
+  questionType  QuestionType @map("question_type")
+  marks         Int          @default(1)
+  options       Json? // Stores array: [{ id: "opt1", text: "A" }, ...]
+  correctAnswer String?      @map("correct_answer") // Securely stores the correct optionId (e.g. "opt2")
+  order         Int          @default(0)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  exam    Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  answers ExamAnswer[]
+
+  @@map("questions")
+}
+
+model ExamSubmission {
+  id          String   @id @default(uuid())
+  examId      String   @map("exam_id")
+  studentId   String   @map("student_id")
+  submittedAt DateTime @default(now()) @map("submitted_at")
+  totalScore  Decimal? @map("total_score") @db.Decimal(6, 2)
+  status      String   @default("GRADED") // GRADED, PENDING_MANUAL
+
+  exam    Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers ExamAnswer[]
+
+  @@unique([examId, studentId]) // Strictly prevents duplicate submissions
+  @@map("exam_submissions")
+}
+
+model ExamAnswer {
+  id           String   @id @default(uuid())
+  submissionId String   @map("submission_id")
+  questionId   String   @map("question_id")
+  answer       String   @db.Text // The student's submitted optionId or text
+  isCorrect    Boolean? @map("is_correct")
+  marksAwarded Decimal? @map("marks_awarded") @db.Decimal(6, 2)
+
+  submission ExamSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  question   Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("exam_answers")
 }
 
 model Result {
