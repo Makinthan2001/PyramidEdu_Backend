@@ -21,4 +21,18 @@ router.post(
   AttendanceController.markByQR
 );
 
+router.get(
+  '/students',
+  authenticate,
+  authorize(Role.ADMIN, Role.MANAGER, Role.TEACHER),
+  AttendanceController.getStudents
+);
+
+router.post(
+  '/manual',
+  authenticate,
+  authorize(Role.ADMIN, Role.MANAGER, Role.TEACHER),
+  AttendanceController.markManual
+);
+
 export default router;
