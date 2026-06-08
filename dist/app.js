@@ -24,10 +24,14 @@ const study_materials_1 = __importDefault(require("./modules/study-materials"));
 const batches_1 = __importDefault(require("./modules/batches"));
 const qr_1 = require("./modules/qr");
 const attendance_1 = require("./modules/attendance");
+const exams_1 = __importDefault(require("./modules/exams"));
+const teachers_1 = __importDefault(require("./modules/teachers"));
 (0, validateEnv_1.validateEnv)();
 const app = (0, express_1.default)();
 // Secure security headers
-app.use((0, helmet_1.default)());
+app.use((0, helmet_1.default)({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 const corsOrigin = process.env.CORS_ORIGIN
     ? Array.from(new Set([
         ...process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
@@ -84,6 +88,10 @@ app.use('/api/v1/study-materials', study_materials_1.default);
 app.use('/api/v1/batches', batches_1.default);
 app.use('/api/v1/qr', qr_1.qrRoutes);
 app.use('/api/v1/attendance', attendance_1.attendanceRoutes);
+// Teachers routes
+app.use('/api/v1/teachers', teachers_1.default);
+// Exams routes
+app.use('/api/v1/exams', exams_1.default);
 // centralized error handler - must be last
 app.use(errorHandler_1.default);
 exports.default = app;

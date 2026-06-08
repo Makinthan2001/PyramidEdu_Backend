@@ -42,6 +42,7 @@ function toSafeUser(user) {
             forcePwdChange: user.forcePwdChange,
             createdAt: user.createdAt,
             phone: user.phone || undefined,
+            profileImage: user.profileImage || undefined,
         };
         if (user.student) {
             response.phone = user.student.phone || response.phone;

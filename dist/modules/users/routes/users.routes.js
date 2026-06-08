@@ -40,6 +40,7 @@ const controller = __importStar(require("../controller/users.controller"));
 const users_guard_1 = require("../guards/users.guard");
 const users_validator_1 = require("../validators/users.validator");
 const change_password_dto_1 = require("../dto/change-password.dto");
+const profile_upload_middleware_1 = require("../../../middleware/profile-upload.middleware");
 const router = (0, express_1.Router)();
 /**
  * All routes require JWT authentication
@@ -50,6 +51,21 @@ router.use(jwt_guard_1.jwtGuard);
  * List all users (role-based filtering)
  */
 router.get('/', users_guard_1.canManageUsers, controller.getUsers);
+/**
+ * GET /api/v1/users/profile
+ * Get current user profile
+ */
+router.get('/profile', controller.getProfile);
+/**
+ * PUT /api/v1/users/profile
+ * Update current user profile
+ */
+router.put('/profile', controller.updateProfile);
+/**
+ * POST /api/v1/users/profile/image
+ * Upload profile image
+ */
+router.post('/profile/image', profile_upload_middleware_1.uploadProfileImage.single('image'), controller.uploadProfileImage);
 /**
  * GET /api/v1/users/:id
  * Get specific user by ID (with access control)
@@ -87,10 +103,11 @@ router.post('/', users_guard_1.canManageUsers, (req, res, next) => {
     (0, validate_1.validate)(schema)(req, res, next);
 }, users_guard_1.canCreateRole, controller.createUser);
 /**
- * PATCH /api/v1/users/change-password
+ * PATCH or PUT /api/v1/users/change-password
  * Change password for current authenticated user
  */
-router.patch('/change-password', (0, validate_1.validate)(change_password_dto_1.changePasswordSchema), jwt_guard_1.jwtGuard, controller.changeMyPassword);
+router.patch('/change-password', (0, validate_1.validate)(change_password_dto_1.changePasswordSchema), controller.changeMyPassword);
+router.put('/change-password', (0, validate_1.validate)(change_password_dto_1.changePasswordSchema), controller.changeMyPassword);
 /**
  * PATCH /api/v1/users/:id/reset-password
  * Admin resets a user's password and receives a temporary password
