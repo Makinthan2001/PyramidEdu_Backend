@@ -8,8 +8,8 @@ import rateLimit from 'express-rate-limit';
 const router = Router();
 
 const scanLimit = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 60, // Limit each IP to 60 requests per `window` (here, per minute)
+  windowMs: 60 * 1000,
+  max: 60,
   message: { error: 'Too many scans from this IP, please try again after a minute.' },
 });
 
@@ -19,6 +19,35 @@ router.post(
   authenticate,
   authorize(Role.ADMIN, Role.MANAGER, Role.TEACHER),
   AttendanceController.markByQR
+);
+
+// Session Routes
+router.post(
+  '/sessions',
+  authenticate,
+  authorize(Role.ADMIN, Role.MANAGER, Role.TEACHER),
+  AttendanceController.createSession
+);
+
+router.get(
+  '/sessions',
+  authenticate,
+  authorize(Role.ADMIN, Role.MANAGER, Role.TEACHER),
+  AttendanceController.fetchSession
+);
+
+router.patch(
+  '/sessions/:id/start',
+  authenticate,
+  authorize(Role.ADMIN, Role.MANAGER, Role.TEACHER),
+  AttendanceController.startSession
+);
+
+router.patch(
+  '/sessions/:id/end',
+  authenticate,
+  authorize(Role.ADMIN, Role.MANAGER, Role.TEACHER),
+  AttendanceController.endSession
 );
 
 router.get(

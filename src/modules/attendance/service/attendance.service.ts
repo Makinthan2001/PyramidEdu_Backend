@@ -89,22 +89,34 @@ export class AttendanceService {
       throw new AppError('Student is not actively enrolled in this subject.', 404);
     }
 
-    // 4. Duplicate check & Date formatting
     const day = new Date(sessionDate);
     day.setHours(0, 0, 0, 0);
 
+    // Check for ACTIVE ClassSession first so we know which session we are marking attendance for
+    const classSession = await prisma.classSession.findFirst({
+      where: {
+        subjectId,
+        sessionDate: day,
+        status: 'ACTIVE',
+      },
+    });
+
+    if (!classSession) {
+      throw new AppError('There is no active attendance session for this subject today.', 403);
+    }
+
+    // 4. Duplicate check based on class session
     const dup = await prisma.attendance.findUnique({
       where: {
-        studentId_subjectId_attendanceDate: {
+        studentId_classSessionId: {
           studentId: student.id,
-          subjectId,
-          attendanceDate: day,
+          classSessionId: classSession.id,
         },
       },
     });
 
     if (dup) {
-      throw new AppError('Attendance already marked for today.', 409);
+      throw new AppError('Attendance already marked for this session.', 409);
     }
 
     // 5. Save Attendance
@@ -113,6 +125,7 @@ export class AttendanceService {
         studentId: student.id,
         subjectId,
         teacherId: enrolled.teacherId, // Added from active enrollment
+        classSessionId: classSession.id,
         qrCodeId: qr.id,
         attendanceDate: day,
         attendanceStatus: AttendanceStatus.PRESENT,
@@ -153,6 +166,22 @@ export class AttendanceService {
       whereClause.teacherId = teacherId;
     }
 
+    const day = new Date(sessionDate);
+    day.setHours(0, 0, 0, 0);
+
+    const classSession = await prisma.classSession.findFirst({
+      where: {
+        subjectId,
+        teacherId,
+        sessionDate: day,
+        sessionTime,
+      }
+    });
+
+    if (!classSession) {
+      return [];
+    }
+
     const enrollments = await prisma.enrollment.findMany({
       where: whereClause,
       include: {
@@ -161,6 +190,11 @@ export class AttendanceService {
             id: true,
             indexNumber: true,
             user: { select: { fullName: true, isActive: true } },
+            attendances: {
+              where: {
+                classSessionId: classSession?.id,
+              },
+            },
             fees: {
               where: { monthYear: { lte: new Date() } },
               orderBy: { monthYear: 'desc' },
@@ -211,10 +245,12 @@ export class AttendanceService {
         }
 
         return {
-          id: student.id,
+          studentId: student.id,
+          studentName: student.user?.fullName,
           indexNumber: student.indexNumber,
-          fullName: student.user?.fullName,
           feeStatus,
+          isPresent: student.attendances && student.attendances.length > 0 && student.attendances[0].isPresent,
+          hasRecord: student.attendances && student.attendances.length > 0,
         };
       });
 
@@ -227,6 +263,7 @@ export class AttendanceService {
       subjectId: string;
       teacherId?: string;
       batchId?: string | null;
+      classSessionId: string;
       sessionDate: string;
       sessionTime: string;
       attendanceStatus: AttendanceStatus;
@@ -238,20 +275,6 @@ export class AttendanceService {
     for (const record of records) {
       const day = new Date(record.sessionDate);
       day.setHours(0, 0, 0, 0);
-
-      const dup = await prisma.attendance.findUnique({
-        where: {
-          studentId_subjectId_attendanceDate: {
-            studentId: record.studentId,
-            subjectId: record.subjectId,
-            attendanceDate: day,
-          },
-        },
-      });
-
-      if (dup) {
-        throw new AppError(`Attendance already exists for student ID: ${record.studentId} on ${record.sessionDate}`, 409);
-      }
 
       const enrolled = await prisma.enrollment.findFirst({
         where: {
@@ -265,20 +288,31 @@ export class AttendanceService {
         throw new AppError(`Student ID: ${record.studentId} is not enrolled in subject ${record.subjectId}`, 404);
       }
 
-      // Prepare date/time logic correctly (just combining them conceptually, but saving day and current time for scannedTime)
-      const attendance = await prisma.attendance.create({
-        data: {
+      // Upsert so that manual saves overwrite existing records for the day instead of crashing
+      const attendance = await prisma.attendance.upsert({
+        where: {
+          studentId_classSessionId: {
+            studentId: record.studentId,
+            classSessionId: record.classSessionId,
+          },
+        },
+        update: {
+          attendanceStatus: record.attendanceStatus,
+          attendanceMethod: AttendanceMethod.MANUAL,
+          isPresent: record.attendanceStatus === AttendanceStatus.PRESENT,
+          markedAt: new Date(),
+          teacherId: record.teacherId || enrolled.teacherId,
+        },
+        create: {
           studentId: record.studentId,
           subjectId: record.subjectId,
+          classSessionId: record.classSessionId,
           teacherId: record.teacherId || enrolled.teacherId, // Associate teacher
           attendanceDate: day,
           attendanceStatus: record.attendanceStatus,
           attendanceMethod: AttendanceMethod.MANUAL,
           isPresent: record.attendanceStatus === AttendanceStatus.PRESENT,
-          scannedTime: new Date(), 
           markedAt: new Date(),
-          // Note: we don't have sessionTime or batchId in the Attendance schema directly.
-          // They can be tracked externally or we leave them out as requested.
         },
       });
 
@@ -287,4 +321,156 @@ export class AttendanceService {
 
     return results;
   }
+
+  static async createSession(data: { subjectId: string; teacherId: string; batchId?: string; sessionDate: string; sessionTime: string; createdById: string }) {
+    const day = new Date(data.sessionDate);
+    day.setHours(0, 0, 0, 0);
+
+    const dup = await prisma.classSession.findFirst({
+      where: {
+        subjectId: data.subjectId,
+        teacherId: data.teacherId,
+        sessionDate: day,
+        sessionTime: data.sessionTime,
+        batchId: data.batchId || null,
+      },
+    });
+
+    if (dup) {
+      throw new AppError('A class session with these details already exists.', 409);
+    }
+
+    return prisma.classSession.create({
+      data: {
+        subjectId: data.subjectId,
+        teacherId: data.teacherId,
+        sessionDate: day,
+        sessionTime: data.sessionTime,
+        batchId: data.batchId || null,
+        createdById: data.createdById,
+        status: 'CREATED',
+      },
+    });
+  }
+
+  static async fetchSession(subjectId: string, teacherId: string, sessionDate: string, sessionTime: string, batchId?: string) {
+    const day = new Date(sessionDate);
+    day.setHours(0, 0, 0, 0);
+
+    return prisma.classSession.findFirst({
+      where: {
+        subjectId,
+        teacherId,
+        sessionDate: day,
+        sessionTime,
+        batchId: batchId || null,
+      },
+      include: {
+        attendances: true,
+      },
+    });
+  }
+
+  static async fetchSessionsByDate(sessionDate: string) {
+    const day = new Date(sessionDate);
+    day.setHours(0, 0, 0, 0);
+
+    return prisma.classSession.findMany({
+      where: {
+        sessionDate: day,
+      },
+      include: {
+        subject: true,
+        teacher: { include: { user: true } },
+        batch: true,
+      },
+      orderBy: {
+        sessionTime: 'asc',
+      },
+    });
+  }
+
+  static async startSession(id: string) {
+    const session = await prisma.classSession.findUnique({ where: { id } });
+    if (!session) throw new AppError('Session not found', 404);
+    if (session.status !== 'CREATED') throw new AppError('Only CREATED sessions can be started.', 400);
+
+    return prisma.classSession.update({
+      where: { id },
+      data: {
+        status: 'ACTIVE',
+        attendanceStartTime: new Date(),
+      },
+    });
+  }
+
+  static async endSession(id: string) {
+    const session = await prisma.classSession.findUnique({
+      where: { id },
+      include: { attendances: true },
+    });
+
+    if (!session) throw new AppError('Session not found', 404);
+    if (session.status !== 'ACTIVE') throw new AppError('Only ACTIVE sessions can be ended.', 400);
+
+    const now = new Date();
+
+    // 1. Mark as completed
+    await prisma.classSession.update({
+      where: { id },
+      data: {
+        status: 'COMPLETED',
+        attendanceEndTime: now,
+      },
+    });
+
+    // 2. Fetch Eligible students
+    const whereClause: any = {
+      subjectId: session.subjectId,
+      teacherId: session.teacherId,
+      enrollmentStatus: EnrollmentStatus.ACTIVE,
+    };
+
+    if (session.batchId) {
+      whereClause.student = { batchId: session.batchId };
+    }
+
+    const enrollments = await prisma.enrollment.findMany({
+      where: whereClause,
+      include: { student: true },
+    });
+
+    // 3. Compare and mark absentees
+    const markedStudentIds = new Set(session.attendances.map(a => a.studentId));
+    const absentRecords = [];
+
+    for (const enrollment of enrollments) {
+      if (!markedStudentIds.has(enrollment.studentId)) {
+        absentRecords.push({
+          studentId: enrollment.studentId,
+          subjectId: session.subjectId,
+          teacherId: enrollment.teacherId,
+          classSessionId: id,
+          attendanceDate: session.sessionDate,
+          attendanceStatus: AttendanceStatus.ABSENT,
+          attendanceMethod: AttendanceMethod.SYSTEM_GENERATED,
+          isPresent: false,
+          markedAt: now,
+        });
+      }
+    }
+
+    if (absentRecords.length > 0) {
+      await prisma.attendance.createMany({
+        data: absentRecords,
+        skipDuplicates: true,
+      });
+    }
+
+    return {
+      sessionStatus: 'COMPLETED',
+      absenteesMarked: absentRecords.length,
+    };
+  }
 }
+

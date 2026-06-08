@@ -21,6 +21,9 @@ const users_1 = __importDefault(require("./modules/users"));
 const subjects_1 = __importDefault(require("./modules/subjects"));
 const manager_1 = __importDefault(require("./modules/manager"));
 const study_materials_1 = __importDefault(require("./modules/study-materials"));
+const batches_1 = __importDefault(require("./modules/batches"));
+const qr_1 = require("./modules/qr");
+const attendance_1 = require("./modules/attendance");
 (0, validateEnv_1.validateEnv)();
 const app = (0, express_1.default)();
 // Secure security headers
@@ -77,8 +80,10 @@ app.use('/api/v1/subjects', subjects_1.default);
 app.use('/api/v1/students', student_routes_1.default);
 // Manager routes
 app.use('/api/v1/manager', manager_1.default);
-// Study Materials routes
 app.use('/api/v1/study-materials', study_materials_1.default);
+app.use('/api/v1/batches', batches_1.default);
+app.use('/api/v1/qr', qr_1.qrRoutes);
+app.use('/api/v1/attendance', attendance_1.attendanceRoutes);
 // centralized error handler - must be last
 app.use(errorHandler_1.default);
 exports.default = app;

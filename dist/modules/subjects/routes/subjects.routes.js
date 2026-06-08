@@ -47,6 +47,7 @@ router.get('/available', controller.getAvailableSubjects);
 router.get('/teachers', controller.getTeachersForSubject);
 router.use(jwt_guard_1.jwtGuard);
 router.post('/streams', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN, client_1.Role.MANAGER), (0, validate_1.validate)(subjects_validator_1.createStreamSchema), controller.createStream);
+router.patch('/streams/:id', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN, client_1.Role.MANAGER), controller.updateStream);
 router.get('/', controller.getSubjects);
 router.get('/:id', controller.getSubjectById);
 router.post('/', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN, client_1.Role.MANAGER), (0, validate_1.validate)(subjects_validator_1.createSubjectSchema), controller.createSubject);

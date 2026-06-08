@@ -209,6 +209,7 @@ class StudentService {
                         gender: regData.gender === 'MALE' ? 'MALE' : regData.gender === 'FEMALE' ? 'FEMALE' : 'OTHER',
                         school: regData.school || null,
                         batch: regData.alExamBatch,
+                        batchId: regData.batchId || null,
                         approvalStatus: 'PENDING',
                         paymentStatus: 'PENDING',
                         totalFeeAmount: totalFeeAmount,

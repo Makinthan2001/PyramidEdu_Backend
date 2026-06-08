@@ -107,11 +107,13 @@ class ManagerController {
     }
     static reEnrollStudent(req, res, next) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a;
+            var _a, _b;
             try {
                 const { id } = req.params;
                 const data = req.body;
-                const actorId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id; // Assuming auth middleware sets this
+                console.log('RE-ENROLL REQ USER:', req.user);
+                console.log('RE-ENROLL REQ USER ID:', req.userId);
+                const actorId = ((_a = req.user) === null || _a === void 0 ? void 0 : _a.sub) || ((_b = req.user) === null || _b === void 0 ? void 0 : _b.id) || req.userId;
                 if (!actorId) {
                     throw new AppError_1.AppError('Unauthorized: Manager ID required for re-enrollment.', 401);
                 }

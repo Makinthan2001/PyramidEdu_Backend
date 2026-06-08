@@ -17,6 +17,7 @@ exports.getStreams = getStreams;
 exports.getAvailableSubjects = getAvailableSubjects;
 exports.getTeachersForSubject = getTeachersForSubject;
 exports.createStream = createStream;
+exports.updateStream = updateStream;
 exports.getSubjectById = getSubjectById;
 exports.createSubject = createSubject;
 exports.updateSubject = updateSubject;
@@ -134,6 +135,27 @@ function createStream(req, res, next) {
         }
     });
 }
+function updateStream(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const streamId = req.params.id;
+            const { name, batchIds } = req.body;
+            if (!(name === null || name === void 0 ? void 0 : name.trim())) {
+                res.status(400).json({ success: false, message: 'Stream name is required' });
+                return;
+            }
+            const stream = yield subjects_service_1.default.updateStream(streamId, name.trim(), batchIds);
+            res.status(200).json({
+                success: true,
+                message: 'Stream updated successfully',
+                data: stream,
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
 function getSubjectById(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -217,8 +239,9 @@ function assignTeacher(req, res, next) {
         try {
             const subjectId = req.params.id;
             const teacherId = Array.isArray(req.body.teacherId) ? req.body.teacherId[0] : req.body.teacherId;
+            const batchIds = req.body.batchIds;
             const userId = req.userId;
-            const subject = yield subjects_service_1.default.assignTeacher(subjectId, teacherId, { userId });
+            const subject = yield subjects_service_1.default.assignTeacher(subjectId, teacherId, batchIds, { userId });
             res.status(200).json({
                 success: true,
                 message: 'Teacher assigned successfully',
@@ -315,6 +338,7 @@ exports.default = {
     getAvailableSubjects,
     getStreams,
     createStream,
+    updateStream,
     getSubjects,
     getSubjectById,
     createSubject,
