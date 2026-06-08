@@ -31,6 +31,77 @@ export class AttendanceController {
     }
   }
 
+  static async createSession(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { subjectId, teacherId, batchId, sessionDate, sessionTime } = req.body;
+      if (!subjectId || !teacherId || !sessionDate || !sessionTime) {
+        throw new AppError('subjectId, teacherId, sessionDate, sessionTime are required.', 400);
+      }
+      const createdById = (req as any).user?.sub;
+      if (!createdById) throw new AppError('User authentication failed.', 401);
+
+      const session = await AttendanceService.createSession({
+        subjectId, teacherId, batchId, sessionDate, sessionTime, createdById
+      });
+
+      res.status(201).json({ success: true, data: session });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async fetchSession(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { subjectId, teacherId, batchId, sessionDate, sessionTime } = req.query;
+
+      if (!sessionDate) {
+        throw new AppError('sessionDate is required.', 400);
+      }
+
+      if (sessionDate && !subjectId && !teacherId && !sessionTime) {
+        // Fetch all sessions for the date
+        const sessions = await AttendanceService.fetchSessionsByDate(sessionDate as string);
+        return res.status(200).json({ success: true, data: sessions });
+      }
+
+      if (!subjectId || !teacherId || !sessionTime) {
+        throw new AppError('subjectId, teacherId, sessionTime are required for fetching a specific session.', 400);
+      }
+
+      const session = await AttendanceService.fetchSession(
+        subjectId as string,
+        teacherId as string,
+        sessionDate as string,
+        sessionTime as string,
+        batchId as string | undefined
+      );
+
+      res.status(200).json({ success: true, data: session });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async startSession(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const session = await AttendanceService.startSession(id as string);
+      res.status(200).json({ success: true, data: session });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async endSession(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const result = await AttendanceService.endSession(id as string);
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async getStudents(req: Request, res: Response, next: NextFunction) {
     try {
       const { subjectId, batchId, teacherId, sessionDate, sessionTime } = req.query;

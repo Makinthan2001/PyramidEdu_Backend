@@ -7,6 +7,7 @@ exports.initiateRegistrationSchema = zod_1.z.object({
     lastName: zod_1.z.string().min(1, 'Last name is required'),
     dateOfBirth: zod_1.z.string().min(1, 'Date of birth is required'),
     alExamBatch: zod_1.z.string().min(1, 'A/L exam batch is required'),
+    batchId: zod_1.z.string().optional(),
     gender: zod_1.z.enum(['MALE', 'FEMALE', 'OTHER']),
     phone: zod_1.z.string().min(10, 'Phone number must be at least 10 characters'),
     address: zod_1.z.string().min(1, 'Address is required'),

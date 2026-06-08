@@ -116,6 +116,7 @@ class ManagerService {
                     parent: true,
                     stream: true,
                     enrollments: {
+                        where: { enrollmentStatus: 'ACTIVE' },
                         include: {
                             subject: true,
                             teacher: {
@@ -144,6 +145,7 @@ class ManagerService {
             if (!student) {
                 throw new AppError_1.AppError('Student not found.', 404);
             }
+            console.log(`[getRegisteredStudentById] Returning ${student.enrollments.length} ACTIVE enrollments for student ${id}`);
             return student;
         });
     }

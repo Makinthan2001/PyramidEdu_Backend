@@ -13,23 +13,12 @@ const ws_1 = __importDefault(require("ws"));
 serverless_1.neonConfig.webSocketConstructor = ws_1.default;
 const connectionString = `${process.env.DATABASE_URL}`;
 const globalForPrisma = global;
-let prismaInstance;
-if (process.env.NODE_ENV === "production") {
+if (!globalForPrisma.prisma) {
     const adapter = new adapter_neon_1.PrismaNeon({ connectionString });
-    prismaInstance = new client_1.PrismaClient({
+    globalForPrisma.prisma = new client_1.PrismaClient({
         adapter,
         log: ["error", "warn"],
     });
 }
-else {
-    if (!globalForPrisma.prisma) {
-        const adapter = new adapter_neon_1.PrismaNeon({ connectionString });
-        globalForPrisma.prisma = new client_1.PrismaClient({
-            adapter,
-            log: ["error", "warn"],
-        });
-    }
-    prismaInstance = globalForPrisma.prisma;
-}
-exports.prisma = prismaInstance;
+exports.prisma = globalForPrisma.prisma;
 exports.default = exports.prisma;

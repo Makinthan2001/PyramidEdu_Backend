@@ -53,6 +53,7 @@ enum AttendanceStatus {
 enum AttendanceMethod {
   QR_CODE
   MANUAL
+  SYSTEM_GENERATED
 }
 
 enum RegistrationPaymentStatus {
@@ -213,6 +214,7 @@ model User {
   chatConversations     ChatConversation[]
   fileUploads           FileUpload[]
   enrollmentChanges     EnrollmentHistory[] @relation("EnrollmentChangedBy")
+  classSessions         ClassSession[]
 
   @@index([email])
   @@index([role])
@@ -272,6 +274,7 @@ model Teacher {
   results            Result[]
   enrollments        Enrollment[]
   attendances        Attendance[]
+  classSessions      ClassSession[]
 
   @@map("teachers")
 }
@@ -426,6 +429,7 @@ model Subject {
   assignments        Assignment[]
   subjectAllocations SubjectAllocation[]
   courseSchedules    CourseSchedule[]
+  classSessions      ClassSession[]
 
   @@map("subjects")
 }
@@ -683,6 +687,36 @@ model QRCode {
   @@map("qr_codes")
 }
 
+enum ClassSessionStatus {
+  CREATED
+  ACTIVE
+  COMPLETED
+}
+
+model ClassSession {
+  id                  String             @id @default(uuid())
+  subjectId           String             @map("subject_id")
+  teacherId           String             @map("teacher_id")
+  batchId             String?            @map("batch_id")
+  sessionDate         DateTime           @map("session_date")
+  sessionTime         String             @map("session_time")
+  status              ClassSessionStatus @default(CREATED)
+  attendanceStartTime DateTime?          @map("attendance_start_time")
+  attendanceEndTime   DateTime?          @map("attendance_end_time")
+  createdById         String             @map("created_by_id")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  subject     Subject      @relation(fields: [subjectId], references: [id])
+  teacher     Teacher      @relation(fields: [teacherId], references: [id])
+  batch       Batch?       @relation(fields: [batchId], references: [id])
+  createdBy   User         @relation(fields: [createdById], references: [id])
+  attendances Attendance[]
+
+  @@unique([subjectId, teacherId, sessionDate, sessionTime, batchId])
+  @@map("class_sessions")
+}
+
 model AttendanceSession {
   id          String   @id @default(uuid())
   termId      String   @map("term_id")
@@ -704,6 +738,7 @@ model Attendance {
   subjectId        String           @map("subject_id")
   teacherId        String?          @map("teacher_id")
   sessionId        String?          @map("session_id")
+  classSessionId   String?          @map("class_session_id")
   qrCodeId         String?          @map("qr_code_id")
   attendanceDate   DateTime         @map("attendance_date")
   attendanceStatus AttendanceStatus @default(ABSENT) @map("attendance_status")
@@ -715,12 +750,13 @@ model Attendance {
   createdAt        DateTime         @default(now()) @map("created_at")
   updatedAt        DateTime         @updatedAt @map("updated_at")
 
-  student Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacher Teacher?           @relation(fields: [teacherId], references: [id])
-  qrCode  QRCode?            @relation(fields: [qrCodeId], references: [id])
-  session AttendanceSession? @relation(fields: [sessionId], references: [id])
+  student      Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher      Teacher?           @relation(fields: [teacherId], references: [id])
+  qrCode       QRCode?            @relation(fields: [qrCodeId], references: [id])
+  session      AttendanceSession? @relation(fields: [sessionId], references: [id])
+  classSession ClassSession?      @relation(fields: [classSessionId], references: [id])
 
-  @@unique([studentId, subjectId, attendanceDate])
+  @@unique([studentId, classSessionId])
   @@index([studentId])
   @@index([subjectId])
   @@index([attendanceDate])
@@ -1097,6 +1133,7 @@ model Batch {
   announcements      Announcement[]
   streams            Stream[]
   subjectAllocations SubjectAllocation[]
+  classSessions      ClassSession[]
 
   @@map("batches")
 }
