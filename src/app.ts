@@ -25,7 +25,9 @@ validateEnv();
 const app = express();
 
 // Secure security headers
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
 const corsOrigin = process.env.CORS_ORIGIN
   ? Array.from(new Set([

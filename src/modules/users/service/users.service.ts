@@ -3,6 +3,8 @@ import prisma from '../../../config/prisma.config';
 import { hashPassword, generateTemporaryPassword, comparePasswords } from '../../../utils/password.util';
 import { AppError } from '../../../utils/AppError';
 import type { UpdateUserDto } from '../dto';
+import fs from 'fs/promises';
+import path from 'path';
 
 export interface UsersQueryParams {
   page?: number;
@@ -702,6 +704,47 @@ export class UsersService {
     });
 
     return deletedUser;
+  }
+
+  /**
+   * Update profile image
+   */
+  static async updateProfileImage(userId: string, imageUrl: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { profileImage: true, email: true },
+    });
+
+    if (!user) {
+      throw new AppError('User not found.', 404);
+    }
+
+    // If there is an old profile image, try to delete it to save space
+    if (user.profileImage && user.profileImage.startsWith('/uploads/profile/')) {
+      try {
+        const oldImagePath = path.join(__dirname, '../../../../', user.profileImage);
+        await fs.unlink(oldImagePath);
+      } catch (err) {
+        console.error(`Failed to delete old profile image: ${user.profileImage}`, err);
+        // Continue even if delete fails
+      }
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { profileImage: imageUrl },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: AuditAction.UPDATE,
+        userId,
+        module: 'USER',
+        description: `User ${user.email} updated profile image`,
+      },
+    });
+
+    return formatUserListItem(updatedUser);
   }
 }
 

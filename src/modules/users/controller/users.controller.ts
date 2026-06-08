@@ -233,6 +233,79 @@ export async function approveStudent(req: Request, res: Response, next: NextFunc
   }
 }
 
+/**
+ * GET /api/v1/users/profile
+ * Get current user profile
+ */
+export async function getProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId as string;
+    const user = await UsersService.getUserById(userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile retrieved successfully',
+      data: user,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PUT /api/v1/users/profile
+ * Update current user profile
+ */
+export async function updateProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId as string;
+    const dto: UpdateUserDto = req.body;
+
+    const user = await UsersService.updateUser(userId, dto);
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: user,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/v1/users/profile/image
+ * Upload profile image
+ */
+export async function uploadProfileImage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId as string;
+    
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No image file provided',
+      });
+    }
+
+    const role = (req as any).userRole?.toLowerCase() || 'misc';
+    const imageUrl = `/uploads/profile/${role}/${req.file.filename}`;
+
+    const updatedUser = await UsersService.updateProfileImage(userId, imageUrl);
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile image uploaded successfully',
+      data: {
+        profileImage: imageUrl,
+        user: updatedUser
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export default {
   getUsers,
   getUserById,
@@ -242,4 +315,7 @@ export default {
   deactivateUser,
   activateUser,
   approveStudent,
+  getProfile,
+  updateProfile,
+  uploadProfileImage,
 };

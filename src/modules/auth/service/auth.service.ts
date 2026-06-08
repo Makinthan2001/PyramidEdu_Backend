@@ -34,6 +34,7 @@ async function toSafeUser(user: any): Promise<SafeUser> {
     forcePwdChange: user.forcePwdChange,
     createdAt: user.createdAt,
     phone: user.phone || undefined,
+    profileImage: user.profileImage || undefined,
   };
 
   if (user.student) {
