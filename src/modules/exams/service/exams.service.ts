@@ -50,7 +50,7 @@ export class ExamsService {
   async updateExam(examId: string, teacherId: string, data: UpdateExamDto) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
+    if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
       throw new AppError('Cannot update exam after it has started', 400);
     }
 
