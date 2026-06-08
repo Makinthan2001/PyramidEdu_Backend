@@ -45,6 +45,7 @@ export interface SafeUser {
   subject?: string;
   subjectId?: string;
   teacherProfileId?: string;
+  profileImage?: string;
 }
 
 export interface PasswordResetPayload {
