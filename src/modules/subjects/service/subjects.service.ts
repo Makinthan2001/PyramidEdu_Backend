@@ -1,4 +1,4 @@
-import { Prisma, UserRole } from '@prisma/client';
+import { Prisma, Role, AuditAction, EnrollmentStatus, SubjectAllocationStatus } from '@prisma/client';
 import prisma from '../../../config/prisma.config';
 import { AppError } from '../../../utils/AppError';
 import type { CreateSubjectDto } from '../dto/create-subject.dto';
@@ -8,11 +8,11 @@ import type { EnrollStudentDto } from '../dto/enroll-student.dto';
 
 export interface SubjectsQueryParams {
   active?: boolean;
-  teacherId?: number;
-  streamId?: number;
+  teacherId?: string;
+  streamId?: string;
   search?: string;
-  userRole?: UserRole;
-  userId?: number;
+  userRole?: Role;
+  userId?: string;
 }
 
 function generateSubjectCode(name: string) {
@@ -24,35 +24,13 @@ async function ensureUniqueSubjectCode(baseCode: string) {
   let code = baseCode;
   let suffix = 1;
 
-  while (await prisma.subject.findUnique({ where: { code } })) {
+  while (await prisma.subject.findUnique({ where: { subjectCode: code } })) {
     const suffixText = String(suffix);
     code = `${baseCode.slice(0, Math.max(1, 20 - suffixText.length))}${suffixText}`;
     suffix += 1;
   }
 
   return code;
-}
-
-async function validateStreamIds(streamIds: number[]) {
-  const uniqueIds = Array.from(new Set(streamIds));
-
-  if (uniqueIds.length === 0) {
-    throw new AppError('At least one stream is required.', 400);
-  }
-
-  const streams = await prisma.stream.findMany({
-    where: {
-      id: { in: uniqueIds },
-      isActive: true,
-    },
-    select: { id: true },
-  });
-
-  if (streams.length !== uniqueIds.length) {
-    throw new AppError('One or more selected streams were not found.', 404);
-  }
-
-  return uniqueIds;
 }
 
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined) {
@@ -63,13 +41,11 @@ function decimalToNumber(value: Prisma.Decimal | number | null | undefined) {
   return typeof value === 'number' ? value : Number(value);
 }
 
-async function getTeacherProfileByUserId(userId: number) {
+async function getTeacherProfileByUserId(userId: string) {
   return prisma.teacher.findUnique({
     where: { userId },
     select: {
       id: true,
-      firstName: true,
-      lastName: true,
       user: {
         select: {
           isActive: true,
@@ -79,13 +55,11 @@ async function getTeacherProfileByUserId(userId: number) {
   });
 }
 
-async function getStudentProfileByUserId(userId: number) {
+async function getStudentProfileByUserId(userId: string) {
   return prisma.student.findUnique({
     where: { userId },
     select: {
       id: true,
-      firstName: true,
-      lastName: true,
       indexNumber: true,
       user: {
         select: {
@@ -96,7 +70,7 @@ async function getStudentProfileByUserId(userId: number) {
   });
 }
 
-async function resolveTeacherReference(referenceId: number) {
+async function resolveTeacherReference(referenceId: string) {
   const teacherByTeacherId = await prisma.teacher.findUnique({
     where: { id: referenceId },
     select: {
@@ -114,7 +88,6 @@ async function resolveTeacherReference(referenceId: number) {
     if (!teacherByTeacherId.user?.isActive) {
       throw new AppError('Teacher is inactive.', 403);
     }
-
     return teacherByTeacherId;
   }
 
@@ -135,14 +108,13 @@ async function resolveTeacherReference(referenceId: number) {
     if (!teacherByUserId.user?.isActive) {
       throw new AppError('Teacher is inactive.', 403);
     }
-
     return teacherByUserId;
   }
 
   return null;
 }
 
-async function resolveStudentReference(referenceId: number) {
+async function resolveStudentReference(referenceId: string) {
   const studentByStudentId = await prisma.student.findUnique({
     where: { id: referenceId },
     select: {
@@ -160,7 +132,6 @@ async function resolveStudentReference(referenceId: number) {
     if (!studentByStudentId.user?.isActive) {
       throw new AppError('Student is inactive.', 403);
     }
-
     return studentByStudentId;
   }
 
@@ -181,30 +152,28 @@ async function resolveStudentReference(referenceId: number) {
     if (!studentByUserId.user?.isActive) {
       throw new AppError('Student is inactive.', 403);
     }
-
     return studentByUserId;
   }
 
   return null;
 }
 
-async function findSubjectByIdentifier(identifier: string) {
-  const numericId = Number(identifier);
 
-  if (Number.isInteger(numericId)) {
+
+async function findSubjectByIdentifier(identifier: string) {
+  // Try finding by UUID
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+  if (isUuid) {
     const subjectById = await prisma.subject.findUnique({
-      where: { id: numericId },
+      where: { id: identifier },
       include: {
-        subjectStreams: {
+        streams: true,
+        subjectAllocations: {
+          where: { status: SubjectAllocationStatus.ACTIVE },
           include: {
-            stream: true,
-          },
-        },
-        teacher: {
-          include: {
-            user: {
-              select: {
-                isActive: true,
+            teacher: {
+              include: {
+                user: true,
               },
             },
           },
@@ -218,18 +187,15 @@ async function findSubjectByIdentifier(identifier: string) {
   }
 
   return prisma.subject.findUnique({
-    where: { code: identifier },
+    where: { subjectCode: identifier },
     include: {
-      subjectStreams: {
+      streams: true,
+      subjectAllocations: {
+        where: { status: SubjectAllocationStatus.ACTIVE },
         include: {
-          stream: true,
-        },
-      },
-      teacher: {
-        include: {
-          user: {
-            select: {
-              isActive: true,
+          teacher: {
+            include: {
+              user: true,
             },
           },
         },
@@ -238,8 +204,8 @@ async function findSubjectByIdentifier(identifier: string) {
   });
 }
 
-async function resolveEnrollmentStudentId(dto: EnrollStudentDto, actor?: { userRole?: UserRole; userId?: number }) {
-  if (actor?.userRole === UserRole.STUDENT) {
+async function resolveEnrollmentStudentId(dto: EnrollStudentDto, actor?: { userRole?: Role; userId?: string }) {
+  if (actor?.userRole === Role.STUDENT) {
     if (!actor.userId) {
       throw new AppError('Student profile not found.', 403);
     }
@@ -270,44 +236,58 @@ async function resolveEnrollmentStudentId(dto: EnrollStudentDto, actor?: { userR
   throw new AppError('Student ID is required for enrollment.', 400);
 }
 
-function buildSubjectResponse(subject: any, activeEnrollmentCount = 0, currentTeacherId?: number) {
+function buildSubjectResponse(subject: any, activeEnrollmentCount = 0, currentTeacherId?: string) {
+  // Get active teacher from allocations
+  const activeAllocation = subject.subjectAllocations?.find((alloc: any) => alloc.status === SubjectAllocationStatus.ACTIVE);
+  const teacher = activeAllocation?.teacher;
+
+  // Support both streams[] (many-to-many) and legacy single stream
+  const streamsArray: any[] = subject.streams ?? (subject.stream ? [subject.stream] : []);
+  const primaryStream = streamsArray[0] ?? null;
+
   return {
     id: subject.id,
-    name: subject.name,
-    feePerMonth: decimalToNumber(subject.feePerMonth),
-    description: subject.description,
-    teacherId: subject.teacherId,
+    name: subject.subjectName,
+    code: subject.subjectCode,
+    feePerMonth: decimalToNumber(subject.feeAmount),
     isActive: subject.isActive,
     createdAt: subject.createdAt,
-    streams: (subject.subjectStreams ?? []).map((subjectStream: any) => ({
-      id: subjectStream.stream.id,
-      name: subjectStream.stream.name,
-      isActive: subjectStream.stream.isActive,
+    // Full array for multi-stream display
+    streams: streamsArray.map((s: any) => ({
+      id: s.id,
+      name: s.streamName,
+      isActive: s.isActive,
     })),
-    teacher: subject.teacher
+    // Legacy single-stream field for backwards compat
+    stream: primaryStream
       ? {
-          id: subject.teacher.id,
-          firstName: subject.teacher.firstName,
-          lastName: subject.teacher.lastName,
-          specialization: subject.teacher.specialization,
-          isActive: subject.teacher.user?.isActive ?? true,
-        }
+        id: primaryStream.id,
+        name: primaryStream.streamName,
+        isActive: primaryStream.isActive,
+      }
+      : null,
+    teacher: teacher
+      ? {
+        id: teacher.id,
+        name: teacher.user?.fullName || '',
+        isActive: teacher.user?.isActive ?? true,
+      }
       : null,
     activeEnrollmentCount,
-    isAssignedToMe: currentTeacherId ? subject.teacherId === currentTeacherId : false,
+    isAssignedToMe: currentTeacherId && teacher ? teacher.id === currentTeacherId : false,
   };
 }
 
-async function getActiveEnrollmentCountMap(subjectIds: number[]) {
+async function getActiveEnrollmentCountMap(subjectIds: string[]) {
   if (subjectIds.length === 0) {
-    return new Map<number, number>();
+    return new Map<string, number>();
   }
 
   const grouped = await prisma.enrollment.groupBy({
     by: ['subjectId'],
     where: {
       subjectId: { in: subjectIds },
-      isActive: true,
+      enrollmentStatus: EnrollmentStatus.ACTIVE,
     },
     _count: {
       _all: true,
@@ -319,95 +299,114 @@ async function getActiveEnrollmentCountMap(subjectIds: number[]) {
 
 export class SubjectsService {
   static async getStreams() {
-    const streams = await prisma.stream.findMany({
+    return prisma.stream.findMany({
       where: { isActive: true },
-      orderBy: { name: 'asc' },
+      orderBy: { streamName: 'asc' },
+      include: {
+        batches: true,
+      },
     });
-
-    return streams;
   }
 
   static async getAvailableSubjects() {
     const subjects = await prisma.subject.findMany({
       where: { isActive: true },
-      orderBy: { name: 'asc' },
+      orderBy: { subjectName: 'asc' },
       include: {
-        subjectStreams: {
-          include: {
-            stream: true,
-          },
-        },
+        streams: true,
       },
     });
 
     return subjects.map((sub) => ({
       id: sub.id,
-      name: sub.name,
-      streams: (sub.subjectStreams ?? []).map((ss) => ss.stream.name),
-      feePerMonth: decimalToNumber(sub.feePerMonth),
+      name: sub.subjectName,
+      streamName: sub.streams[0]?.streamName ?? '',
+      streams: sub.streams.map(s => ({ id: s.id, name: s.streamName, streamName: s.streamName })),
+      feePerMonth: decimalToNumber(sub.feeAmount),
     }));
   }
 
-  static async createStream(dto: CreateStreamDto, actor?: { userId?: number }) {
+  static async createStream(dto: CreateStreamDto, actor?: { userId?: string }) {
     const stream = await prisma.stream.create({
       data: {
-        name: dto.name,
+        streamName: dto.name,
+        batches: dto.batchIds && dto.batchIds.length > 0 ? {
+          connect: dto.batchIds.map(id => ({ id }))
+        } : undefined,
+      },
+      include: {
+        batches: true,
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        action: 'STREAM_CREATED',
-        userId: actor?.userId ?? null,
-        resourceType: 'STREAM',
-        resourceId: stream.id,
-        details: JSON.stringify({ name: stream.name }),
-      },
-    });
+    if (actor?.userId) {
+      await prisma.auditLog.create({
+        data: {
+          action: AuditAction.CREATE,
+          userId: actor.userId,
+          module: 'STREAM',
+          description: `Stream created: ${stream.streamName}`,
+        },
+      });
+    }
 
     return stream;
   }
 
-  static async createSubject(dto: CreateSubjectDto, actor?: { userId?: number }) {
-    const streamIds = await validateStreamIds(dto.streamIds);
-    const requestedCode = dto.code ? dto.code.toUpperCase() : generateSubjectCode(dto.name);
+  static async updateStream(streamId: string, streamName: string, batchIds?: string[]) {
+    return prisma.stream.update({
+      where: { id: streamId },
+      data: { 
+        streamName,
+        batches: batchIds ? {
+          set: batchIds.map(id => ({ id }))
+        } : undefined
+      },
+      include: {
+        batches: true
+      }
+    });
+  }
+
+  static async createSubject(dto: CreateSubjectDto, actor?: { userId?: string }) {
+    const requestedCode = dto.subjectCode ? dto.subjectCode.toUpperCase() : generateSubjectCode(dto.subjectName);
     const code = await ensureUniqueSubjectCode(requestedCode);
+
+    // Resolve stream IDs from either streamIds array or single streamId
+    const streamIds = dto.streamIds?.length ? dto.streamIds : (dto.streamId ? [dto.streamId] : []);
 
     const subject = await prisma.subject.create({
       data: {
-        name: dto.name,
-        code,
-        feePerMonth: new Prisma.Decimal(dto.feePerMonth),
-        description: dto.description,
+        subjectName: dto.subjectName,
+        subjectCode: code,
+        feeAmount: new Prisma.Decimal(dto.feeAmount),
         isActive: dto.isActive ?? true,
-        subjectStreams: {
-          createMany: {
-            data: streamIds.map((streamId) => ({ streamId })),
-          },
-        },
+        streams: streamIds.length > 0 ? {
+          connect: streamIds.map((id) => ({ id })),
+        } : undefined,
       },
       include: {
-        subjectStreams: {
+        streams: true,
+        subjectAllocations: {
           include: {
-            stream: true,
+            teacher: {
+              include: { user: true },
+            },
           },
         },
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        action: 'SUBJECT_CREATED',
-        userId: actor?.userId ?? null,
-        resourceType: 'SUBJECT',
-        resourceId: subject.id,
-        details: JSON.stringify({
-          name: subject.name,
-          code: subject.code,
-          feePerMonth: subject.feePerMonth.toString(),
-        }),
-      },
-    });
+    if (actor?.userId) {
+      await prisma.auditLog.create({
+        data: {
+          action: AuditAction.CREATE,
+          userId: actor.userId,
+          module: 'SUBJECT',
+          description: `Subject created: ${subject.subjectName} (${subject.subjectCode})`,
+        },
+      });
+    }
 
     return buildSubjectResponse(subject, 0);
   }
@@ -415,123 +414,104 @@ export class SubjectsService {
   static async getSubjects(params: SubjectsQueryParams) {
     const where: Prisma.SubjectWhereInput = {};
 
-    if (params.userRole === UserRole.STUDENT && params.active === undefined) {
+    if (params.userRole === Role.STUDENT && params.active === undefined) {
       where.isActive = true;
     } else if (params.active !== undefined) {
       where.isActive = params.active;
     }
 
     if (params.teacherId) {
-      where.teacherId = params.teacherId;
-    }
-
-    if (params.streamId) {
-      where.subjectStreams = {
+      where.subjectAllocations = {
         some: {
-          streamId: params.streamId,
+          teacherId: params.teacherId,
+          status: SubjectAllocationStatus.ACTIVE,
         },
       };
     }
 
+    if (params.streamId) {
+      where.streams = { some: { id: params.streamId } };
+    }
+
     if (params.search) {
       where.OR = [
-        { name: { contains: params.search, mode: 'insensitive' } },
-        { code: { contains: params.search, mode: 'insensitive' } },
+        { subjectName: { contains: params.search, mode: 'insensitive' } },
+        { subjectCode: { contains: params.search, mode: 'insensitive' } },
       ];
     }
 
-    const [subjects, currentTeacher] = await Promise.all([
-      prisma.subject.findMany({
-        where,
-        orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
-        include: {
-          subjectStreams: {
-            include: {
-              stream: true,
-            },
-          },
-          teacher: {
-            include: {
-              user: {
-                select: {
-                  isActive: true,
+    try {
+      const [subjects, currentTeacher] = await Promise.all([
+        prisma.subject.findMany({
+          where,
+          orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
+          include: {
+            streams: true,
+            subjectAllocations: {
+              include: {
+                teacher: {
+                  include: {
+                    user: {
+                      select: {
+                        isActive: true,
+                        fullName: true,
+                      },
+                    },
+                  },
                 },
               },
             },
           },
-        },
-      }),
-      params.userRole === UserRole.TEACHER && params.userId ? getTeacherProfileByUserId(params.userId) : Promise.resolve(null),
-    ]);
+        }),
+        params.userRole === Role.TEACHER && params.userId ? getTeacherProfileByUserId(params.userId) : Promise.resolve(null),
+      ]);
 
-    const subjectIds = subjects.map((subject) => subject.id);
-    const activeCounts = await getActiveEnrollmentCountMap(subjectIds);
+      const subjectIds = subjects.map((subject) => subject.id);
+      const activeCounts = await getActiveEnrollmentCountMap(subjectIds);
 
-    return {
-      data: subjects.map((subject) =>
-        buildSubjectResponse(subject, activeCounts.get(subject.id) ?? 0, currentTeacher?.id ?? undefined)
-      ),
-      total: subjects.length,
-      page: 1,
-      limit: subjects.length,
-      hasMore: false,
-    };
-  }
-
-  static async getSubjectTeacher(subjectId: number) {
-    const subject = await prisma.subject.findUnique({
-      where: { id: subjectId },
-      include: {
-        teacher: {
-          include: {
-            user: {
-              select: {
-                isActive: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!subject || !subject.teacher) {
-      return null;
+      return {
+        data: subjects.map((subject) =>
+          buildSubjectResponse(subject, activeCounts.get(subject.id) ?? 0, currentTeacher?.id ?? undefined)
+        ),
+        total: subjects.length,
+        page: 1,
+        limit: subjects.length,
+        hasMore: false,
+      };
+    } catch (err: any) {
+      console.error('[getSubjects] Prisma/DB error:', err?.message ?? err);
+      throw err;
     }
-
-    return {
-      id: subject.teacher.id,
-      name: `${subject.teacher.firstName ?? ''} ${subject.teacher.lastName ?? ''}`.trim(),
-      qualification: subject.teacher.specialization ?? '',
-      isActive: subject.teacher.user?.isActive ?? true,
-    };
   }
 
-  static async getSubjectByIdentifier(identifier: string, actor?: { userRole?: UserRole; userId?: number }) {
+
+
+  static async getSubjectByIdentifier(identifier: string, actor?: { userRole?: Role; userId?: string }) {
     const subject = await findSubjectByIdentifier(identifier);
 
     if (!subject) {
       throw new AppError('Subject not found.', 404);
     }
 
-    if (!subject.isActive && actor?.userRole === UserRole.STUDENT) {
+    if (!subject.isActive && actor?.userRole === Role.STUDENT) {
       throw new AppError('Subject not found.', 404);
     }
 
     const activeEnrollmentCount = await prisma.enrollment.count({
       where: {
         subjectId: subject.id,
-        isActive: true,
+        enrollmentStatus: EnrollmentStatus.ACTIVE,
       },
     });
 
-    const currentTeacher = actor?.userRole === UserRole.TEACHER && actor.userId
+    const currentTeacher = actor?.userRole === Role.TEACHER && actor.userId
       ? await getTeacherProfileByUserId(actor.userId)
       : null;
 
     return buildSubjectResponse(subject, activeEnrollmentCount, currentTeacher?.id ?? undefined);
   }
 
-  static async updateSubject(subjectId: number, dto: UpdateSubjectDto, actor?: { userId?: number }) {
+  static async updateSubject(subjectId: string, dto: UpdateSubjectDto, actor?: { userId?: string }) {
     const existing = await prisma.subject.findUnique({
       where: { id: subjectId },
     });
@@ -540,126 +520,69 @@ export class SubjectsService {
       throw new AppError('Subject not found.', 404);
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const data: Prisma.SubjectUpdateInput = {};
+    const data: Prisma.SubjectUpdateInput = {};
 
-      if (dto.name !== undefined) {
-        data.name = dto.name;
+    if (dto.subjectName !== undefined) {
+      data.subjectName = dto.subjectName;
+    }
+
+    if (dto.subjectCode !== undefined) {
+      data.subjectCode = dto.subjectCode;
+    }
+
+    if (dto.feeAmount !== undefined) {
+      data.feeAmount = new Prisma.Decimal(dto.feeAmount);
+    }
+
+    if (dto.isActive !== undefined) {
+      data.isActive = dto.isActive;
+    }
+
+    if (dto.streamId !== undefined || dto.streamIds !== undefined) {
+      // Resolve stream IDs from either streamIds array or single streamId
+      const streamIds = dto.streamIds?.length ? dto.streamIds : (dto.streamId ? [dto.streamId] : []);
+      if (streamIds.length > 0) {
+        data.streams = { set: streamIds.map((id) => ({ id })) };
       }
+    }
 
-      if (dto.code !== undefined) {
-        data.code = dto.code;
-      }
-
-      if (dto.description !== undefined) {
-        data.description = dto.description;
-      }
-
-      if (dto.feePerMonth !== undefined) {
-        data.feePerMonth = new Prisma.Decimal(dto.feePerMonth);
-      }
-
-      if (dto.isActive !== undefined) {
-        data.isActive = dto.isActive;
-      }
-
-      const subject = await tx.subject.update({
-        where: { id: subjectId },
-        data,
-        include: {
-          subjectStreams: {
-            include: {
-              stream: true,
-            },
-          },
-          teacher: {
-            include: {
-              user: {
-                select: {
-                  isActive: true,
+    const updated = await prisma.subject.update({
+      where: { id: subjectId },
+      data,
+      include: {
+        streams: true,
+        subjectAllocations: {
+          include: {
+            teacher: {
+              include: {
+                user: {
+                  select: {
+                    isActive: true,
+                    fullName: true,
+                  },
                 },
               },
             },
           },
         },
-      });
-
-      if (dto.feePerMonth !== undefined && decimalToNumber(existing.feePerMonth) !== dto.feePerMonth) {
-        await tx.auditLog.create({
-          data: {
-            action: 'SUBJECT_FEE_UPDATED',
-            userId: actor?.userId ?? null,
-            resourceType: 'SUBJECT',
-            resourceId: subject.id,
-            details: JSON.stringify({
-              previousFeePerMonth: existing.feePerMonth.toString(),
-              newFeePerMonth: subject.feePerMonth.toString(),
-            }),
-          },
-        });
-      }
-
-      if (dto.isActive !== undefined && existing.isActive !== dto.isActive) {
-        await tx.auditLog.create({
-          data: {
-            action: dto.isActive ? 'SUBJECT_ACTIVATED' : 'SUBJECT_DEACTIVATED',
-            userId: actor?.userId ?? null,
-            resourceType: 'SUBJECT',
-            resourceId: subject.id,
-            details: JSON.stringify({
-              previousIsActive: existing.isActive,
-              newIsActive: dto.isActive,
-            }),
-          },
-        });
-      }
-
-      if (dto.streamIds !== undefined) {
-        const streamIds = await validateStreamIds(dto.streamIds);
-
-        await tx.subjectStream.deleteMany({
-          where: { subjectId },
-        });
-
-        await tx.subjectStream.createMany({
-          data: streamIds.map((streamId) => ({
-            subjectId,
-            streamId,
-          })),
-        });
-      }
-
-      const refreshed = await tx.subject.findUnique({
-        where: { id: subjectId },
-        include: {
-          subjectStreams: {
-            include: {
-              stream: true,
-            },
-          },
-          teacher: {
-            include: {
-              user: {
-                select: {
-                  isActive: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!refreshed) {
-        throw new AppError('Subject not found.', 404);
-      }
-
-      return refreshed;
+      },
     });
+
+    if (actor?.userId) {
+      await prisma.auditLog.create({
+        data: {
+          action: AuditAction.UPDATE,
+          userId: actor.userId,
+          module: 'SUBJECT',
+          description: `Subject updated: ${updated.subjectName}`,
+        },
+      });
+    }
 
     return buildSubjectResponse(updated, 0);
   }
 
-  static async deactivateSubject(subjectId: number, actor?: { userId?: number; force?: boolean }) {
+  static async deactivateSubject(subjectId: string, actor?: { userId?: string; force?: boolean }) {
     const subject = await prisma.subject.findUnique({
       where: { id: subjectId },
     });
@@ -671,7 +594,7 @@ export class SubjectsService {
     const activeEnrollmentCount = await prisma.enrollment.count({
       where: {
         subjectId,
-        isActive: true,
+        enrollmentStatus: EnrollmentStatus.ACTIVE,
       },
     });
 
@@ -685,16 +608,17 @@ export class SubjectsService {
         isActive: false,
       },
       include: {
-        subjectStreams: {
+        streams: true,
+        subjectAllocations: {
           include: {
-            stream: true,
-          },
-        },
-        teacher: {
-          include: {
-            user: {
-              select: {
-                isActive: true,
+            teacher: {
+              include: {
+                user: {
+                  select: {
+                    isActive: true,
+                    fullName: true,
+                  },
+                },
               },
             },
           },
@@ -702,44 +626,79 @@ export class SubjectsService {
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        action: 'SUBJECT_DEACTIVATED',
-        userId: actor?.userId ?? null,
-        resourceType: 'SUBJECT',
-        resourceId: subjectId,
-        details: JSON.stringify({
-          force: Boolean(actor?.force),
-        }),
-      },
-    });
+    if (actor?.userId) {
+      await prisma.auditLog.create({
+        data: {
+          action: AuditAction.UPDATE,
+          userId: actor.userId,
+          module: 'SUBJECT',
+          description: `Subject deactivated: ${subjectId}`,
+        },
+      });
+    }
 
     return buildSubjectResponse(updated, activeEnrollmentCount);
   }
 
-  static async assignTeacher(subjectId: number, teacherId: number, actor?: { userId?: number }) {
-    const teacher = await resolveTeacherReference(teacherId);
-
-    if (!teacher) {
-      throw new AppError('Teacher not found. Use the teacher table id or the linked user id.', 404);
+  static async assignTeacher(subjectId: string, teacherId: string, batchIds?: string[], actor?: { userId?: string }) {
+    const subject = await prisma.subject.findUnique({ where: { id: subjectId } });
+    if (!subject) {
+      throw new AppError('Subject not found.', 404);
     }
 
-    const subject = await prisma.subject.update({
-      where: { id: subjectId },
-      data: {
-        teacherId: teacher.id,
-      },
-      include: {
-        subjectStreams: {
-          include: {
-            stream: true,
-          },
+    const teacher = await resolveTeacherReference(teacherId);
+    if (!teacher) {
+      throw new AppError('Teacher not found.', 404);
+    }
+
+    // Allocate teacher using SubjectAllocation
+    await prisma.subjectAllocation.upsert({
+      where: {
+        teacherId_subjectId: {
+          teacherId: teacher.id,
+          subjectId,
         },
-        teacher: {
+      },
+      create: {
+        teacherId: teacher.id,
+        subjectId,
+        status: SubjectAllocationStatus.ACTIVE,
+        ...(batchIds && {
+          batches: {
+            connect: batchIds.map((id) => ({ id })),
+          },
+        }),
+      },
+      update: {
+        status: SubjectAllocationStatus.ACTIVE,
+        ...(batchIds && {
+          batches: {
+            set: batchIds.map((id) => ({ id })),
+          },
+        }),
+      },
+    });
+
+    if (actor?.userId) {
+      await prisma.auditLog.create({
+        data: {
+          action: AuditAction.UPDATE,
+          userId: actor.userId,
+          module: 'SUBJECT',
+          description: `Teacher ${teacher.id} assigned to subject ${subject.subjectName}`,
+        },
+      });
+    }
+
+    const updatedSubject = await prisma.subject.findUnique({
+      where: { id: subjectId },
+      include: {
+        streams: true,
+        subjectAllocations: {
           include: {
-            user: {
-              select: {
-                isActive: true,
+            teacher: {
+              include: {
+                user: true,
               },
             },
           },
@@ -747,27 +706,38 @@ export class SubjectsService {
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        action: 'SUBJECT_TEACHER_ASSIGNED',
-        userId: actor?.userId ?? null,
-        resourceType: 'SUBJECT',
-        resourceId: subjectId,
-        details: JSON.stringify({
-          teacherId: teacher.id,
-        }),
-      },
-    });
-
-    return buildSubjectResponse(subject, 0);
+    return buildSubjectResponse(updatedSubject, 0);
   }
 
-  static async getSubjectStudents(subjectId: number, actor?: { userRole?: UserRole; userId?: number }) {
+  static async getSubjectTeachers(subjectId: string) {
+    const allocations = await prisma.subjectAllocation.findMany({
+      where: { subjectId, status: SubjectAllocationStatus.ACTIVE },
+      include: {
+        teacher: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phone: true,
+                isActive: true,
+                profileImage: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return allocations.map(a => a.teacher);
+  }
+
+  static async getSubjectStudents(subjectId: string, actor?: { userRole?: Role; userId?: string }) {
     const subject = await prisma.subject.findUnique({
       where: { id: subjectId },
       select: {
         id: true,
-        teacherId: true,
       },
     });
 
@@ -775,10 +745,18 @@ export class SubjectsService {
       throw new AppError('Subject not found.', 404);
     }
 
-    if (actor?.userRole === UserRole.TEACHER && actor.userId) {
+    if (actor?.userRole === Role.TEACHER && actor.userId) {
       const teacher = await getTeacherProfileByUserId(actor.userId);
+      // Ensure the teacher is allocated to this subject
+      const allocation = await prisma.subjectAllocation.findFirst({
+        where: {
+          subjectId,
+          teacherId: teacher?.id,
+          status: SubjectAllocationStatus.ACTIVE,
+        },
+      });
 
-      if (teacher?.id !== subject.teacherId) {
+      if (!allocation) {
         throw new AppError('You can only view students for your assigned subjects.', 403);
       }
     }
@@ -786,7 +764,7 @@ export class SubjectsService {
     const enrollments = await prisma.enrollment.findMany({
       where: {
         subjectId,
-        isActive: true,
+        enrollmentStatus: EnrollmentStatus.ACTIVE,
       },
       include: {
         student: {
@@ -795,13 +773,14 @@ export class SubjectsService {
               select: {
                 isActive: true,
                 email: true,
+                fullName: true,
               },
             },
           },
         },
       },
       orderBy: {
-        enrolledAt: 'desc',
+        enrolledDate: 'desc',
       },
     });
 
@@ -809,13 +788,12 @@ export class SubjectsService {
       data: enrollments.map((enrollment) => ({
         enrollmentId: enrollment.id,
         studentId: enrollment.studentId,
-        enrolledAt: enrollment.enrolledAt,
-        isActive: enrollment.isActive,
+        enrolledAt: enrollment.enrolledDate,
+        enrollmentStatus: enrollment.enrollmentStatus,
         student: {
           id: enrollment.student.id,
           userId: enrollment.student.userId,
-          firstName: enrollment.student.firstName,
-          lastName: enrollment.student.lastName,
+          name: enrollment.student.user?.fullName || '',
           indexNumber: enrollment.student.indexNumber,
           phone: enrollment.student.phone,
           address: enrollment.student.address,
@@ -826,7 +804,7 @@ export class SubjectsService {
     };
   }
 
-  static async enrollStudent(subjectId: number, dto: EnrollStudentDto, actor?: { userRole?: UserRole; userId?: number }) {
+  static async enrollStudent(subjectId: string, dto: EnrollStudentDto, actor?: { userRole?: Role; userId?: string }) {
     const subject = await prisma.subject.findUnique({
       where: { id: subjectId },
       select: {
@@ -865,43 +843,42 @@ export class SubjectsService {
       where: {
         studentId,
         subjectId,
+        enrollmentStatus: EnrollmentStatus.ACTIVE,
       },
     });
 
-    if (existingEnrollment?.isActive) {
+    if (existingEnrollment?.enrollmentStatus === EnrollmentStatus.ACTIVE) {
       throw new AppError('Student is already enrolled in this subject.', 409);
     }
 
     const enrollment = existingEnrollment
       ? await prisma.enrollment.update({
-          where: { id: existingEnrollment.id },
-          data: { isActive: true },
-        })
+        where: { id: existingEnrollment.id },
+        data: { enrollmentStatus: EnrollmentStatus.ACTIVE },
+      })
       : await prisma.enrollment.create({
-          data: {
-            studentId,
-            subjectId,
-            isActive: true,
-          },
-        });
-
-    await prisma.auditLog.create({
-      data: {
-        action: 'SUBJECT_STUDENT_ENROLLED',
-        userId: actor?.userId ?? null,
-        resourceType: 'ENROLLMENT',
-        resourceId: enrollment.id,
-        details: JSON.stringify({
-          subjectId,
+        data: {
           studentId,
-        }),
-      },
-    });
+          subjectId,
+          enrollmentStatus: EnrollmentStatus.ACTIVE,
+        },
+      });
+
+    if (actor?.userId) {
+      await prisma.auditLog.create({
+        data: {
+          action: AuditAction.CREATE,
+          userId: actor.userId,
+          module: 'ENROLLMENT',
+          description: `Student ${studentId} enrolled in subject ${subjectId}`,
+        },
+      });
+    }
 
     return enrollment;
   }
 
-  static async unenrollStudent(subjectId: number, studentId: number, actor?: { userRole?: UserRole; userId?: number }) {
+  static async unenrollStudent(subjectId: string, studentId: string, actor?: { userRole?: Role; userId?: string }) {
     const subject = await prisma.subject.findUnique({
       where: { id: subjectId },
       select: {
@@ -913,7 +890,7 @@ export class SubjectsService {
       throw new AppError('Subject not found.', 404);
     }
 
-    if (actor?.userRole === UserRole.STUDENT) {
+    if (actor?.userRole === Role.STUDENT) {
       if (!actor.userId) {
         throw new AppError('Student profile not found.', 403);
       }
@@ -929,36 +906,34 @@ export class SubjectsService {
       where: {
         studentId,
         subjectId,
-        isActive: true,
+        enrollmentStatus: EnrollmentStatus.ACTIVE,
       },
     });
 
-    if (!enrollment) {
-      throw new AppError('Enrollment not found.', 404);
+    if (!enrollment || enrollment.enrollmentStatus !== EnrollmentStatus.ACTIVE) {
+      throw new AppError('Active enrollment not found.', 404);
     }
 
     const updated = await prisma.enrollment.update({
       where: { id: enrollment.id },
-      data: { isActive: false },
+      data: { enrollmentStatus: EnrollmentStatus.DROPPED },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        action: 'SUBJECT_STUDENT_UNENROLLED',
-        userId: actor?.userId ?? null,
-        resourceType: 'ENROLLMENT',
-        resourceId: updated.id,
-        details: JSON.stringify({
-          subjectId,
-          studentId,
-        }),
-      },
-    });
+    if (actor?.userId) {
+      await prisma.auditLog.create({
+        data: {
+          action: AuditAction.UPDATE,
+          userId: actor.userId,
+          module: 'ENROLLMENT',
+          description: `Student ${studentId} unenrolled from subject ${subjectId}`,
+        },
+      });
+    }
 
     return updated;
   }
 
-  static async getEnrollmentCount(subjectId: number) {
+  static async getEnrollmentCount(subjectId: string) {
     const subject = await prisma.subject.findUnique({
       where: { id: subjectId },
       select: { id: true },
@@ -971,7 +946,7 @@ export class SubjectsService {
     return prisma.enrollment.count({
       where: {
         subjectId,
-        isActive: true,
+        enrollmentStatus: EnrollmentStatus.ACTIVE,
       },
     });
   }

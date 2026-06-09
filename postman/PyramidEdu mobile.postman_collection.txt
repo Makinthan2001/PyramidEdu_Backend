@@ -1,0 +1,21 @@
+=== Mobile Login ===
+URL: POST {{baseUrl}}/api/v1/mobile/auth/login
+Instruction: Login endpoint specifically for the mobile app.
+Body:
+{
+  "email": "student@test.com",
+  "password": "Password123"
+}
+
+-------------------------------------------------
+
+=== Mobile Refresh ===
+URL: POST {{baseUrl}}/api/v1/mobile/auth/refresh
+Instruction: Refresh token endpoint for the mobile app.
+Body:
+{
+  "refreshToken": "your_refresh_token_here"
+}
+
+-------------------------------------------------
+

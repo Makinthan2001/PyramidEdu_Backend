@@ -4,4 +4,8 @@ npx prisma migrate dev --name xxxxxxxxxxx --schema prisma/schema.prisma
 npx prisma generate --schema prisma/schema.prisma
 
 for reset
-npx prisma migrate reset --schema prisma/schema.
+npx prisma migrate reset --schema prisma/schema.prisma
+
+npx prisma format 
+npx prisma generate 
+npx prisma db push

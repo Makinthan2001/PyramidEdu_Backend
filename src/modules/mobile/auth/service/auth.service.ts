@@ -1,4 +1,4 @@
-import { UserRole } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { AppError } from '../../../../utils/AppError';
 import { comparePasswords } from '../../../../utils/password.util';
 import {
@@ -7,7 +7,6 @@ import {
   verifyRefreshToken,
   expiryStringToDate,
 } from '../../../../utils/jwt.util';
-import { generateTokenFamily, hashToken } from '../../../../utils/crypto.util';
 import type { AuthTokens } from '../../../../types/auth.types';
 import MobileAuthRepository, { type StudentAuthRecord } from '../repository/auth.repository';
 import type { LoginDto } from '../dto/login.dto';
@@ -16,17 +15,16 @@ const MOBILE_ACCESS_EXPIRES = process.env.JWT_MOBILE_ACCESS_EXPIRES_IN || proces
 const MOBILE_REFRESH_EXPIRES = process.env.JWT_MOBILE_REFRESH_EXPIRES_IN || '30d';
 
 export interface MobileStudentSession {
-  id: number;
+  id: string;
   email: string;
-  role: UserRole; // runtime value set as 'STUDENT'
+  fullName: string;
+  role: Role; // runtime value set as 'STUDENT'
   isActive: boolean;
-  forcePasswordChange: boolean;
+  forcePwdChange: boolean;
   createdAt: Date;
   student: {
-    id: number;
-    firstName: string;
-    lastName: string;
-    indexNumber: string;
+    id: string;
+    indexNumber: string | null;
     phone: string | null;
     address: string | null;
     dateOfBirth: string | null;
@@ -46,15 +44,14 @@ function toStudentSession(user: StudentAuthRecord): MobileStudentSession {
   return {
     id: user.id,
     email: user.email,
-    role: 'STUDENT' as UserRole,
+    fullName: user.fullName,
+    role: Role.STUDENT,
     isActive: user.isActive,
-    forcePasswordChange: user.forcePasswordChange,
+    forcePwdChange: user.forcePwdChange,
     createdAt: user.createdAt,
     student: {
       id: user.student.id,
-      firstName: user.student.firstName,
-      lastName: user.student.lastName,
-      indexNumber: user.student.indexNumber,
+      indexNumber: user.student.indexNumber ?? null,
       phone: user.student.phone ?? null,
       address: user.student.address ?? null,
       dateOfBirth: user.student.dateOfBirth ? user.student.dateOfBirth.toISOString().slice(0, 10) : null,
@@ -63,9 +60,9 @@ function toStudentSession(user: StudentAuthRecord): MobileStudentSession {
 }
 
 export async function loginStudent(dto: LoginDto): Promise<MobileLoginResult> {
-  const user = await MobileAuthRepository.findStudentByEmail(dto.email);
+  const user = await MobileAuthRepository.findStudentByEmail(dto.email.trim().toLowerCase());
 
-  if (!user || user.role !== UserRole.STUDENT || !user.student) {
+  if (!user || user.role !== Role.STUDENT || !user.student) {
     throw new AppError('Invalid email or password.', 401);
   }
 
@@ -73,27 +70,25 @@ export async function loginStudent(dto: LoginDto): Promise<MobileLoginResult> {
     throw new AppError('Your account has been deactivated. Please contact the school administration.', 403);
   }
 
-  const isMatch = await comparePasswords(dto.password, user.passwordHash);
+  const isMatch = await comparePasswords(dto.password, user.password);
   if (!isMatch) {
     throw new AppError('Invalid email or password.', 401);
   }
 
   // Ensure student profile has been approved
-  if (!user.student || (user.student as any).isApproved === false) {
+  if (!user.student || user.student.approvalStatus !== 'APPROVED') {
     throw new AppError('Your account is pending approval. Please contact the school administration.', 403);
   }
 
-  const tokenFamily = generateTokenFamily();
   const accessToken = generateAccessToken(
     { sub: user.id, email: user.email, role: user.role },
     MOBILE_ACCESS_EXPIRES,
   );
-  const refreshToken = generateRefreshToken(user.id, tokenFamily, MOBILE_REFRESH_EXPIRES);
+  const refreshToken = generateRefreshToken(user.id, MOBILE_REFRESH_EXPIRES);
 
   await MobileAuthRepository.createRefreshToken({
     userId: user.id,
-    tokenHash: hashToken(refreshToken),
-    tokenFamily,
+    token: refreshToken,
     expiresAt: expiryStringToDate(MOBILE_REFRESH_EXPIRES),
   });
 
@@ -105,33 +100,27 @@ export async function loginStudent(dto: LoginDto): Promise<MobileLoginResult> {
 
 export async function refreshAccessToken(refreshToken: string): Promise<AuthTokens> {
   const payload = verifyRefreshToken(refreshToken);
-  const tokenHash = hashToken(refreshToken);
-  const stored = await MobileAuthRepository.findRefreshTokenByHash(tokenHash);
+  const stored = await MobileAuthRepository.findRefreshTokenByToken(refreshToken);
 
   if (!stored) {
     await MobileAuthRepository.deleteRefreshTokensByUserId(payload.sub);
     throw new AppError('Refresh token reuse detected. All sessions have been terminated.', 401);
   }
 
-  if (stored.tokenFamily !== payload.tokenFamily) {
-    await MobileAuthRepository.deleteRefreshTokensByUserId(payload.sub);
-    throw new AppError('Token family mismatch. Please log in again.', 401);
-  }
-
   if (stored.expiresAt < new Date()) {
-    await MobileAuthRepository.deleteRefreshTokenByHash(tokenHash);
+    await MobileAuthRepository.deleteRefreshTokenByToken(refreshToken);
     throw new AppError('Refresh token has expired. Please log in again.', 401);
   }
 
   const user = await MobileAuthRepository.findStudentById(payload.sub);
-  if (!user || user.role !== UserRole.STUDENT || !user.isActive || !user.student) {
+  if (!user || user.role !== Role.STUDENT || !user.isActive || !user.student) {
     await MobileAuthRepository.deleteRefreshTokensByUserId(payload.sub);
     throw new AppError('Student account not found or inactive.', 401);
   }
 
-  await MobileAuthRepository.deleteRefreshTokenByHash(tokenHash);
+  await MobileAuthRepository.deleteRefreshTokenByToken(refreshToken);
 
-  const newRefreshToken = generateRefreshToken(user.id, payload.tokenFamily, MOBILE_REFRESH_EXPIRES);
+  const newRefreshToken = generateRefreshToken(user.id, MOBILE_REFRESH_EXPIRES);
   const newAccessToken = generateAccessToken(
     { sub: user.id, email: user.email, role: user.role },
     MOBILE_ACCESS_EXPIRES,
@@ -139,8 +128,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<AuthToke
 
   await MobileAuthRepository.createRefreshToken({
     userId: user.id,
-    tokenHash: hashToken(newRefreshToken),
-    tokenFamily: payload.tokenFamily,
+    token: newRefreshToken,
     expiresAt: expiryStringToDate(MOBILE_REFRESH_EXPIRES),
   });
 
@@ -156,16 +144,16 @@ export async function logoutStudent(refreshToken: string, logoutAll = false): Pr
       return;
     }
 
-    await MobileAuthRepository.deleteRefreshTokenByHash(hashToken(refreshToken));
+    await MobileAuthRepository.deleteRefreshTokenByToken(refreshToken);
   } catch {
     return;
   }
 }
 
-export async function getCurrentStudent(userId: number): Promise<MobileStudentSession> {
+export async function getCurrentStudent(userId: string): Promise<MobileStudentSession> {
   const user = await MobileAuthRepository.findStudentById(userId);
 
-  if (!user || user.role !== UserRole.STUDENT || !user.student) {
+  if (!user || user.role !== Role.STUDENT || !user.student) {
     throw new AppError('Student account not found.', 404);
   }
 

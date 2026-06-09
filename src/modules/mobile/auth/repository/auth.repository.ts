@@ -15,31 +15,30 @@ export const MobileAuthRepository = {
     });
   },
 
-  findStudentById(userId: number): Promise<StudentAuthRecord | null> {
+  findStudentById(userId: string): Promise<StudentAuthRecord | null> {
     return prisma.user.findUnique({
       where: { id: userId },
       include: { student: true },
     });
   },
 
-  findRefreshTokenByHash(tokenHash: string) {
-    return prisma.refreshToken.findUnique({ where: { tokenHash } });
+  findRefreshTokenByToken(token: string) {
+    return prisma.refreshToken.findUnique({ where: { token } });
   },
 
   createRefreshToken(data: {
-    userId: number;
-    tokenHash: string;
-    tokenFamily: string;
+    userId: string;
+    token: string;
     expiresAt: Date;
   }) {
     return prisma.refreshToken.create({ data });
   },
 
-  deleteRefreshTokenByHash(tokenHash: string) {
-    return prisma.refreshToken.deleteMany({ where: { tokenHash } });
+  deleteRefreshTokenByToken(token: string) {
+    return prisma.refreshToken.delete({ where: { token } });
   },
 
-  deleteRefreshTokensByUserId(userId: number) {
+  deleteRefreshTokensByUserId(userId: string) {
     return prisma.refreshToken.deleteMany({ where: { userId } });
   },
 };

@@ -6,17 +6,18 @@ import {
   canManageUsers, 
   canCreateRole, 
   canAccessUser, 
+  canUpdateUser,
   preventSelfDeactivation 
 } from '../guards/users.guard';
 import {
   createManagerSchema,
   createTeacherSchema,
   createStudentSchema,
-  createSupportStaffSchema,
   createAdminSchema,
   updateUserSchema,
 } from '../validators/users.validator';
 import { changePasswordSchema } from '../dto/change-password.dto';
+import { uploadProfileImage } from '../../../middleware/profile-upload.middleware';
 
 const router = Router();
 
@@ -30,6 +31,24 @@ router.use(jwtGuard);
  * List all users (role-based filtering)
  */
 router.get('/', canManageUsers, controller.getUsers);
+
+/**
+ * GET /api/v1/users/profile
+ * Get current user profile
+ */
+router.get('/profile', controller.getProfile);
+
+/**
+ * PUT /api/v1/users/profile
+ * Update current user profile
+ */
+router.put('/profile', controller.updateProfile);
+
+/**
+ * POST /api/v1/users/profile/image
+ * Upload profile image
+ */
+router.post('/profile/image', uploadProfileImage.single('image'), controller.uploadProfileImage);
 
 /**
  * GET /api/v1/users/:id
@@ -60,9 +79,6 @@ router.post(
       case 'STUDENT':
         schema = createStudentSchema;
         break;
-      case 'SUPPORT_STAFF':
-        schema = createSupportStaffSchema;
-        break;
       case 'ADMIN':
         schema = createAdminSchema;
         break;
@@ -81,10 +97,11 @@ router.post(
 );
 
 /**
- * PATCH /api/v1/users/change-password
+ * PATCH or PUT /api/v1/users/change-password
  * Change password for current authenticated user
  */
-router.patch('/change-password', validate(changePasswordSchema), jwtGuard, controller.changeMyPassword);
+router.patch('/change-password', validate(changePasswordSchema), controller.changeMyPassword);
+router.put('/change-password', validate(changePasswordSchema), controller.changeMyPassword);
 
 /**
  * PATCH /api/v1/users/:id/reset-password
@@ -99,7 +116,7 @@ router.patch('/:id/reset-password', canManageUsers, controller.resetUserPassword
 router.patch(
   '/:id',
   validate(updateUserSchema),
-  canAccessUser,
+  canUpdateUser,
   controller.updateUser
 );
 

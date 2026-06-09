@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import path from 'path';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -10,21 +11,31 @@ import { validateEnv } from './utils/validateEnv';
 import authRouter from './modules/auth';
 import healthRouter from './modules/health';
 import mobileRouter from './modules/mobile';
+import studentRouter from './modules/student/routes/student.routes';
 import usersRouter from './modules/users';
 import subjectsRouter from './modules/subjects';
+import managerRouter from './modules/manager';
+import studyMaterialsRouter from './modules/study-materials';
+import batchesRouter from './modules/batches';
+import { qrRoutes } from './modules/qr';
+import { attendanceRoutes } from './modules/attendance';
+import examsRouter from './modules/exams';
+import teachersRouter from './modules/teachers';
 
 validateEnv();
 
 const app = express();
 
 // Secure security headers
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
 const corsOrigin = process.env.CORS_ORIGIN
   ? Array.from(new Set([
-      ...process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
-      'http://localhost:8081',
-    ]))
+    ...process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
+    'http://localhost:8081',
+  ]))
   : ['http://localhost:3000', 'http://localhost:8081'];
 
 const corsOptions = {
@@ -58,6 +69,9 @@ const authBasePaths = ['/api/v1/auth', '/api/auth'];
 app.use(['/api/v1/auth/login', '/api/auth/login', '/api/v1/mobile/auth/login'], authRateLimiter);
 app.use(['/api/v1/auth/register', '/api/auth/register'], authRateLimiter);
 
+// Serve static files from the uploads directory
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 app.get('/', (req, res) => {
   res.send('PyramidEdu Backend Running');
@@ -78,6 +92,22 @@ app.use('/api/v1/users', usersRouter);
 
 // Subjects routes
 app.use('/api/v1/subjects', subjectsRouter);
+
+// Student routes
+app.use('/api/v1/students', studentRouter);
+
+// Manager routes
+app.use('/api/v1/manager', managerRouter);
+app.use('/api/v1/study-materials', studyMaterialsRouter);
+app.use('/api/v1/batches', batchesRouter);
+app.use('/api/v1/qr', qrRoutes);
+app.use('/api/v1/attendance', attendanceRoutes);
+
+// Teachers routes
+app.use('/api/v1/teachers', teachersRouter);
+
+// Exams routes
+app.use('/api/v1/exams', examsRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);

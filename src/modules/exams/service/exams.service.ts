@@ -1,0 +1,213 @@
+import prisma from '../../../config/prisma.config';
+import { AppError } from '../../../utils/AppError';
+import { CreateExamDto } from '../dto/create-exam.dto';
+import { UpdateExamDto } from '../dto/update-exam.dto';
+import { CreateQuestionDto } from '../dto/create-question.dto';
+import { SubmitExamDto } from '../dto/submit-exam.dto';
+import { examAccessService } from './exam-access.service';
+import { gradingService } from './grading.service';
+
+export class ExamsService {
+  async createExam(teacherId: string, data: CreateExamDto) {
+    return await prisma.exam.create({
+      data: {
+        ...data,
+        teacherId,
+      },
+    });
+  }
+
+  async getExamsByTeacher(teacherId: string) {
+    return await prisma.exam.findMany({
+      where: { teacherId },
+      include: {
+        subject: { select: { subjectName: true, subjectCode: true } },
+        _count: { select: { questions: true, submissions: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getExamById(examId: string, teacherId?: string) {
+    const exam = await prisma.exam.findUnique({
+      where: { id: examId },
+      include: {
+        questions: {
+          orderBy: { order: 'asc' },
+        },
+        subject: { select: { subjectName: true, subjectCode: true } },
+      },
+    });
+
+    if (!exam) throw new AppError('Exam not found', 404);
+    if (teacherId && exam.teacherId !== teacherId) {
+      throw new AppError('Unauthorized access to exam', 403);
+    }
+
+    return exam;
+  }
+
+  async updateExam(examId: string, teacherId: string, data: UpdateExamDto) {
+    const exam = await this.getExamById(examId, teacherId);
+
+    if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+      throw new AppError('Cannot update exam after it has started', 400);
+    }
+
+    return await prisma.exam.update({
+      where: { id: examId },
+      data,
+    });
+  }
+
+  async deleteExam(examId: string, teacherId: string) {
+    const exam = await this.getExamById(examId, teacherId);
+
+    if (exam.startTime && new Date() >= exam.startTime) {
+      throw new AppError('Cannot delete exam after it has started', 400);
+    }
+
+    await prisma.exam.delete({
+      where: { id: examId },
+    });
+  }
+
+  async addQuestion(examId: string, teacherId: string, data: CreateQuestionDto) {
+    const exam = await this.getExamById(examId, teacherId);
+
+    if (exam.startTime && new Date() >= exam.startTime) {
+      throw new AppError('Cannot add questions after exam has started', 400);
+    }
+
+    return await prisma.question.create({
+      data: {
+        examId,
+        questionText: data.questionText,
+        questionType: data.questionType,
+        marks: data.marks,
+        options: data.options ? (data.options as any) : undefined,
+        correctAnswer: data.correctAnswer || undefined,
+        order: data.order,
+      },
+    });
+  }
+
+  async deleteQuestion(examId: string, questionId: string, teacherId: string) {
+    const exam = await this.getExamById(examId, teacherId);
+
+    if (exam.startTime && new Date() >= exam.startTime) {
+      throw new AppError('Cannot delete questions after exam has started', 400);
+    }
+
+    await prisma.question.delete({
+      where: { id: questionId },
+    });
+  }
+
+  async updateQuestion(examId: string, questionId: string, teacherId: string, data: Partial<CreateQuestionDto>) {
+    const exam = await this.getExamById(examId, teacherId);
+
+    if (exam.startTime && new Date() >= exam.startTime) {
+      throw new AppError('Cannot edit questions after exam has started', 400);
+    }
+
+    return await prisma.question.update({
+      where: { id: questionId },
+      data: {
+        questionText: data.questionText,
+        questionType: data.questionType,
+        marks: data.marks,
+        options: data.options ? (data.options as any) : undefined,
+        correctAnswer: data.correctAnswer || undefined,
+        order: data.order,
+      },
+    });
+  }
+
+  // STUDENT ENDPOINTS
+
+  async getQuestionsForStudent(examId: string, studentId: string) {
+    await examAccessService.validateStudentAccess(examId, studentId);
+
+    const exam = await prisma.exam.findUnique({
+      where: { id: examId },
+      include: {
+        questions: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    if (!exam) throw new AppError('Exam not found', 404);
+
+    // Strip correctAnswer before sending to student!
+    const secureQuestions = exam.questions.map((q) => {
+      const { correctAnswer, ...safeQuestion } = q;
+      return safeQuestion;
+    });
+
+    return secureQuestions;
+  }
+
+  async submitExam(examId: string, studentId: string, data: SubmitExamDto) {
+    await examAccessService.validateStudentAccess(examId, studentId);
+
+    const gradingResult = await gradingService.gradeSubmission(examId, studentId, data.answers);
+
+    // Create Submission, Answers, and Result in a transaction
+    return await prisma.$transaction(async (tx) => {
+      const submission = await tx.examSubmission.create({
+        data: {
+          examId,
+          studentId,
+          totalScore: gradingResult.totalScore,
+          status: gradingResult.status,
+          answers: {
+            createMany: {
+              data: gradingResult.answerRecords,
+            },
+          },
+        },
+      });
+
+      const exam = await tx.exam.findUnique({ where: { id: examId } });
+
+      await tx.result.create({
+        data: {
+          studentId,
+          subjectId: exam!.subjectId,
+          examId: exam!.id,
+          marks: gradingResult.percentage,
+          grade: gradingResult.gradeLetter,
+          feedback: `Auto-graded: ${gradingResult.totalScore}/${exam!.totalMarks} marks.`,
+        },
+      });
+
+      return submission;
+    });
+  }
+
+  async getStudentUpcomingExams(studentId: string) {
+    const enrollments = await prisma.enrollment.findMany({
+      where: { studentId, enrollmentStatus: 'ACTIVE' },
+      select: { subjectId: true },
+    });
+
+    const subjectIds = enrollments.map(e => e.subjectId);
+
+    return await prisma.exam.findMany({
+      where: {
+        subjectId: { in: subjectIds },
+        isPublished: true,
+        isApproved: true,
+        startTime: { gt: new Date() }, // Future exams
+      },
+      include: {
+        subject: { select: { subjectName: true } },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+  }
+}
+
+export const examsService = new ExamsService();
