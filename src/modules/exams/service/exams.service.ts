@@ -22,6 +22,8 @@ export class ExamsService {
       where: { teacherId },
       include: {
         subject: { select: { subjectName: true, subjectCode: true } },
+        batchRecord: { select: { batchName: true } },
+        term: { select: { name: true } },
         _count: { select: { questions: true, submissions: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -36,6 +38,9 @@ export class ExamsService {
           orderBy: { order: 'asc' },
         },
         subject: { select: { subjectName: true, subjectCode: true } },
+        batchRecord: { select: { batchName: true } },
+        term: { select: { name: true } },
+        _count: { select: { submissions: true } },
       },
     });
 
@@ -45,6 +50,27 @@ export class ExamsService {
     }
 
     return exam;
+  }
+
+  async getExamSubmissions(examId: string, teacherId: string) {
+    await this.getExamById(examId, teacherId);
+
+    return await prisma.examSubmission.findMany({
+      where: { examId },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                fullName: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
   }
 
   async updateExam(examId: string, teacherId: string, data: UpdateExamDto) {

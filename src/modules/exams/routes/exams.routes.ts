@@ -39,6 +39,12 @@ router.get(
   controller.getExamById
 );
 
+router.get(
+  '/:id/submissions',
+  roleGuard(Role.TEACHER, Role.ADMIN),
+  controller.getExamSubmissions
+);
+
 router.patch(
   '/:id',
   roleGuard(Role.TEACHER, Role.ADMIN),

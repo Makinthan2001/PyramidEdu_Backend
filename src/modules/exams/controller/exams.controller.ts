@@ -148,6 +148,18 @@ export async function updateQuestion(req: Request, res: Response, next: NextFunc
   }
 }
 
+export async function getExamSubmissions(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId as string;
+    const userRole = (req as any).userRole as string;
+    const teacherId = await resolveTeacherProfileId(userId, userRole);
+    const submissions = await examsService.getExamSubmissions(req.params.id as string, teacherId);
+    res.status(200).json({ success: true, data: submissions });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // STUDENT CONTROLLERS
 
 export async function getStudentQuestions(req: Request, res: Response, next: NextFunction) {
