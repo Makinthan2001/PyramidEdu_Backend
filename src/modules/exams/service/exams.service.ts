@@ -182,7 +182,20 @@ export class ExamsService {
   async submitExam(examId: string, studentId: string, data: SubmitExamDto) {
     await examAccessService.validateStudentAccess(examId, studentId);
 
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) throw new AppError('Exam not found', 404);
+
     const gradingResult = await gradingService.gradeSubmission(examId, studentId, data.answers);
+
+    // Calculate submissionStatus
+    const now = new Date();
+    let submissionStatus = 'SUBMITTED';
+    if (exam.startTime && exam.duration) {
+      const endTime = new Date(exam.startTime.getTime() + exam.duration * 60000);
+      if (now > endTime) {
+        submissionStatus = 'LATE_SUBMISSION';
+      }
+    }
 
     // Create Submission, Answers, and Result in a transaction
     return await prisma.$transaction(async (tx) => {
@@ -192,6 +205,7 @@ export class ExamsService {
           studentId,
           totalScore: gradingResult.totalScore,
           status: gradingResult.status,
+          submissionStatus,
           answers: {
             createMany: {
               data: gradingResult.answerRecords,
@@ -200,16 +214,14 @@ export class ExamsService {
         },
       });
 
-      const exam = await tx.exam.findUnique({ where: { id: examId } });
-
       await tx.result.create({
         data: {
           studentId,
-          subjectId: exam!.subjectId,
-          examId: exam!.id,
+          subjectId: exam.subjectId,
+          examId: exam.id,
           marks: gradingResult.percentage,
           grade: gradingResult.gradeLetter,
-          feedback: `Auto-graded: ${gradingResult.totalScore}/${exam!.totalMarks} marks.`,
+          feedback: `Auto-graded: ${gradingResult.totalScore}/${exam.totalMarks} marks.`,
         },
       });
 

@@ -676,6 +676,7 @@ model ExamSubmission {
   submittedAt DateTime @default(now()) @map("submitted_at")
   totalScore  Decimal? @map("total_score") @db.Decimal(6, 2)
   status      String   @default("GRADED") // GRADED, PENDING_MANUAL
+  submissionStatus String @default("SUBMITTED") @map("submission_status") // SUBMITTED, LATE_SUBMISSION
 
   exam    Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
   student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
