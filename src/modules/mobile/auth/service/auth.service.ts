@@ -18,6 +18,7 @@ export interface MobileStudentSession {
   id: string;
   email: string;
   fullName: string;
+  profileImage: string | null;
   role: Role; // runtime value set as 'STUDENT'
   isActive: boolean;
   forcePwdChange: boolean;
@@ -28,6 +29,17 @@ export interface MobileStudentSession {
     phone: string | null;
     address: string | null;
     dateOfBirth: string | null;
+    gender: string | null;
+    school: string | null;
+    batch: string | null;
+    nic: string | null;
+    rewardPoints: number;
+    attendancePercentage: number;
+    performanceStatus: string | null;
+    trendStatus: string | null;
+    approvalStatus: string;
+    paymentStatus: string;
+    totalFeeAmount: number;
   };
 }
 
@@ -45,6 +57,7 @@ function toStudentSession(user: StudentAuthRecord): MobileStudentSession {
     id: user.id,
     email: user.email,
     fullName: user.fullName,
+    profileImage: user.profileImage ?? null,
     role: Role.STUDENT,
     isActive: user.isActive,
     forcePwdChange: user.forcePwdChange,
@@ -55,6 +68,17 @@ function toStudentSession(user: StudentAuthRecord): MobileStudentSession {
       phone: user.student.phone ?? null,
       address: user.student.address ?? null,
       dateOfBirth: user.student.dateOfBirth ? user.student.dateOfBirth.toISOString().slice(0, 10) : null,
+      gender: user.student.gender ?? null,
+      school: user.student.school ?? null,
+      batch: user.student.batch ?? null,
+      nic: user.student.nic ?? null,
+      rewardPoints: user.student.rewardPoints,
+      attendancePercentage: Number(user.student.attendancePercentage),
+      performanceStatus: user.student.performanceStatus ?? null,
+      trendStatus: user.student.trendStatus ?? null,
+      approvalStatus: user.student.approvalStatus,
+      paymentStatus: user.student.paymentStatus,
+      totalFeeAmount: Number(user.student.totalFeeAmount),
     },
   };
 }

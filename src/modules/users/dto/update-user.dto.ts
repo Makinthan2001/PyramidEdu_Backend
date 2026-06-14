@@ -31,6 +31,9 @@ export const updateUserSchema = z.object({
   
   // Salary
   salary: z.number().positive('Salary must be positive').optional(),
+  
+  // Profile Image URL
+  profileImage: z.string().url('Invalid URL format').or(z.string().min(1)).optional(),
 });
 
 export type UpdateUserDto = z.infer<typeof updateUserSchema>;

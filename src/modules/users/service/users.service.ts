@@ -511,6 +511,7 @@ export class UsersService {
       updateData.fullName = `${existingFirstName} ${existingLastName}`.trim();
     }
     if (dto.phoneNumber) updateData.phone = dto.phoneNumber;
+    if (dto.profileImage !== undefined) updateData.profileImage = dto.profileImage;
 
     if (Object.keys(updateData).length > 0) {
       await prisma.user.update({
