@@ -31,7 +31,7 @@ export function uploadProfileImageToCloudinary(
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder: options.folder || 'profiles',
+        folder: options.folder || 'pyramidEdu/profiles',
         public_id: options.publicId,
         resource_type: 'image',
       },
