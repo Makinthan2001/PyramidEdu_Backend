@@ -63,3 +63,32 @@ export async function deleteCloudinaryImage(publicId: string): Promise<any> {
     // Best-effort deletion, do not block/fail the process
   }
 }
+
+export function uploadToCloudinary(
+  fileBuffer: Buffer,
+  options: { folder?: string; publicId?: string; resourceType?: 'image' | 'raw' | 'video' | 'auto' } = {}
+): Promise<{ secure_url: string; public_id: string }> {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: options.folder,
+        public_id: options.publicId,
+        resource_type: options.resourceType || 'auto',
+      },
+      (error, result) => {
+        if (error) {
+          return reject(error);
+        }
+        if (!result) {
+          return reject(new Error('Cloudinary upload returned empty result'));
+        }
+        resolve({
+          secure_url: result.secure_url,
+          public_id: result.public_id,
+        });
+      }
+    );
+
+    uploadStream.end(fileBuffer);
+  });
+}
