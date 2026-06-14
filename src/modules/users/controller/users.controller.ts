@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import UsersService from '../service/users.service';
 import type { CreateUserDto, UpdateUserDto } from '../dto';
 import type { ChangePasswordDto } from '../dto/change-password.dto';
+import { uploadProfileImageToCloudinary } from '../../../utils/cloudinary.util';
 
 /**
  * Users Controller - Handles user account operations
@@ -289,7 +290,11 @@ export async function uploadProfileImage(req: Request, res: Response, next: Next
     }
 
     const role = (req as any).userRole?.toLowerCase() || 'misc';
-    const imageUrl = `/uploads/profile/${role}/${req.file.filename}`;
+    const folder = `profiles/${role}`;
+
+    // Upload image to Cloudinary
+    const uploadResult = await uploadProfileImageToCloudinary(req.file.buffer, { folder });
+    const imageUrl = uploadResult.secure_url;
 
     const updatedUser = await UsersService.updateProfileImage(userId, imageUrl);
 
