@@ -21,6 +21,7 @@ import { qrRoutes } from './modules/qr';
 import { attendanceRoutes } from './modules/attendance';
 import examsRouter from './modules/exams';
 import teachersRouter from './modules/teachers';
+import supportStaffRouter from './modules/support-staff';
 
 validateEnv();
 
@@ -105,6 +106,9 @@ app.use('/api/v1/attendance', attendanceRoutes);
 
 // Teachers routes
 app.use('/api/v1/teachers', teachersRouter);
+
+// Support Staff routes
+app.use('/api/v1/support-staff', supportStaffRouter);
 
 // Exams routes
 app.use('/api/v1/exams', examsRouter);
