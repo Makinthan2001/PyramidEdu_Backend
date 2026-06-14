@@ -289,8 +289,17 @@ export async function uploadProfileImage(req: Request, res: Response, next: Next
       });
     }
 
-    const role = (req as any).userRole?.toLowerCase() || 'misc';
-    const folder = `profiles/${role}`;
+    const userRole = (req as any).userRole;
+    let roleFolder = 'misc';
+    if (userRole) {
+      const lowerRole = userRole.toLowerCase();
+      if (lowerRole === 'student') {
+        roleFolder = 'students';
+      } else {
+        roleFolder = lowerRole;
+      }
+    }
+    const folder = `pyramidEdu/profiles/${roleFolder}`;
 
     // Upload image to Cloudinary
     const uploadResult = await uploadProfileImageToCloudinary(req.file.buffer, { folder });
