@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { generateRAGAnswer } from '../../../utils/rag.util';
+import { routeQuery } from '../../../utils/aiRouter.util';
 import prisma from '../../../config/prisma.config';
 import { AppError } from '../../../utils/AppError';
 
@@ -68,8 +69,8 @@ export const askQuestion = async (
     if (subjectId) filters.subjectId = subjectId;
     if (batchId) filters.batchId = batchId;
 
-    // 3 & 4. Send message to RAG/Gemini pipeline & Receive AI response
-    const answer = await generateRAGAnswer(question, filters);
+    // 3 & 4. Send message to AI Router pipeline & Receive response
+    const answer = await routeQuery(question, filters);
 
     // 6. Insert AI response into database
     const aiMsg = await prisma.chatMessage.create({
