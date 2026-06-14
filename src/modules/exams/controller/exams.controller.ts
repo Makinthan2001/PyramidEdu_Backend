@@ -192,17 +192,9 @@ export async function getMyUpcomingExams(req: Request, res: Response, next: Next
   }
 }
 
-import { createClient } from '@supabase/supabase-js';
+import { uploadToCloudinary } from '../../../utils/cloudinary.util';
 
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SECRET_KEY || '',
-  {
-    auth: { persistSession: false }
-  }
-);
-
-export async function uploadFileToSupabase(req: Request, res: Response, next: NextFunction) {
+export async function uploadFileToCloudinary(req: Request, res: Response, next: NextFunction) {
   try {
     const file = req.file;
     const bucket = req.body.bucket;
@@ -214,46 +206,44 @@ export async function uploadFileToSupabase(req: Request, res: Response, next: Ne
       throw new AppError('Bucket name is required', 400);
     }
 
+    let folder = '';
+    let resourceType: 'image' | 'raw' | 'video' | 'auto' = 'auto';
+
     // Server-side validation
     if (bucket === 'question-images' || bucket === 'profile-images') {
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
         throw new AppError('Invalid image format. Allowed formats: JPEG, PNG, WEBP.', 400);
       }
-      if (file.size > 3 * 1024 * 1024) {
-        throw new AppError('Image size cannot exceed 3MB.', 400);
+      if (file.size > 7 * 1024 * 1024) {
+        throw new AppError('Image size cannot exceed 7MB.', 400);
       }
+      folder = process.env.CLOUDINARY_QUESTION_FOLDER || 'pyramidEdu/question-images';
+      resourceType = 'image';
     } else if (bucket === 'essay-pdfs') {
       if (file.mimetype !== 'application/pdf') {
         throw new AppError('Invalid document format. Only PDF is allowed.', 400);
       }
-      if (file.size > 5 * 1024 * 1024) {
-        throw new AppError('PDF size cannot exceed 5MB.', 400);
+      if (file.size > 20 * 1024 * 1024) {
+        throw new AppError('PDF size cannot exceed 20MB.', 400);
       }
+      folder = process.env.CLOUDINARY_ESSAY_FOLDER || 'pyramidEdu/essay-pdfs';
+      resourceType = 'auto';
     } else {
       throw new AppError('Invalid bucket specified', 400);
     }
 
-    const fileExt = file.originalname.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-    const filePath = bucket === 'essay-pdfs' ? `essays/${fileName}` : `questions/${fileName}`;
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-    const { data, error } = await supabaseAdmin.storage
-      .from(bucket)
-      .upload(filePath, file.buffer, {
-        contentType: file.mimetype,
-        upsert: false
-      });
-
-    if (error) throw error;
-
-    const { data: { publicUrl } } = supabaseAdmin.storage
-      .from(bucket)
-      .getPublicUrl(filePath);
+    const uploadResult = await uploadToCloudinary(file.buffer, {
+      folder,
+      publicId: fileName,
+      resourceType,
+    });
 
     res.status(200).json({
       success: true,
       message: 'File uploaded successfully',
-      url: publicUrl
+      url: uploadResult.secure_url
     });
   } catch (error) {
     next(error);

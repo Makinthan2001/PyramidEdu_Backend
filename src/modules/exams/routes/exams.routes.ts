@@ -18,7 +18,10 @@ router.get('/:id/questions', roleGuard(Role.STUDENT), controller.getStudentQuest
 router.post('/:id/submit', roleGuard(Role.STUDENT), validate(validators.submitExamSchema), controller.submitExam);
 
 import multer from 'multer';
-const uploadInMemory = multer({ storage: multer.memoryStorage() });
+const uploadInMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
+});
 
 // ----------------------------------------------------
 // TEACHER / ADMIN ROUTES
@@ -27,7 +30,7 @@ router.post(
   '/upload-file',
   roleGuard(Role.TEACHER, Role.ADMIN),
   uploadInMemory.single('file'),
-  controller.uploadFileToSupabase
+  controller.uploadFileToCloudinary
 );
 
 router.post(
