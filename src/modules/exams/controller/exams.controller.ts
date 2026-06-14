@@ -148,6 +148,18 @@ export async function updateQuestion(req: Request, res: Response, next: NextFunc
   }
 }
 
+export async function getExamSubmissions(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId as string;
+    const userRole = (req as any).userRole as string;
+    const teacherId = await resolveTeacherProfileId(userId, userRole);
+    const submissions = await examsService.getExamSubmissions(req.params.id as string, teacherId);
+    res.status(200).json({ success: true, data: submissions });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // STUDENT CONTROLLERS
 
 export async function getStudentQuestions(req: Request, res: Response, next: NextFunction) {
@@ -175,6 +187,74 @@ export async function getMyUpcomingExams(req: Request, res: Response, next: Next
     const actualStudentId = (req as any).studentId as string || (req as any).userId as string;
     const exams = await examsService.getStudentUpcomingExams(actualStudentId);
     res.status(200).json({ success: true, data: exams });
+  } catch (error) {
+    next(error);
+  }
+}
+
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_SECRET_KEY || '',
+  {
+    auth: { persistSession: false }
+  }
+);
+
+export async function uploadFileToSupabase(req: Request, res: Response, next: NextFunction) {
+  try {
+    const file = req.file;
+    const bucket = req.body.bucket;
+
+    if (!file) {
+      throw new AppError('No file uploaded', 400);
+    }
+    if (!bucket) {
+      throw new AppError('Bucket name is required', 400);
+    }
+
+    // Server-side validation
+    if (bucket === 'question-images' || bucket === 'profile-images') {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+        throw new AppError('Invalid image format. Allowed formats: JPEG, PNG, WEBP.', 400);
+      }
+      if (file.size > 3 * 1024 * 1024) {
+        throw new AppError('Image size cannot exceed 3MB.', 400);
+      }
+    } else if (bucket === 'essay-pdfs') {
+      if (file.mimetype !== 'application/pdf') {
+        throw new AppError('Invalid document format. Only PDF is allowed.', 400);
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        throw new AppError('PDF size cannot exceed 5MB.', 400);
+      }
+    } else {
+      throw new AppError('Invalid bucket specified', 400);
+    }
+
+    const fileExt = file.originalname.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+    const filePath = bucket === 'essay-pdfs' ? `essays/${fileName}` : `questions/${fileName}`;
+
+    const { data, error } = await supabaseAdmin.storage
+      .from(bucket)
+      .upload(filePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false
+      });
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = supabaseAdmin.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+    res.status(200).json({
+      success: true,
+      message: 'File uploaded successfully',
+      url: publicUrl
+    });
   } catch (error) {
     next(error);
   }

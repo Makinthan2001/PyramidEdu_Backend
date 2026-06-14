@@ -83,17 +83,13 @@ enum FeeStatus {
 }
 
 enum ExamType {
-  MIDTERM
-  FINAL
-  QUIZ
-  ASSIGNMENT
-  MOCK
+  MCQ
+  ESSAY
 }
 
 enum QuestionType {
-  MCQ
-  TRUE_FALSE
-  SHORT_ANSWER
+  TEXT
+  IMAGE
 }
 
 enum PerformanceLevel {
@@ -611,13 +607,13 @@ model Exam {
   teacherId   String    @map("teacher_id")
   termId      String?   @map("term_id")
   examTitle   String    @map("exam_title")
-  examType    ExamType  @default(MIDTERM) @map("exam_type")
+  examType    ExamType  @default(MCQ) @map("exam_type")
   examDate    DateTime  @map("exam_date")
   totalMarks  Int       @default(100) @map("total_marks")
   isPublished Boolean   @default(false) @map("is_published")
-  isApproved  Boolean   @default(false) @map("is_approved")
   startTime   DateTime? @map("start_time")
   duration    Int? // minutes
+  pdfUrl      String?   @map("pdf_url") @db.Text
   batch       String?
   batchId     String?   @map("batch_id")
   deletedAt   DateTime? @map("deleted_at")
@@ -656,11 +652,13 @@ model ExamSchedule {
 model Question {
   id            String       @id @default(uuid())
   examId        String       @map("exam_id")
-  questionText  String       @map("question_text") @db.Text
+  questionText  String?      @map("question_text") @db.Text
+  imageUrl      String?      @map("image_url") @db.Text
   questionType  QuestionType @map("question_type")
   marks         Int          @default(1)
   options       Json? // Stores array: [{ id: "opt1", text: "A" }, ...]
   correctAnswer String?      @map("correct_answer") // Securely stores the correct optionId (e.g. "opt2")
+  explanation   String?      @db.Text
   order         Int          @default(0)
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
@@ -678,6 +676,7 @@ model ExamSubmission {
   submittedAt DateTime @default(now()) @map("submitted_at")
   totalScore  Decimal? @map("total_score") @db.Decimal(6, 2)
   status      String   @default("GRADED") // GRADED, PENDING_MANUAL
+  submissionStatus String @default("SUBMITTED") @map("submission_status") // SUBMITTED, LATE_SUBMISSION
 
   exam    Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
   student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)

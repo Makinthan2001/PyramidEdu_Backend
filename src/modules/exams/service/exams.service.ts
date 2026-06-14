@@ -22,6 +22,8 @@ export class ExamsService {
       where: { teacherId },
       include: {
         subject: { select: { subjectName: true, subjectCode: true } },
+        batchRecord: { select: { batchName: true } },
+        term: { select: { name: true } },
         _count: { select: { questions: true, submissions: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -36,6 +38,9 @@ export class ExamsService {
           orderBy: { order: 'asc' },
         },
         subject: { select: { subjectName: true, subjectCode: true } },
+        batchRecord: { select: { batchName: true } },
+        term: { select: { name: true } },
+        _count: { select: { submissions: true } },
       },
     });
 
@@ -47,12 +52,33 @@ export class ExamsService {
     return exam;
   }
 
+  async getExamSubmissions(examId: string, teacherId: string) {
+    await this.getExamById(examId, teacherId);
+
+    return await prisma.examSubmission.findMany({
+      where: { examId },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                fullName: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+  }
+
   async updateExam(examId: string, teacherId: string, data: UpdateExamDto) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot update exam after it has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot update exam after it has started', 400);
+    // }
 
     return await prisma.exam.update({
       where: { id: examId },
@@ -63,9 +89,9 @@ export class ExamsService {
   async deleteExam(examId: string, teacherId: string) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot delete exam after it has started', 400);
-    }
+    // if (exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot delete exam after it has started', 400);
+    // }
 
     await prisma.exam.delete({
       where: { id: examId },
@@ -75,18 +101,20 @@ export class ExamsService {
   async addQuestion(examId: string, teacherId: string, data: CreateQuestionDto) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot add questions after exam has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot add questions after exam has started', 400);
+    // }
 
     return await prisma.question.create({
       data: {
         examId,
-        questionText: data.questionText,
+        questionText: data.questionText || null,
+        imageUrl: data.imageUrl || null,
         questionType: data.questionType,
         marks: data.marks,
         options: data.options ? (data.options as any) : undefined,
         correctAnswer: data.correctAnswer || undefined,
+        explanation: data.explanation || null,
         order: data.order,
       },
     });
@@ -95,9 +123,9 @@ export class ExamsService {
   async deleteQuestion(examId: string, questionId: string, teacherId: string) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot delete questions after exam has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot delete questions after exam has started', 400);
+    // }
 
     await prisma.question.delete({
       where: { id: questionId },
@@ -107,18 +135,20 @@ export class ExamsService {
   async updateQuestion(examId: string, questionId: string, teacherId: string, data: Partial<CreateQuestionDto>) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot edit questions after exam has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot edit questions after exam has started', 400);
+    // }
 
     return await prisma.question.update({
       where: { id: questionId },
       data: {
-        questionText: data.questionText,
+        questionText: data.questionText !== undefined ? data.questionText : undefined,
+        imageUrl: data.imageUrl !== undefined ? data.imageUrl : undefined,
         questionType: data.questionType,
         marks: data.marks,
         options: data.options ? (data.options as any) : undefined,
         correctAnswer: data.correctAnswer || undefined,
+        explanation: data.explanation !== undefined ? data.explanation : undefined,
         order: data.order,
       },
     });
@@ -152,7 +182,20 @@ export class ExamsService {
   async submitExam(examId: string, studentId: string, data: SubmitExamDto) {
     await examAccessService.validateStudentAccess(examId, studentId);
 
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) throw new AppError('Exam not found', 404);
+
     const gradingResult = await gradingService.gradeSubmission(examId, studentId, data.answers);
+
+    // Calculate submissionStatus
+    const now = new Date();
+    let submissionStatus = 'SUBMITTED';
+    if (exam.startTime && exam.duration) {
+      const endTime = new Date(exam.startTime.getTime() + exam.duration * 60000);
+      if (now > endTime) {
+        submissionStatus = 'LATE_SUBMISSION';
+      }
+    }
 
     // Create Submission, Answers, and Result in a transaction
     return await prisma.$transaction(async (tx) => {
@@ -162,6 +205,7 @@ export class ExamsService {
           studentId,
           totalScore: gradingResult.totalScore,
           status: gradingResult.status,
+          submissionStatus,
           answers: {
             createMany: {
               data: gradingResult.answerRecords,
@@ -170,16 +214,14 @@ export class ExamsService {
         },
       });
 
-      const exam = await tx.exam.findUnique({ where: { id: examId } });
-
       await tx.result.create({
         data: {
           studentId,
-          subjectId: exam!.subjectId,
-          examId: exam!.id,
+          subjectId: exam.subjectId,
+          examId: exam.id,
           marks: gradingResult.percentage,
           grade: gradingResult.gradeLetter,
-          feedback: `Auto-graded: ${gradingResult.totalScore}/${exam!.totalMarks} marks.`,
+          feedback: `Auto-graded: ${gradingResult.totalScore}/${exam.totalMarks} marks.`,
         },
       });
 
@@ -199,7 +241,6 @@ export class ExamsService {
       where: {
         subjectId: { in: subjectIds },
         isPublished: true,
-        isApproved: true,
         startTime: { gt: new Date() }, // Future exams
       },
       include: {

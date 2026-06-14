@@ -17,7 +17,7 @@ export class ExamAccessService {
       throw new AppError('Exam not found', 404);
     }
 
-    if (!exam.isPublished || !exam.isApproved) {
+    if (!exam.isPublished) {
       throw new AppError('Exam is not currently available', 403);
     }
 
@@ -28,12 +28,12 @@ export class ExamAccessService {
       throw new AppError('Exam has not started yet', 403);
     }
 
-    if (exam.startTime && exam.duration) {
-      const endTime = new Date(exam.startTime.getTime() + exam.duration * 60000);
-      if (now > endTime) {
-        throw new AppError('Exam has already ended', 403);
-      }
-    }
+    // if (exam.startTime && exam.duration) {
+    //   const endTime = new Date(exam.startTime.getTime() + exam.duration * 60000);
+    //   if (now > endTime) {
+    //     throw new AppError('Exam has already ended', 403);
+    //   }
+    // }
 
     // Enrollment validation
     const enrollment = await prisma.enrollment.findFirst({
