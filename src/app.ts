@@ -23,6 +23,7 @@ import { attendanceRoutes } from './modules/attendance';
 import examsRouter from './modules/exams';
 import teachersRouter from './modules/teachers';
 import supportStaffRouter from './modules/support-staff';
+import { chatRouter } from './modules/chat';
 
 validateEnv();
 configureCloudinary();
@@ -114,6 +115,9 @@ app.use('/api/v1/support-staff', supportStaffRouter);
 
 // Exams routes
 app.use('/api/v1/exams', examsRouter);
+
+// Chat routes
+app.use('/api/v1/chat', chatRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);

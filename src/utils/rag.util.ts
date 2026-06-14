@@ -169,8 +169,7 @@ export async function querySimilarChunks(
 
   const results = await prisma.$queryRawUnsafe<SimilarChunk[]>(query, ...params);
 
-  // Return chunks with meaningful similarity score (> 0.4)
-  return (results || []).filter((r) => r.similarity > 0.4);
+  return results || [];
 }
 
 /**
@@ -180,30 +179,63 @@ export async function generateRAGAnswer(
   question: string,
   filters: { subjectId?: string; batchId?: string } = {}
 ): Promise<string> {
-  const qEmbedding = await generateEmbedding(question);
-  const chunks = await querySimilarChunks(qEmbedding, filters);
+  const SIMILARITY_THRESHOLD = 0.5;
 
-  if (chunks.length === 0) {
-    return 'Not available in study materials.';
+  console.log(`\n--- Chatbot Processing ---`);
+  console.log(`Question: "${question}"`);
+
+  // 1 & 2. Process Question and Generate Embedding
+  const qEmbedding = await generateEmbedding(question);
+  
+  // 3. Vector Similarity Search
+  const allChunks = await querySimilarChunks(qEmbedding, filters);
+  
+  // 4. Relevance Evaluation
+  const relevantChunks = allChunks.filter(c => c.similarity >= SIMILARITY_THRESHOLD);
+
+  console.log(`Total chunks retrieved: ${allChunks.length}`);
+  if (allChunks.length > 0) {
+    console.log(`Similarity Scores: ${allChunks.map(c => c.similarity.toFixed(3)).join(', ')}`);
   }
 
-  const context = chunks
-    .map((c) => `[Source: ${c.title}]\n${c.chunk_text}`)
-    .join('\n\n---\n\n');
+  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+  let prompt = '';
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-  const prompt = `You are PyramidEdu's academic assistant.
-Answer the STUDENT QUESTION ONLY using the CONTEXT FROM NOTES below, which are uploaded by their teacher.
-If the answer is not in the context, say exactly: 'Not available in study materials.'
-Do not add information or assume facts beyond what is provided in the context.
+  if (relevantChunks.length > 0) {
+    // 5. RAG Prompt Construction
+    console.log(`Status: Valid chunks found. Activating RAG Mode.`);
+    
+    const context = relevantChunks
+      .map((c) => `[Source: ${c.title}]\n${c.chunk_text}`)
+      .join('\n\n---\n\n');
+
+    prompt = `You are PyramidEdu's educational AI assistant.
+Your task is to answer the STUDENT QUESTION using the provided CONTEXT FROM NOTES.
+If the answer is present in the context, you must prioritize the notes over your general knowledge.
+If the context contains the answer, start your response with a phrase like "Based on the uploaded study materials," or "According to the notes,".
+Keep explanations educational and student-friendly.
 
 CONTEXT FROM NOTES:
 ${context}
 
 STUDENT QUESTION: ${question}
 ANSWER:`;
+  } else {
+    // General Mode Fallback
+    console.log(`Status: No relevant chunks met the threshold (${SIMILARITY_THRESHOLD}). Activating General AI Mode.`);
+    
+    prompt = `You are PyramidEdu's helpful educational AI assistant.
+Answer the STUDENT QUESTION using your general knowledge. Behave as a helpful and friendly assistant.
+Support casual conversations, language requests, coding questions, and general educational queries.
 
+STUDENT QUESTION: ${question}
+ANSWER:`;
+  }
+
+  // 6 & 7. Gemini Answer Generation
   const result = await model.generateContent(prompt);
+  console.log(`--- End Processing ---\n`);
+  
   return result.response.text();
 }
 
