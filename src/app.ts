@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import errorHandler from './middleware/errorHandler';
 import { validateEnv } from './utils/validateEnv';
+import { configureCloudinary } from './utils/cloudinary.util';
 import authRouter from './modules/auth';
 import healthRouter from './modules/health';
 import mobileRouter from './modules/mobile';
@@ -24,6 +25,7 @@ import teachersRouter from './modules/teachers';
 import supportStaffRouter from './modules/support-staff';
 
 validateEnv();
+configureCloudinary();
 
 const app = express();
 

@@ -5,6 +5,7 @@ import { AppError } from '../../../utils/AppError';
 import type { UpdateUserDto } from '../dto';
 import fs from 'fs/promises';
 import path from 'path';
+import { deleteCloudinaryImage } from '../../../utils/cloudinary.util';
 
 export interface UsersQueryParams {
   page?: number;
@@ -721,13 +722,33 @@ export class UsersService {
     }
 
     // If there is an old profile image, try to delete it to save space
-    if (user.profileImage && user.profileImage.startsWith('/uploads/profile/')) {
-      try {
-        const oldImagePath = path.join(__dirname, '../../../../', user.profileImage);
-        await fs.unlink(oldImagePath);
-      } catch (err) {
-        console.error(`Failed to delete old profile image: ${user.profileImage}`, err);
-        // Continue even if delete fails
+    if (user.profileImage) {
+      if (user.profileImage.startsWith('/uploads/profile/')) {
+        try {
+          const oldImagePath = path.join(__dirname, '../../../../', user.profileImage);
+          await fs.unlink(oldImagePath);
+        } catch (err) {
+          console.error(`Failed to delete old local profile image: ${user.profileImage}`, err);
+          // Continue even if delete fails
+        }
+      } else if (user.profileImage.includes('res.cloudinary.com')) {
+        try {
+          const parts = user.profileImage.split('/upload/');
+          if (parts.length > 1) {
+            const pathAfterUpload = parts[1];
+            const pathParts = pathAfterUpload.split('/');
+            if (pathParts[0].startsWith('v') && /^\d+$/.test(pathParts[0].slice(1))) {
+              pathParts.shift();
+            }
+            const fullPathWithExt = pathParts.join('/');
+            const dotIdx = fullPathWithExt.lastIndexOf('.');
+            const publicId = dotIdx !== -1 ? fullPathWithExt.substring(0, dotIdx) : fullPathWithExt;
+            
+            await deleteCloudinaryImage(publicId);
+          }
+        } catch (err) {
+          console.error(`Failed to delete old Cloudinary image: ${user.profileImage}`, err);
+        }
       }
     }
 
