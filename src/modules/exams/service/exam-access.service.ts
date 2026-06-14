@@ -17,7 +17,7 @@ export class ExamAccessService {
       throw new AppError('Exam not found', 404);
     }
 
-    if (!exam.isPublished || !exam.isApproved) {
+    if (!exam.isPublished) {
       throw new AppError('Exam is not currently available', 403);
     }
 

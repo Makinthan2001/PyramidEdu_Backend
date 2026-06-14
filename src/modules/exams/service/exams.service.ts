@@ -76,9 +76,9 @@ export class ExamsService {
   async updateExam(examId: string, teacherId: string, data: UpdateExamDto) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot update exam after it has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot update exam after it has started', 400);
+    // }
 
     return await prisma.exam.update({
       where: { id: examId },
@@ -89,9 +89,9 @@ export class ExamsService {
   async deleteExam(examId: string, teacherId: string) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot delete exam after it has started', 400);
-    }
+    // if (exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot delete exam after it has started', 400);
+    // }
 
     await prisma.exam.delete({
       where: { id: examId },
@@ -101,18 +101,20 @@ export class ExamsService {
   async addQuestion(examId: string, teacherId: string, data: CreateQuestionDto) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot add questions after exam has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot add questions after exam has started', 400);
+    // }
 
     return await prisma.question.create({
       data: {
         examId,
-        questionText: data.questionText,
+        questionText: data.questionText || null,
+        imageUrl: data.imageUrl || null,
         questionType: data.questionType,
         marks: data.marks,
         options: data.options ? (data.options as any) : undefined,
         correctAnswer: data.correctAnswer || undefined,
+        explanation: data.explanation || null,
         order: data.order,
       },
     });
@@ -121,9 +123,9 @@ export class ExamsService {
   async deleteQuestion(examId: string, questionId: string, teacherId: string) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot delete questions after exam has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot delete questions after exam has started', 400);
+    // }
 
     await prisma.question.delete({
       where: { id: questionId },
@@ -133,18 +135,20 @@ export class ExamsService {
   async updateQuestion(examId: string, questionId: string, teacherId: string, data: Partial<CreateQuestionDto>) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot edit questions after exam has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot edit questions after exam has started', 400);
+    // }
 
     return await prisma.question.update({
       where: { id: questionId },
       data: {
-        questionText: data.questionText,
+        questionText: data.questionText !== undefined ? data.questionText : undefined,
+        imageUrl: data.imageUrl !== undefined ? data.imageUrl : undefined,
         questionType: data.questionType,
         marks: data.marks,
         options: data.options ? (data.options as any) : undefined,
         correctAnswer: data.correctAnswer || undefined,
+        explanation: data.explanation !== undefined ? data.explanation : undefined,
         order: data.order,
       },
     });
@@ -225,7 +229,6 @@ export class ExamsService {
       where: {
         subjectId: { in: subjectIds },
         isPublished: true,
-        isApproved: true,
         startTime: { gt: new Date() }, // Future exams
       },
       include: {

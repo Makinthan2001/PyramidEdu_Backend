@@ -28,22 +28,18 @@ export class GradingService {
       let isCorrect = false;
       let marksAwarded = 0;
 
-      if (question.questionType === QuestionType.MCQ || question.questionType === QuestionType.TRUE_FALSE) {
+      if (question.questionType === QuestionType.TEXT || question.questionType === QuestionType.IMAGE) {
         if (studentAnswer === question.correctAnswer) {
           isCorrect = true;
           marksAwarded = question.marks;
         }
         totalScore += marksAwarded;
-      } else if (question.questionType === QuestionType.SHORT_ANSWER) {
-        hasManualGrading = true;
-        isCorrect = false; // Requires teacher manual review
-        marksAwarded = 0;
       }
 
       answerRecords.push({
         questionId: question.id,
         answer: studentAnswer,
-        isCorrect: question.questionType === QuestionType.SHORT_ANSWER ? null : isCorrect,
+        isCorrect,
         marksAwarded,
       });
     }
