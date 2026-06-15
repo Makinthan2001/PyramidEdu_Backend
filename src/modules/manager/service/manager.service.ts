@@ -1,6 +1,7 @@
 import prisma from '../../../config/prisma.config';
 import { AppError } from '../../../utils/AppError';
 import { ApprovalStatus, RegistrationPaymentStatus, Role } from '@prisma/client';
+import { notificationService } from '../../notification/service/notification.service';
 
 export class ManagerService {
   /**
@@ -139,8 +140,9 @@ export class ManagerService {
     const student = await prisma.student.findUnique({ where: { id } });
     if (!student) throw new AppError('Student not found.', 404);
 
+    let resultStudent;
     if (paymentStatus === 'PAID' && student.paymentStatus !== 'PAID') {
-      return prisma.$transaction(async (tx) => {
+      resultStudent = await prisma.$transaction(async (tx) => {
         const updatedStudent = await tx.student.update({
           where: { id },
           data: { paymentStatus },
@@ -186,12 +188,42 @@ export class ManagerService {
 
         return updatedStudent;
       });
+    } else {
+      resultStudent = await prisma.student.update({
+        where: { id },
+        data: { paymentStatus },
+      });
     }
 
-    return prisma.student.update({
-      where: { id },
-      data: { paymentStatus },
-    });
+    // Notify student about payment status change
+    try {
+      const studentDetails = await prisma.student.findUnique({
+        where: { id },
+        include: { user: true }
+      });
+      if (studentDetails) {
+        let title = 'Payment Status Updated';
+        let message = `Your registration payment status has been updated to ${paymentStatus}.`;
+        if (paymentStatus === 'PAID') {
+          title = 'Payment Approved';
+          message = `Your registration fee payment of LKR ${studentDetails.totalFeeAmount} has been approved.`;
+        }
+        
+        await notificationService.createNotification({
+          senderId: null,
+          receiverId: studentDetails.userId,
+          title,
+          message,
+          type: 'PAYMENT',
+          referenceType: 'PAYMENT',
+          referenceId: id,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to send payment notification to student:', err);
+    }
+
+    return resultStudent;
   }
 
   /**
@@ -246,7 +278,7 @@ export class ManagerService {
     });
     if (!student) throw new AppError('Student not found.', 404);
 
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Update User
       if (data.fullName || data.phone || data.email) {
         await tx.user.update({
@@ -327,6 +359,37 @@ export class ManagerService {
 
       return { success: true };
     });
+
+    // Notify Teachers about student assignment
+    try {
+      const enrollments = await prisma.enrollment.findMany({
+        where: { studentId: id, enrollmentStatus: 'ACTIVE' },
+        include: { teacher: true, student: { include: { user: true } } }
+      });
+      
+      for (const enrollment of enrollments) {
+        const teacher = enrollment.teacher;
+        if (teacher) {
+          const teacherUserId = teacher.userId;
+          const studentName = enrollment.student.user.fullName;
+          const batchName = enrollment.student.batch || 'Class';
+          
+          await notificationService.createNotification({
+            senderId: enrollment.student.userId,
+            receiverId: teacherUserId,
+            title: 'New Student Assigned',
+            message: `${studentName} joined Batch ${batchName}.`,
+            type: 'STUDENT_ENROLLMENT',
+            referenceType: 'ENROLLMENT',
+            referenceId: enrollment.id,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to trigger notifications for student enrollments update:', err);
+    }
+
+    return result;
   }
   /**
    * Re-Enroll Student
@@ -345,7 +408,7 @@ export class ManagerService {
 
     if (!student) throw new AppError('Student not found.', 404);
 
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Snapshot previous data
       const previousStream = student.stream?.streamName || null;
       const previousMonthlyFee = student.totalFeeAmount;
@@ -432,6 +495,37 @@ export class ManagerService {
 
       return { success: true };
     });
+
+    // Notify Teachers about student assignment
+    try {
+      const enrollments = await prisma.enrollment.findMany({
+        where: { studentId: id, enrollmentStatus: 'ACTIVE' },
+        include: { teacher: true, student: { include: { user: true } } }
+      });
+      
+      for (const enrollment of enrollments) {
+        const teacher = enrollment.teacher;
+        if (teacher) {
+          const teacherUserId = teacher.userId;
+          const studentName = enrollment.student.user.fullName;
+          const batchName = enrollment.student.batch || 'Class';
+          
+          await notificationService.createNotification({
+            senderId: enrollment.student.userId,
+            receiverId: teacherUserId,
+            title: 'New Student Assigned',
+            message: `${studentName} joined Batch ${batchName}.`,
+            type: 'STUDENT_ENROLLMENT',
+            referenceType: 'ENROLLMENT',
+            referenceId: enrollment.id,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to trigger notifications for student re-enrollment:', err);
+    }
+
+    return result;
   }
 }
 

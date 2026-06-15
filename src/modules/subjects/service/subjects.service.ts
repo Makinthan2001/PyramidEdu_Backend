@@ -1,5 +1,6 @@
 import { Prisma, Role, AuditAction, EnrollmentStatus, SubjectAllocationStatus } from '@prisma/client';
 import prisma from '../../../config/prisma.config';
+import { notificationService } from '../../notification/service/notification.service';
 import { AppError } from '../../../utils/AppError';
 import type { CreateSubjectDto } from '../dto/create-subject.dto';
 import type { CreateStreamDto } from '../dto/create-stream.dto';
@@ -863,6 +864,36 @@ export class SubjectsService {
           enrollmentStatus: EnrollmentStatus.ACTIVE,
         },
       });
+
+    // Notify Teacher about student assignment
+    try {
+      const allocation = await prisma.subjectAllocation.findFirst({
+        where: { subjectId, status: SubjectAllocationStatus.ACTIVE },
+        include: { teacher: { include: { user: true } } }
+      });
+      const studentDetails = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: { user: true }
+      });
+      
+      if (allocation && allocation.teacher && studentDetails) {
+        const teacherUserId = allocation.teacher.userId;
+        const studentName = studentDetails.user.fullName;
+        const batchName = studentDetails.batch || 'Class';
+        
+        await notificationService.createNotification({
+          senderId: studentDetails.userId,
+          receiverId: teacherUserId,
+          title: 'New Student Assigned',
+          message: `${studentName} joined Batch ${batchName}.`,
+          type: 'STUDENT_ENROLLMENT',
+          referenceType: 'ENROLLMENT',
+          referenceId: enrollment.id,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to trigger notification for student enrollment:', err);
+    }
 
     if (actor?.userId) {
       await prisma.auditLog.create({

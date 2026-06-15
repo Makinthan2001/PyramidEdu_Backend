@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.config';
+import { notificationService } from '../../notification/service/notification.service';
 import { AppError } from '../../../utils/AppError';
 import { hashPassword } from '../../../utils/password.util';
 import { Role, UserStatus, type Prisma } from '@prisma/client';
@@ -263,6 +264,35 @@ export class StudentService {
     await prisma.otpVerification.delete({
       where: { email: dto.email },
     });
+
+    // Notify Teachers about student assignment
+    try {
+      const studentId = result.student.id;
+      const enrollments = await prisma.enrollment.findMany({
+        where: { studentId, enrollmentStatus: 'ACTIVE' },
+        include: { teacher: true }
+      });
+      
+      for (const enrollment of enrollments) {
+        if (enrollment.teacher) {
+          const teacherUserId = enrollment.teacher.userId;
+          const studentName = result.user.fullName;
+          const batchName = result.student.batch || 'Class';
+          
+          await notificationService.createNotification({
+            senderId: result.user.id,
+            receiverId: teacherUserId,
+            title: 'New Student Assigned',
+            message: `${studentName} joined Batch ${batchName}.`,
+            type: 'STUDENT_ENROLLMENT',
+            referenceType: 'ENROLLMENT',
+            referenceId: enrollment.id,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to trigger notifications for student registration enrollments:', err);
+    }
 
     return result;
   }

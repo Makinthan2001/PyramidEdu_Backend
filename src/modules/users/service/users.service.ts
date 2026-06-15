@@ -1,5 +1,6 @@
 import { Role, Prisma, AuditAction } from '@prisma/client';
 import prisma from '../../../config/prisma.config';
+import { notificationService } from '../../notification/service/notification.service';
 import { hashPassword, generateTemporaryPassword, comparePasswords } from '../../../utils/password.util';
 import { AppError } from '../../../utils/AppError';
 import type { UpdateUserDto } from '../dto';
@@ -384,6 +385,34 @@ export class UsersService {
       },
     });
 
+    // Notify all active Admins about the new registration
+    try {
+      const admins = await prisma.user.findMany({
+        where: {
+          role: Role.ADMIN,
+          isActive: true,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (admins.length > 0) {
+        const adminIds = admins.map((a) => a.id);
+        const roleLabel = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase().replace('_', ' ');
+        await notificationService.createNotifications({
+          senderId: user.id,
+          receiverIds: adminIds,
+          title: `New ${roleLabel} Registered`,
+          message: `${userData.fullName} created an account.`,
+          type: 'USER_REGISTRATION',
+          referenceType: 'USER',
+          referenceId: user.id,
+        });
+      }
+    } catch (notificationError) {
+      console.error('Failed to send registration notifications to admins:', notificationError);
+    }
+
     return { user, temporaryPassword: providedPassword };
   }
 
@@ -601,6 +630,21 @@ export class UsersService {
         description: `User ${user.email} updated`,
       },
     });
+
+    // Send profile update notification
+    try {
+      await notificationService.createNotification({
+        senderId: null,
+        receiverId: userId,
+        title: 'Profile Updated',
+        message: 'Your account profile information has been successfully updated.',
+        type: 'SYSTEM',
+        referenceType: 'PROFILE',
+        referenceId: userId,
+      });
+    } catch (err) {
+      console.error('Failed to trigger profile update notification:', err);
+    }
 
     return formatUserListItem(updatedUserWithData);
   }

@@ -1067,11 +1067,15 @@ model Notification {
   title            String
   message          String           @db.Text
   notificationType NotificationType @map("notification_type")
+  type             String           @default("GENERAL")
+  referenceType    String?          @map("reference_type")
+  referenceId      String?          @map("reference_id")
   isRead           Boolean          @default(false) @map("is_read")
   readAt           DateTime?        @map("read_at")
   deletedAt        DateTime?        @map("deleted_at")
   sentAt           DateTime         @default(now()) @map("sent_at")
   createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at")
 
   sender   User? @relation("SentNotifications", fields: [senderId], references: [id])
   receiver User  @relation("ReceivedNotifications", fields: [receiverId], references: [id], onDelete: Cascade)
