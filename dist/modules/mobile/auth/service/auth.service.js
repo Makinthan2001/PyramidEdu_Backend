@@ -24,7 +24,7 @@ const auth_repository_1 = __importDefault(require("../repository/auth.repository
 const MOBILE_ACCESS_EXPIRES = process.env.JWT_MOBILE_ACCESS_EXPIRES_IN || process.env.JWT_ACCESS_EXPIRES_IN || '10m';
 const MOBILE_REFRESH_EXPIRES = process.env.JWT_MOBILE_REFRESH_EXPIRES_IN || '30d';
 function toStudentSession(user) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     if (!user.student) {
         throw new AppError_1.AppError('Student profile not found.', 404);
     }
@@ -32,16 +32,28 @@ function toStudentSession(user) {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
+        profileImage: (_a = user.profileImage) !== null && _a !== void 0 ? _a : null,
         role: client_1.Role.STUDENT,
         isActive: user.isActive,
         forcePwdChange: user.forcePwdChange,
         createdAt: user.createdAt,
         student: {
             id: user.student.id,
-            indexNumber: (_a = user.student.indexNumber) !== null && _a !== void 0 ? _a : null,
-            phone: (_b = user.student.phone) !== null && _b !== void 0 ? _b : null,
-            address: (_c = user.student.address) !== null && _c !== void 0 ? _c : null,
+            indexNumber: (_b = user.student.indexNumber) !== null && _b !== void 0 ? _b : null,
+            phone: (_c = user.student.phone) !== null && _c !== void 0 ? _c : null,
+            address: (_d = user.student.address) !== null && _d !== void 0 ? _d : null,
             dateOfBirth: user.student.dateOfBirth ? user.student.dateOfBirth.toISOString().slice(0, 10) : null,
+            gender: (_e = user.student.gender) !== null && _e !== void 0 ? _e : null,
+            school: (_f = user.student.school) !== null && _f !== void 0 ? _f : null,
+            batch: (_g = user.student.batch) !== null && _g !== void 0 ? _g : null,
+            nic: (_h = user.student.nic) !== null && _h !== void 0 ? _h : null,
+            rewardPoints: user.student.rewardPoints,
+            attendancePercentage: Number(user.student.attendancePercentage),
+            performanceStatus: (_j = user.student.performanceStatus) !== null && _j !== void 0 ? _j : null,
+            trendStatus: (_k = user.student.trendStatus) !== null && _k !== void 0 ? _k : null,
+            approvalStatus: user.student.approvalStatus,
+            paymentStatus: user.student.paymentStatus,
+            totalFeeAmount: Number(user.student.totalFeeAmount),
         },
     };
 }

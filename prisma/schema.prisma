@@ -219,6 +219,8 @@ model User {
   fileUploads           FileUpload[]
   enrollmentChanges     EnrollmentHistory[] @relation("EnrollmentChangedBy")
   classSessions         ClassSession[]
+  sentAnnouncements     Announcement[]      @relation("SentAnnouncements")
+  receivedAnnouncements Announcement[]      @relation("AnnouncementRecipients")
 
   @@index([email])
   @@index([role])
@@ -435,6 +437,7 @@ model Subject {
   subjectAllocations SubjectAllocation[]
   courseSchedules    CourseSchedule[]
   classSessions      ClassSession[]
+  announcements      Announcement[]      @relation("AnnouncementSubjects")
 
   @@map("subjects")
 }
@@ -538,12 +541,12 @@ model StudyMaterial {
 }
 
 model StudyMaterialChunk {
-  id         String   @id @default(uuid())
-  materialId String   @map("material_id")
-  chunkIndex Int      @map("chunk_index")
-  chunkText  String   @db.Text @map("chunk_text")
+  id         String                      @id @default(uuid())
+  materialId String                      @map("material_id")
+  chunkIndex Int                         @map("chunk_index")
+  chunkText  String                      @map("chunk_text") @db.Text
   embedding  Unsupported("vector(768)")?
-  createdAt  DateTime @default(now()) @map("created_at")
+  createdAt  DateTime                    @default(now()) @map("created_at")
 
   studyMaterial StudyMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
@@ -687,13 +690,13 @@ model Question {
 }
 
 model ExamSubmission {
-  id          String   @id @default(uuid())
-  examId      String   @map("exam_id")
-  studentId   String   @map("student_id")
-  submittedAt DateTime @default(now()) @map("submitted_at")
-  totalScore  Decimal? @map("total_score") @db.Decimal(6, 2)
-  status      String   @default("GRADED") // GRADED, PENDING_MANUAL
-  submissionStatus String @default("SUBMITTED") @map("submission_status") // SUBMITTED, LATE_SUBMISSION
+  id               String   @id @default(uuid())
+  examId           String   @map("exam_id")
+  studentId        String   @map("student_id")
+  submittedAt      DateTime @default(now()) @map("submitted_at")
+  totalScore       Decimal? @map("total_score") @db.Decimal(6, 2)
+  status           String   @default("GRADED") // GRADED, PENDING_MANUAL
+  submissionStatus String   @default("SUBMITTED") @map("submission_status") // SUBMITTED, LATE_SUBMISSION
 
   exam    Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
   student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -1079,24 +1082,34 @@ model Notification {
 }
 
 model Announcement {
-  id          String             @id @default(uuid())
-  adminId     String             @map("admin_id")
-  title       String
-  content     String             @db.Text
-  target      AnnouncementTarget @default(ALL)
-  batchId     String?            @map("batch_id")
-  publishDate DateTime           @map("publish_date")
-  expiryDate  DateTime?          @map("expiry_date")
-  isActive    Boolean            @default(true) @map("is_active")
-  deletedAt   DateTime?          @map("deleted_at")
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
+  id            String             @id @default(uuid())
+  adminId       String?            @map("admin_id")
+  senderId      String?            @map("sender_id")
+  title         String
+  content       String             @db.Text
+  target        AnnouncementTarget @default(ALL)
+  batchId       String?            @map("batch_id")
+  publishDate   DateTime           @map("publish_date")
+  expiryDate    DateTime?          @map("expiry_date")
+  priority      String             @default("MEDIUM") // LOW, MEDIUM, HIGH
+  status        String             @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED, SCHEDULED
+  attachmentUrl String?            @map("attachment_url")
+  isActive      Boolean            @default(true) @map("is_active")
+  deletedAt     DateTime?          @map("deleted_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
 
-  admin       Admin  @relation(fields: [adminId], references: [id])
-  batchRecord Batch? @relation(fields: [batchId], references: [id])
+  admin       Admin? @relation(fields: [adminId], references: [id])
+  sender      User?  @relation("SentAnnouncements", fields: [senderId], references: [id], onDelete: Cascade)
+  batchRecord Batch? @relation("BatchDirectAnnouncements", fields: [batchId], references: [id])
+
+  recipients User[]    @relation("AnnouncementRecipients")
+  batches    Batch[]   @relation("AnnouncementBatches")
+  subjects   Subject[] @relation("AnnouncementSubjects")
 
   @@index([target])
   @@index([publishDate])
+  @@index([status])
   @@index([batchId])
   @@map("announcements")
 }
@@ -1199,14 +1212,15 @@ model Batch {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  students           Student[]
-  materials          StudyMaterial[]
-  assignments        Assignment[]
-  exams              Exam[]
-  announcements      Announcement[]
-  streams            Stream[]
-  subjectAllocations SubjectAllocation[]
-  classSessions      ClassSession[]
+  students            Student[]
+  materials           StudyMaterial[]
+  assignments         Assignment[]
+  exams               Exam[]
+  announcements       Announcement[]      @relation("AnnouncementBatches")
+  announcementsDirect Announcement[]      @relation("BatchDirectAnnouncements")
+  streams             Stream[]
+  subjectAllocations  SubjectAllocation[]
+  classSessions       ClassSession[]
 
   @@map("batches")
 }
