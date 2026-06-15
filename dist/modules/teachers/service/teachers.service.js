@@ -55,6 +55,7 @@ class TeachersService {
                     subjectAllocations: {
                         include: {
                             subject: true,
+                            batches: true,
                         },
                     },
                 },
@@ -77,6 +78,7 @@ class TeachersService {
                     subjectAllocations: {
                         include: {
                             subject: true,
+                            batches: true,
                         },
                     },
                 },

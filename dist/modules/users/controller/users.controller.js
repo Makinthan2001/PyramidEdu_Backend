@@ -26,6 +26,7 @@ exports.getProfile = getProfile;
 exports.updateProfile = updateProfile;
 exports.uploadProfileImage = uploadProfileImage;
 const users_service_1 = __importDefault(require("../service/users.service"));
+const cloudinary_util_1 = require("../../../utils/cloudinary.util");
 /**
  * Users Controller - Handles user account operations
  */
@@ -302,7 +303,6 @@ function updateProfile(req, res, next) {
  */
 function uploadProfileImage(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a;
         try {
             const userId = req.userId;
             if (!req.file) {
@@ -311,8 +311,21 @@ function uploadProfileImage(req, res, next) {
                     message: 'No image file provided',
                 });
             }
-            const role = ((_a = req.userRole) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || 'misc';
-            const imageUrl = `/uploads/profile/${role}/${req.file.filename}`;
+            const userRole = req.userRole;
+            let roleFolder = 'misc';
+            if (userRole) {
+                const lowerRole = userRole.toLowerCase();
+                if (lowerRole === 'student') {
+                    roleFolder = 'students';
+                }
+                else {
+                    roleFolder = lowerRole;
+                }
+            }
+            const folder = `pyramidEdu/profiles/${roleFolder}`;
+            // Upload image to Cloudinary
+            const uploadResult = yield (0, cloudinary_util_1.uploadProfileImageToCloudinary)(req.file.buffer, { folder });
+            const imageUrl = uploadResult.secure_url;
             const updatedUser = yield users_service_1.default.updateProfileImage(userId, imageUrl);
             res.status(200).json({
                 success: true,

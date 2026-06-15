@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.config';
+import { notificationService } from '../../notification/service/notification.service';
 import { AppError } from '../../../utils/AppError';
 import { CreateExamDto } from '../dto/create-exam.dto';
 import { UpdateExamDto } from '../dto/update-exam.dto';
@@ -9,12 +10,18 @@ import { gradingService } from './grading.service';
 
 export class ExamsService {
   async createExam(teacherId: string, data: CreateExamDto) {
-    return await prisma.exam.create({
+    const exam = await prisma.exam.create({
       data: {
         ...data,
         teacherId,
       },
     });
+
+    if (exam.isPublished) {
+      await this.notifyEligibleStudents(exam.id);
+    }
+
+    return exam;
   }
 
   async getExamsByTeacher(teacherId: string) {
@@ -75,15 +82,22 @@ export class ExamsService {
 
   async updateExam(examId: string, teacherId: string, data: UpdateExamDto) {
     const exam = await this.getExamById(examId, teacherId);
+    const wasPublished = exam.isPublished;
 
     // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
     //   throw new AppError('Cannot update exam after it has started', 400);
     // }
 
-    return await prisma.exam.update({
+    const updatedExam = await prisma.exam.update({
       where: { id: examId },
       data,
     });
+
+    if (updatedExam.isPublished && !wasPublished) {
+      await this.notifyEligibleStudents(updatedExam.id);
+    }
+
+    return updatedExam;
   }
 
   async deleteExam(examId: string, teacherId: string) {
@@ -250,6 +264,43 @@ export class ExamsService {
       },
       orderBy: { startTime: 'asc' },
     });
+  }
+
+  async notifyEligibleStudents(examId: string) {
+    try {
+      const exam = await prisma.exam.findUnique({
+        where: { id: examId },
+        include: { subject: true, teacher: { include: { user: true } } }
+      });
+
+      if (!exam || !exam.isPublished) return;
+
+      const enrollments = await prisma.enrollment.findMany({
+        where: {
+          subjectId: exam.subjectId,
+          enrollmentStatus: 'ACTIVE',
+          ...(exam.batchId && { student: { batchId: exam.batchId } }),
+        },
+        include: { student: true },
+      });
+
+      if (enrollments.length === 0) return;
+
+      const receiverIds = enrollments.map(e => e.student.userId);
+      const teacherName = exam.teacher.user.fullName;
+
+      await notificationService.createNotifications({
+        senderId: exam.teacher.userId,
+        receiverIds,
+        title: 'New Exam Published',
+        message: `${exam.examTitle} published by ${teacherName}.`,
+        type: 'EXAM',
+        referenceType: 'EXAM',
+        referenceId: exam.id,
+      });
+    } catch (err) {
+      console.error('Failed to notify students of new exam:', err);
+    }
   }
 }
 
