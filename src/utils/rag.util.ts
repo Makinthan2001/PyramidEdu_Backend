@@ -15,6 +15,27 @@ export interface TextChunk {
 }
 
 /**
+ * Utility function to retry promises with exponential backoff.
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000): Promise<T> {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      attempt++;
+      if (attempt >= maxRetries || (error.status !== 503 && error.status !== 429)) {
+        throw error;
+      }
+      console.warn(`[Gemini API] Error ${error.status}: Retrying ${attempt}/${maxRetries} in ${delayMs}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs *= 2;
+    }
+  }
+  throw new Error('Unreachable');
+}
+
+/**
  * Extract clean text from a PDF file buffer
  */
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
@@ -26,7 +47,7 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   const parser = new PDFParseClass({ data: buffer });
   const result = await parser.getText();
   await parser.destroy();
-  
+
   let text = result.text
     .replace(/\r\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -34,8 +55,35 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
     .replace(/[^\x20-\x7E\n]/g, ' ')
     .trim();
 
+  const numpages = Math.max(result.numpages || 1, 1);
+  const avgCharsPerPage = text.length / numpages;
+
+  if (avgCharsPerPage < 20) {
+    console.log(`[PDF Classification] IMAGE_BASED detected (${avgCharsPerPage.toFixed(1)} chars/page). Falling back to Gemini OCR...`);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const prompt = "Extract all text from this document accurately. Preserve structure where possible. If it's handwriting, transcribe it to the best of your ability. Do not include any conversational filler.";
+    
+    try {
+      const response = await withRetry(() => model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: buffer.toString('base64'),
+            mimeType: 'application/pdf',
+          },
+        },
+      ]));
+      text = response.response.text().trim();
+      console.log(`[Gemini OCR] Extracted ${text.length} characters.`);
+    } catch (error) {
+      console.error("[Gemini OCR] Fallback failed:", error);
+    }
+  } else {
+    console.log(`[PDF Classification] TEXT_BASED detected (${avgCharsPerPage.toFixed(1)} chars/page).`);
+  }
+
   if (!text || text.length < 20) {
-    throw new Error('Could not extract meaningful text from PDF. Ensure the file is not scanned/image-based.');
+    console.warn('Could not extract meaningful text from PDF even after fallback.');
   }
 
   return text;
@@ -73,10 +121,10 @@ export function chunkText(text: string, chunkSize = 800, overlap = 100): TextChu
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
-  const result = await model.embedContent({
+  const result = await withRetry(() => model.embedContent({
     content: { parts: [{ text }] },
     outputDimensionality: 768,
-  } as any);
+  } as any));
   return result.embedding.values;
 }
 
@@ -186,10 +234,10 @@ export async function generateRAGAnswer(
 
   // 1 & 2. Process Question and Generate Embedding
   const qEmbedding = await generateEmbedding(question);
-  
+
   // 3. Vector Similarity Search
   const allChunks = await querySimilarChunks(qEmbedding, filters);
-  
+
   // 4. Relevance Evaluation
   const relevantChunks = allChunks.filter(c => c.similarity >= SIMILARITY_THRESHOLD);
 
@@ -204,7 +252,7 @@ export async function generateRAGAnswer(
   if (relevantChunks.length > 0) {
     // 5. RAG Prompt Construction
     console.log(`Status: Valid chunks found. Activating RAG Mode.`);
-    
+
     const context = relevantChunks
       .map((c) => `[Source: ${c.title}]\n${c.chunk_text}`)
       .join('\n\n---\n\n');
@@ -223,7 +271,7 @@ ANSWER:`;
   } else {
     // General Mode Fallback
     console.log(`Status: No relevant chunks met the threshold (${SIMILARITY_THRESHOLD}). Activating General AI Mode.`);
-    
+
     prompt = `You are PyramidEdu's helpful educational AI assistant.
 Answer the STUDENT QUESTION using your general knowledge. Behave as a helpful and friendly assistant.
 Support casual conversations, language requests, coding questions, and general educational queries.
@@ -233,9 +281,9 @@ ANSWER:`;
   }
 
   // 6 & 7. Gemini Answer Generation
-  const result = await model.generateContent(prompt);
+  const result = await withRetry(() => model.generateContent(prompt));
   console.log(`--- End Processing ---\n`);
-  
+
   return result.response.text();
 }
 
@@ -255,21 +303,23 @@ export async function processRAGIngestion(
 
       if (item.startsWith('http://') || item.startsWith('https://')) {
         console.log(`Downloading PDF from URL: ${item}`);
-        const response = await axios.get<ArrayBuffer>(item, {
-          responseType: 'arraybuffer',
-          timeout: 30_000,
-        });
-        buffer = Buffer.from(response.data);
-        displayName = item.split('/').pop() || item;
+        try {
+          const response = await axios.get<ArrayBuffer>(item, {
+            responseType: 'arraybuffer',
+            timeout: 30_000,
+          });
+          buffer = Buffer.from(response.data);
+          displayName = item.split('/').pop() || item;
+        } catch (e) {
+          console.error(`Failed to download from ${item}`, e);
+          continue;
+        }
       } else {
         if (!fs.existsSync(item)) {
           console.warn(`File does not exist: ${item}`);
           continue;
         }
-        if (path.extname(item).toLowerCase() !== '.pdf') {
-          console.log(`Skipping non-PDF file: ${item}`);
-          continue;
-        }
+        // Remove .pdf extension check as Multer temp files do not have extensions
         buffer = fs.readFileSync(item);
       }
 
