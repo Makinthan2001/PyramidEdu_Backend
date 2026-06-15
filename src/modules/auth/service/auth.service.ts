@@ -1,5 +1,6 @@
 import { Role, AuditAction } from '@prisma/client';
 import prisma from '../../../config/prisma.config';
+import { notificationService } from '../../notification/service/notification.service';
 import { hashPassword, comparePasswords } from '../../../utils/password.util';
 import {
   generateAccessToken,
@@ -106,6 +107,34 @@ export async function registerUser(dto: RegisterDto): Promise<SafeUser> {
       });
     }
   });
+
+  // Notify all active Admins about the new registration
+  try {
+    const admins = await prisma.user.findMany({
+      where: {
+        role: Role.ADMIN,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    if (admins.length > 0) {
+      const adminIds = admins.map((a) => a.id);
+      const roleLabel = dto.role.charAt(0).toUpperCase() + dto.role.slice(1).toLowerCase().replace('_', ' ');
+      await notificationService.createNotifications({
+        senderId: user.id,
+        receiverIds: adminIds,
+        title: `New ${roleLabel} Registered`,
+        message: `${dto.fullName} created an account.`,
+        type: 'USER_REGISTRATION',
+        referenceType: 'USER',
+        referenceId: user.id,
+      });
+    }
+  } catch (notificationError) {
+    console.error('Failed to send registration notifications to admins:', notificationError);
+  }
 
   return await toSafeUser(user);
 }
@@ -243,6 +272,21 @@ export async function changePassword(userId: string, dto: ChangePasswordDto): Pr
     }),
     prisma.refreshToken.deleteMany({ where: { userId } }),
   ]);
+
+  // Send security notification
+  try {
+    await notificationService.createNotification({
+      senderId: null,
+      receiverId: userId,
+      title: 'Password Changed',
+      message: 'Your account password was updated successfully. If you did not make this change, please contact support.',
+      type: 'SYSTEM',
+      referenceType: 'SECURITY',
+      referenceId: userId,
+    });
+  } catch (err) {
+    console.error('Failed to trigger password change notification:', err);
+  }
 }
 
 export async function forgotPassword(dto: ForgotPasswordDto): Promise<string | null> {

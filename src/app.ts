@@ -25,6 +25,7 @@ import teachersRouter from './modules/teachers';
 import supportStaffRouter from './modules/support-staff';
 import { chatRouter } from './modules/chat';
 import announcementsRouter from './modules/announcements';
+import notificationsRouter from './modules/notification';
 
 validateEnv();
 configureCloudinary();
@@ -122,6 +123,9 @@ app.use('/api/v1/chat', chatRouter);
 
 // Announcements routes
 app.use('/api/v1/announcements', announcementsRouter);
+
+// Notifications routes
+app.use('/api/v1/notifications', notificationsRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);

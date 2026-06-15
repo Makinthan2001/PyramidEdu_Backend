@@ -689,9 +689,12 @@ export class AnnouncementsService {
       const notificationData = targetRecipientIds.map(receiverId => ({
         senderId: announcement.senderId,
         receiverId,
-        title: `Announcement: ${announcement.title}`,
-        message: announcement.content.length > 150 ? `${announcement.content.substring(0, 150)}...` : announcement.content,
+        title: `New Announcement Received`,
+        message: `"${announcement.title}"`,
         notificationType: NotificationType.ANNOUNCEMENT,
+        type: 'ANNOUNCEMENT',
+        referenceType: 'ANNOUNCEMENT',
+        referenceId: announcementId,
         isRead: false,
       }));
 
