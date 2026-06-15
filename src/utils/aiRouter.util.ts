@@ -70,7 +70,29 @@ CRITICAL RULES
 - ALWAYS return valid JSON
 - NEVER hallucinate data
 - If unclear → default to generalAI
+- If unclear → default to generalAI
 - Keep responses structured for backend execution`;
+
+/**
+ * Utility function to retry promises with exponential backoff.
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000): Promise<T> {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      attempt++;
+      if (attempt >= maxRetries || (error.status !== 503 && error.status !== 429)) {
+        throw error;
+      }
+      console.warn(`[Gemini API] Error ${error.status}: Retrying ${attempt}/${maxRetries} in ${delayMs}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs *= 2;
+    }
+  }
+  throw new Error('Unreachable');
+}
 
 interface RouterResponse {
   tool: string;
@@ -91,7 +113,7 @@ export async function routeQuery(
     });
 
     const prompt = `${ROUTER_SYSTEM_PROMPT}\n\nUser Query: "${question}"`;
-    const result = await model.generateContent(prompt);
+    const result = await withRetry(() => model.generateContent(prompt));
     const responseText = result.response.text();
     
     let routeData: RouterResponse;
@@ -294,7 +316,7 @@ async function executeTool(
       const aiPrompt = `You are PyramidEdu's helpful educational AI assistant. Answer the following message generally.
 User message: ${parameters.message}
 Answer:`;
-      const aiResult = await aiModel.generateContent(aiPrompt);
+      const aiResult = await withRetry(() => aiModel.generateContent(aiPrompt));
       return aiResult.response.text();
 
     default:

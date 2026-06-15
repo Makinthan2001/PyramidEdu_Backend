@@ -241,10 +241,12 @@ export class ExamsService {
       where: {
         subjectId: { in: subjectIds },
         isPublished: true,
-        startTime: { gt: new Date() }, // Future exams
       },
       include: {
         subject: { select: { subjectName: true } },
+        submissions: {
+          where: { studentId },
+        },
       },
       orderBy: { startTime: 'asc' },
     });
