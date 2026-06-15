@@ -28,7 +28,7 @@ const uploadInMemory = multer({
 // ----------------------------------------------------
 router.post(
   '/upload-file',
-  roleGuard(Role.TEACHER, Role.ADMIN),
+  roleGuard(Role.TEACHER, Role.ADMIN, Role.STUDENT),
   uploadInMemory.single('file'),
   controller.uploadFileToCloudinary
 );

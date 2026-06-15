@@ -193,6 +193,7 @@ export async function getMyUpcomingExams(req: Request, res: Response, next: Next
 }
 
 import { uploadToCloudinary } from '../../../utils/cloudinary.util';
+import { enqueuePdfIngestion } from '../../rag/services/pdf-ingestion.service';
 
 export async function uploadFileToCloudinary(req: Request, res: Response, next: NextFunction) {
   try {
@@ -245,6 +246,13 @@ export async function uploadFileToCloudinary(req: Request, res: Response, next: 
       message: 'File uploaded successfully',
       url: uploadResult.secure_url
     });
+
+    if (bucket === 'essay-pdfs') {
+      enqueuePdfIngestion({
+        buffer: file.buffer,
+        sourceUrl: uploadResult.secure_url,
+      });
+    }
   } catch (error) {
     next(error);
   }
