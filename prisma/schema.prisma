@@ -5,11 +5,13 @@
 // ============================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -524,14 +526,29 @@ model StudyMaterial {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  teacher     Teacher @relation(fields: [teacherId], references: [id])
-  subject     Subject @relation(fields: [subjectId], references: [id])
-  batchRecord Batch?  @relation(fields: [batchId], references: [id])
+  teacher     Teacher              @relation(fields: [teacherId], references: [id])
+  subject     Subject              @relation(fields: [subjectId], references: [id])
+  batchRecord Batch?               @relation(fields: [batchId], references: [id])
+  chunks      StudyMaterialChunk[]
 
   @@index([subjectId])
   @@index([teacherId])
   @@index([batchId])
   @@map("study_materials")
+}
+
+model StudyMaterialChunk {
+  id         String   @id @default(uuid())
+  materialId String   @map("material_id")
+  chunkIndex Int      @map("chunk_index")
+  chunkText  String   @db.Text @map("chunk_text")
+  embedding  Unsupported("vector(768)")?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  studyMaterial StudyMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@map("study_material_chunks")
 }
 
 model Assignment {

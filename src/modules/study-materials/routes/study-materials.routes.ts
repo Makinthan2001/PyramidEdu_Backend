@@ -21,4 +21,7 @@ router.patch('/:id', authenticate, upload.array('files', 10), controller.updateS
 // Delete material
 router.delete('/:id', authenticate, controller.deleteStudyMaterial);
 
+// RAG Chatbot query endpoint
+router.post('/chat', authenticate, controller.chatWithMaterials);
+
 export default router;

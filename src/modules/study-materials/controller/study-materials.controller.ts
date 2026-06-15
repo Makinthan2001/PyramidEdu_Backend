@@ -4,6 +4,8 @@ import { createStudyMaterialSchema } from '../validators/study-materials.validat
 import fs from 'fs';
 import path from 'path';
 import prisma from '../../../config/prisma.config';
+import { processRAGIngestion, generateRAGAnswer } from '../../../utils/rag.util';
+import { uploadToCloudinary } from '../../../utils/cloudinary.util';
 
 export async function createStudyMaterial(req: Request, res: Response, next: NextFunction) {
   try {
@@ -34,27 +36,40 @@ export async function createStudyMaterial(req: Request, res: Response, next: Nex
     const subject = await prisma.subject.findUnique({ where: { id: dto.subjectId } });
     if (!subject) throw new Error("Subject not found");
 
-    const subjectFolder = subject.subjectName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    const teacherFolder = user.fullName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-
-    const finalDir = path.join(__dirname, '../../../../uploads/study-materials', subjectFolder, teacherFolder);
-    if (!fs.existsSync(finalDir)) {
-      fs.mkdirSync(finalDir, { recursive: true });
-    }
-
     const fileUrls: string[] = [];
     const files = req.files as Express.Multer.File[];
     
     if (files && files.length > 0) {
       for (const file of files) {
-        const finalPath = path.join(finalDir, file.filename);
-        fs.renameSync(file.path, finalPath);
-        // Save relative path
-        fileUrls.push(`/uploads/study-materials/${subjectFolder}/${teacherFolder}/${file.filename}`);
+        const fileBuffer = fs.readFileSync(file.path);
+        
+        // Upload directly to Cloudinary
+        const uploadResult = await uploadToCloudinary(fileBuffer, {
+          folder: process.env.CLOUDINARY_STUDY_MATERIAL_FOLDER || 'pyramidEdu/study_material',
+          resourceType: 'raw',
+        });
+        
+        fileUrls.push(uploadResult.secure_url);
+        
+        // Delete temporary local file immediately after successful upload
+        try {
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+          }
+        } catch (unlinkErr) {
+          console.error(`Failed to delete temp file ${file.path}:`, unlinkErr);
+        }
       }
     }
 
     const result = await service.createStudyMaterial(teacherProfileId, { ...dto, fileUrls });
+
+    // Trigger RAG ingestion in the background asynchronously
+    if (fileUrls.length > 0) {
+      processRAGIngestion(result.id, fileUrls).catch((err) => {
+        console.error("RAG Ingestion failed to start:", err);
+      });
+    }
     
     res.status(201).json({
       success: true,
@@ -155,30 +170,36 @@ export async function updateStudyMaterial(req: Request, res: Response, next: Nex
     const files = req.files as Express.Multer.File[];
     
     if (files && files.length > 0) {
-      // Get material to know the teacher and subject for folder structure
-      const material = await prisma.studyMaterial.findUnique({
-        where: { id },
-        include: { subject: true, teacher: { include: { user: true } } }
-      });
-      
-      if (material) {
-        const subjectFolder = material.subject.subjectName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-        const teacherFolder = (material.teacher.user.fullName || "Teacher").replace(/[^a-zA-Z0-9.\-_]/g, '_');
-
-        const finalDir = path.join(__dirname, '../../../../uploads/study-materials', subjectFolder, teacherFolder);
-        if (!fs.existsSync(finalDir)) {
-          fs.mkdirSync(finalDir, { recursive: true });
-        }
-
-        for (const file of files) {
-          const finalPath = path.join(finalDir, file.filename);
-          fs.renameSync(file.path, finalPath);
-          fileUrls.push(`/uploads/study-materials/${subjectFolder}/${teacherFolder}/${file.filename}`);
+      for (const file of files) {
+        const fileBuffer = fs.readFileSync(file.path);
+        
+        // Upload directly to Cloudinary
+        const uploadResult = await uploadToCloudinary(fileBuffer, {
+          folder: process.env.CLOUDINARY_STUDY_MATERIAL_FOLDER || 'pyramidEdu/study_material',
+          resourceType: 'raw',
+        });
+        
+        fileUrls.push(uploadResult.secure_url);
+        
+        // Delete temporary local file immediately
+        try {
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+          }
+        } catch (unlinkErr) {
+          console.error(`Failed to delete temp file ${file.path}:`, unlinkErr);
         }
       }
     }
 
     const result = await service.updateStudyMaterial(id, teacherProfileId, role, { title, text, batch, status, fileUrls });
+
+    // Trigger RAG ingestion in the background asynchronously
+    if (fileUrls.length > 0) {
+      processRAGIngestion(result.id, fileUrls).catch((err) => {
+        console.error("RAG Ingestion failed to start:", err);
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -189,6 +210,29 @@ export async function updateStudyMaterial(req: Request, res: Response, next: Nex
     res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : "An error occurred during update"
+    });
+  }
+}
+
+export async function chatWithMaterials(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { question, subjectId, batchId } = req.body;
+    
+    if (!question || !question.trim()) {
+      return res.status(400).json({ success: false, message: 'Question is required' });
+    }
+
+    const answer = await generateRAGAnswer(question.trim(), { subjectId, batchId });
+    
+    res.status(200).json({
+      success: true,
+      data: { answer }
+    });
+  } catch (error) {
+    console.error("RAG Chat Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "An error occurred during RAG chat"
     });
   }
 }
