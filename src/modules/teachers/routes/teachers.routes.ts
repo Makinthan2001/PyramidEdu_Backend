@@ -4,6 +4,7 @@ import { jwtGuard } from '../../../modules/auth/guards/jwt.guard';
 import { roleGuard } from '../../../modules/auth/guards/role.guard';
 import { validate } from '../../../middleware/validate';
 import * as controller from '../controller/teachers.controller';
+import * as teacherStudentsController from '../controller/teacher-students.controller';
 import { teachersValidator } from '../validators/teachers.validator';
 
 const router = Router();
@@ -17,6 +18,8 @@ router.get('/', roleGuard(Role.ADMIN, Role.MANAGER), controller.getTeachers);
 // Self‑service routes for the logged‑in teacher
 router.get('/me', roleGuard(Role.TEACHER), controller.getMyProfile);
 router.patch('/me', roleGuard(Role.TEACHER), validate(teachersValidator.updateTeacherSchema), controller.updateMyProfile);
+router.get('/me/students', roleGuard(Role.TEACHER), teacherStudentsController.getMyStudents);
+router.get('/me/students/:studentId', roleGuard(Role.TEACHER), teacherStudentsController.getMyStudentById);
 
 // Get teacher by ID – ADMIN, MANAGER, or the teacher themselves
 router.get('/:id', roleGuard(Role.ADMIN, Role.MANAGER, Role.TEACHER), controller.getTeacherById);
