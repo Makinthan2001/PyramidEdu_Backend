@@ -19,6 +19,7 @@ const password_util_1 = require("../../../utils/password.util");
 const AppError_1 = require("../../../utils/AppError");
 const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
+const cloudinary_util_1 = require("../../../utils/cloudinary.util");
 const userListSelect = {
     id: true,
     email: true,
@@ -477,6 +478,8 @@ class UsersService {
             }
             if (dto.phoneNumber)
                 updateData.phone = dto.phoneNumber;
+            if (dto.profileImage !== undefined)
+                updateData.profileImage = dto.profileImage;
             if (Object.keys(updateData).length > 0) {
                 yield prisma_config_1.default.user.update({
                     where: { id: userId },
@@ -680,14 +683,35 @@ class UsersService {
                 throw new AppError_1.AppError('User not found.', 404);
             }
             // If there is an old profile image, try to delete it to save space
-            if (user.profileImage && user.profileImage.startsWith('/uploads/profile/')) {
-                try {
-                    const oldImagePath = path_1.default.join(__dirname, '../../../../', user.profileImage);
-                    yield promises_1.default.unlink(oldImagePath);
+            if (user.profileImage) {
+                if (user.profileImage.startsWith('/uploads/profile/')) {
+                    try {
+                        const oldImagePath = path_1.default.join(__dirname, '../../../../', user.profileImage);
+                        yield promises_1.default.unlink(oldImagePath);
+                    }
+                    catch (err) {
+                        console.error(`Failed to delete old local profile image: ${user.profileImage}`, err);
+                        // Continue even if delete fails
+                    }
                 }
-                catch (err) {
-                    console.error(`Failed to delete old profile image: ${user.profileImage}`, err);
-                    // Continue even if delete fails
+                else if (user.profileImage.includes('res.cloudinary.com')) {
+                    try {
+                        const parts = user.profileImage.split('/upload/');
+                        if (parts.length > 1) {
+                            const pathAfterUpload = parts[1];
+                            const pathParts = pathAfterUpload.split('/');
+                            if (pathParts[0].startsWith('v') && /^\d+$/.test(pathParts[0].slice(1))) {
+                                pathParts.shift();
+                            }
+                            const fullPathWithExt = pathParts.join('/');
+                            const dotIdx = fullPathWithExt.lastIndexOf('.');
+                            const publicId = dotIdx !== -1 ? fullPathWithExt.substring(0, dotIdx) : fullPathWithExt;
+                            yield (0, cloudinary_util_1.deleteCloudinaryImage)(publicId);
+                        }
+                    }
+                    catch (err) {
+                        console.error(`Failed to delete old Cloudinary image: ${user.profileImage}`, err);
+                    }
                 }
             }
             const updatedUser = yield prisma_config_1.default.user.update({

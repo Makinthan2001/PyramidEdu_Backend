@@ -28,6 +28,8 @@ exports.updateUserSchema = zod_1.z.object({
     roleType: zod_1.z.string().min(1).max(255).optional(),
     // Salary
     salary: zod_1.z.number().positive('Salary must be positive').optional(),
+    // Profile Image URL
+    profileImage: zod_1.z.string().url('Invalid URL format').or(zod_1.z.string().min(1)).optional(),
 });
 exports.default = {
     updateUserSchema: exports.updateUserSchema,

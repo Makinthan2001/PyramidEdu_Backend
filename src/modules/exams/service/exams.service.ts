@@ -1,4 +1,5 @@
 import prisma from '../../../config/prisma.config';
+import { notificationService } from '../../notification/service/notification.service';
 import { AppError } from '../../../utils/AppError';
 import { CreateExamDto } from '../dto/create-exam.dto';
 import { UpdateExamDto } from '../dto/update-exam.dto';
@@ -9,12 +10,18 @@ import { gradingService } from './grading.service';
 
 export class ExamsService {
   async createExam(teacherId: string, data: CreateExamDto) {
-    return await prisma.exam.create({
+    const exam = await prisma.exam.create({
       data: {
         ...data,
         teacherId,
       },
     });
+
+    if (exam.isPublished) {
+      await this.notifyEligibleStudents(exam.id);
+    }
+
+    return exam;
   }
 
   async getExamsByTeacher(teacherId: string) {
@@ -22,6 +29,8 @@ export class ExamsService {
       where: { teacherId },
       include: {
         subject: { select: { subjectName: true, subjectCode: true } },
+        batchRecord: { select: { batchName: true } },
+        term: { select: { name: true } },
         _count: { select: { questions: true, submissions: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -36,6 +45,9 @@ export class ExamsService {
           orderBy: { order: 'asc' },
         },
         subject: { select: { subjectName: true, subjectCode: true } },
+        batchRecord: { select: { batchName: true } },
+        term: { select: { name: true } },
+        _count: { select: { submissions: true } },
       },
     });
 
@@ -47,25 +59,53 @@ export class ExamsService {
     return exam;
   }
 
+  async getExamSubmissions(examId: string, teacherId: string) {
+    await this.getExamById(examId, teacherId);
+
+    return await prisma.examSubmission.findMany({
+      where: { examId },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                fullName: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+  }
+
   async updateExam(examId: string, teacherId: string, data: UpdateExamDto) {
     const exam = await this.getExamById(examId, teacherId);
+    const wasPublished = exam.isPublished;
 
-    if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot update exam after it has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot update exam after it has started', 400);
+    // }
 
-    return await prisma.exam.update({
+    const updatedExam = await prisma.exam.update({
       where: { id: examId },
       data,
     });
+
+    if (updatedExam.isPublished && !wasPublished) {
+      await this.notifyEligibleStudents(updatedExam.id);
+    }
+
+    return updatedExam;
   }
 
   async deleteExam(examId: string, teacherId: string) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot delete exam after it has started', 400);
-    }
+    // if (exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot delete exam after it has started', 400);
+    // }
 
     await prisma.exam.delete({
       where: { id: examId },
@@ -75,18 +115,20 @@ export class ExamsService {
   async addQuestion(examId: string, teacherId: string, data: CreateQuestionDto) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot add questions after exam has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot add questions after exam has started', 400);
+    // }
 
     return await prisma.question.create({
       data: {
         examId,
-        questionText: data.questionText,
+        questionText: data.questionText || null,
+        imageUrl: data.imageUrl || null,
         questionType: data.questionType,
         marks: data.marks,
         options: data.options ? (data.options as any) : undefined,
         correctAnswer: data.correctAnswer || undefined,
+        explanation: data.explanation || null,
         order: data.order,
       },
     });
@@ -95,9 +137,9 @@ export class ExamsService {
   async deleteQuestion(examId: string, questionId: string, teacherId: string) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot delete questions after exam has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot delete questions after exam has started', 400);
+    // }
 
     await prisma.question.delete({
       where: { id: questionId },
@@ -107,18 +149,20 @@ export class ExamsService {
   async updateQuestion(examId: string, questionId: string, teacherId: string, data: Partial<CreateQuestionDto>) {
     const exam = await this.getExamById(examId, teacherId);
 
-    if (exam.startTime && new Date() >= exam.startTime) {
-      throw new AppError('Cannot edit questions after exam has started', 400);
-    }
+    // if (exam.isPublished && exam.startTime && new Date() >= exam.startTime) {
+    //   throw new AppError('Cannot edit questions after exam has started', 400);
+    // }
 
     return await prisma.question.update({
       where: { id: questionId },
       data: {
-        questionText: data.questionText,
+        questionText: data.questionText !== undefined ? data.questionText : undefined,
+        imageUrl: data.imageUrl !== undefined ? data.imageUrl : undefined,
         questionType: data.questionType,
         marks: data.marks,
         options: data.options ? (data.options as any) : undefined,
         correctAnswer: data.correctAnswer || undefined,
+        explanation: data.explanation !== undefined ? data.explanation : undefined,
         order: data.order,
       },
     });
@@ -152,7 +196,39 @@ export class ExamsService {
   async submitExam(examId: string, studentId: string, data: SubmitExamDto) {
     await examAccessService.validateStudentAccess(examId, studentId);
 
-    const gradingResult = await gradingService.gradeSubmission(examId, studentId, data.answers);
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) throw new AppError('Exam not found', 404);
+
+    const existingSubmission = await prisma.examSubmission.findUnique({
+      where: {
+        examId_studentId: {
+          examId,
+          studentId,
+        },
+      },
+    });
+
+    if (existingSubmission) {
+      throw new AppError('You have already submitted this exam.', 400);
+    }
+
+    const gradingResult = await gradingService.gradeSubmission(examId, studentId, data.answers || {});
+
+    // Calculate submissionStatus
+    const now = new Date();
+    let submissionStatus = 'SUBMITTED';
+    if (exam.startTime && exam.duration) {
+      const endTime = new Date(exam.startTime.getTime() + exam.duration * 60000);
+      if (now > endTime) {
+        submissionStatus = 'LATE_SUBMISSION';
+      }
+    }
+
+    const finalStatus = exam.examType === 'ESSAY' ? 'PENDING_MANUAL' : gradingResult.status;
+    const finalScore = exam.examType === 'ESSAY' ? 0 : gradingResult.totalScore;
+    const finalMarks = exam.examType === 'ESSAY' ? 0 : gradingResult.percentage;
+    const finalGrade = exam.examType === 'ESSAY' ? null : gradingResult.gradeLetter;
+    const finalFeedback = exam.examType === 'ESSAY' ? 'Pending manual grading.' : `Auto-graded: ${gradingResult.totalScore}/${exam.totalMarks} marks.`;
 
     // Create Submission, Answers, and Result in a transaction
     return await prisma.$transaction(async (tx) => {
@@ -160,8 +236,11 @@ export class ExamsService {
         data: {
           examId,
           studentId,
-          totalScore: gradingResult.totalScore,
-          status: gradingResult.status,
+          totalScore: finalScore,
+          status: finalStatus,
+          submissionStatus,
+          answerPdfUrl: data.answerPdfUrl,
+          answerPdfPublicId: data.answerPdfPublicId,
           answers: {
             createMany: {
               data: gradingResult.answerRecords,
@@ -170,16 +249,14 @@ export class ExamsService {
         },
       });
 
-      const exam = await tx.exam.findUnique({ where: { id: examId } });
-
       await tx.result.create({
         data: {
           studentId,
-          subjectId: exam!.subjectId,
-          examId: exam!.id,
-          marks: gradingResult.percentage,
-          grade: gradingResult.gradeLetter,
-          feedback: `Auto-graded: ${gradingResult.totalScore}/${exam!.totalMarks} marks.`,
+          subjectId: exam.subjectId,
+          examId: exam.id,
+          marks: finalMarks,
+          grade: finalGrade,
+          feedback: finalFeedback,
         },
       });
 
@@ -199,14 +276,52 @@ export class ExamsService {
       where: {
         subjectId: { in: subjectIds },
         isPublished: true,
-        isApproved: true,
-        startTime: { gt: new Date() }, // Future exams
       },
       include: {
         subject: { select: { subjectName: true } },
+        submissions: {
+          where: { studentId },
+        },
       },
       orderBy: { startTime: 'asc' },
     });
+  }
+
+  async notifyEligibleStudents(examId: string) {
+    try {
+      const exam = await prisma.exam.findUnique({
+        where: { id: examId },
+        include: { subject: true, teacher: { include: { user: true } } }
+      });
+
+      if (!exam || !exam.isPublished) return;
+
+      const enrollments = await prisma.enrollment.findMany({
+        where: {
+          subjectId: exam.subjectId,
+          enrollmentStatus: 'ACTIVE',
+          ...(exam.batchId && { student: { batchId: exam.batchId } }),
+        },
+        include: { student: true },
+      });
+
+      if (enrollments.length === 0) return;
+
+      const receiverIds = enrollments.map(e => e.student.userId);
+      const teacherName = exam.teacher.user.fullName;
+
+      await notificationService.createNotifications({
+        senderId: exam.teacher.userId,
+        receiverIds,
+        title: 'New Exam Published',
+        message: `${exam.examTitle} published by ${teacherName}.`,
+        type: 'EXAM',
+        referenceType: 'EXAM',
+        referenceId: exam.id,
+      });
+    } catch (err) {
+      console.error('Failed to notify students of new exam:', err);
+    }
   }
 }
 

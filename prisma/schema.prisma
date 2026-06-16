@@ -5,11 +5,13 @@
 // ============================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -83,17 +85,13 @@ enum FeeStatus {
 }
 
 enum ExamType {
-  MIDTERM
-  FINAL
-  QUIZ
-  ASSIGNMENT
-  MOCK
+  MCQ
+  ESSAY
 }
 
 enum QuestionType {
-  MCQ
-  TRUE_FALSE
-  SHORT_ANSWER
+  TEXT
+  IMAGE
 }
 
 enum PerformanceLevel {
@@ -221,6 +219,8 @@ model User {
   fileUploads           FileUpload[]
   enrollmentChanges     EnrollmentHistory[] @relation("EnrollmentChangedBy")
   classSessions         ClassSession[]
+  sentAnnouncements     Announcement[]      @relation("SentAnnouncements")
+  receivedAnnouncements Announcement[]      @relation("AnnouncementRecipients")
 
   @@index([email])
   @@index([role])
@@ -437,6 +437,7 @@ model Subject {
   subjectAllocations SubjectAllocation[]
   courseSchedules    CourseSchedule[]
   classSessions      ClassSession[]
+  announcements      Announcement[]      @relation("AnnouncementSubjects")
 
   @@map("subjects")
 }
@@ -528,14 +529,29 @@ model StudyMaterial {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  teacher     Teacher @relation(fields: [teacherId], references: [id])
-  subject     Subject @relation(fields: [subjectId], references: [id])
-  batchRecord Batch?  @relation(fields: [batchId], references: [id])
+  teacher     Teacher              @relation(fields: [teacherId], references: [id])
+  subject     Subject              @relation(fields: [subjectId], references: [id])
+  batchRecord Batch?               @relation(fields: [batchId], references: [id])
+  chunks      StudyMaterialChunk[]
 
   @@index([subjectId])
   @@index([teacherId])
   @@index([batchId])
   @@map("study_materials")
+}
+
+model StudyMaterialChunk {
+  id         String                      @id @default(uuid())
+  materialId String                      @map("material_id")
+  chunkIndex Int                         @map("chunk_index")
+  chunkText  String                      @map("chunk_text") @db.Text
+  embedding  Unsupported("vector(768)")?
+  createdAt  DateTime                    @default(now()) @map("created_at")
+
+  studyMaterial StudyMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@map("study_material_chunks")
 }
 
 model Assignment {
@@ -611,13 +627,13 @@ model Exam {
   teacherId   String    @map("teacher_id")
   termId      String?   @map("term_id")
   examTitle   String    @map("exam_title")
-  examType    ExamType  @default(MIDTERM) @map("exam_type")
+  examType    ExamType  @default(MCQ) @map("exam_type")
   examDate    DateTime  @map("exam_date")
   totalMarks  Int       @default(100) @map("total_marks")
   isPublished Boolean   @default(false) @map("is_published")
-  isApproved  Boolean   @default(false) @map("is_approved")
   startTime   DateTime? @map("start_time")
   duration    Int? // minutes
+  pdfUrl      String?   @map("pdf_url") @db.Text
   batch       String?
   batchId     String?   @map("batch_id")
   deletedAt   DateTime? @map("deleted_at")
@@ -656,11 +672,13 @@ model ExamSchedule {
 model Question {
   id            String       @id @default(uuid())
   examId        String       @map("exam_id")
-  questionText  String       @map("question_text") @db.Text
+  questionText  String?      @map("question_text") @db.Text
+  imageUrl      String?      @map("image_url") @db.Text
   questionType  QuestionType @map("question_type")
   marks         Int          @default(1)
   options       Json? // Stores array: [{ id: "opt1", text: "A" }, ...]
   correctAnswer String?      @map("correct_answer") // Securely stores the correct optionId (e.g. "opt2")
+  explanation   String?      @db.Text
   order         Int          @default(0)
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
@@ -672,12 +690,15 @@ model Question {
 }
 
 model ExamSubmission {
-  id          String   @id @default(uuid())
-  examId      String   @map("exam_id")
-  studentId   String   @map("student_id")
-  submittedAt DateTime @default(now()) @map("submitted_at")
-  totalScore  Decimal? @map("total_score") @db.Decimal(6, 2)
-  status      String   @default("GRADED") // GRADED, PENDING_MANUAL
+  id               String   @id @default(uuid())
+  examId           String   @map("exam_id")
+  studentId        String   @map("student_id")
+  submittedAt      DateTime @default(now()) @map("submitted_at")
+  totalScore       Decimal? @map("total_score") @db.Decimal(6, 2)
+  status           String   @default("GRADED") // GRADED, PENDING_MANUAL
+  submissionStatus  String   @default("SUBMITTED") @map("submission_status") // SUBMITTED, LATE_SUBMISSION
+  answerPdfUrl      String?  @map("answer_pdf_url") @db.Text
+  answerPdfPublicId String?  @map("answer_pdf_public_id")
 
   exam    Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
   student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -1048,11 +1069,15 @@ model Notification {
   title            String
   message          String           @db.Text
   notificationType NotificationType @map("notification_type")
+  type             String           @default("GENERAL")
+  referenceType    String?          @map("reference_type")
+  referenceId      String?          @map("reference_id")
   isRead           Boolean          @default(false) @map("is_read")
   readAt           DateTime?        @map("read_at")
   deletedAt        DateTime?        @map("deleted_at")
   sentAt           DateTime         @default(now()) @map("sent_at")
   createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at")
 
   sender   User? @relation("SentNotifications", fields: [senderId], references: [id])
   receiver User  @relation("ReceivedNotifications", fields: [receiverId], references: [id], onDelete: Cascade)
@@ -1063,24 +1088,34 @@ model Notification {
 }
 
 model Announcement {
-  id          String             @id @default(uuid())
-  adminId     String             @map("admin_id")
-  title       String
-  content     String             @db.Text
-  target      AnnouncementTarget @default(ALL)
-  batchId     String?            @map("batch_id")
-  publishDate DateTime           @map("publish_date")
-  expiryDate  DateTime?          @map("expiry_date")
-  isActive    Boolean            @default(true) @map("is_active")
-  deletedAt   DateTime?          @map("deleted_at")
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
+  id            String             @id @default(uuid())
+  adminId       String?            @map("admin_id")
+  senderId      String?            @map("sender_id")
+  title         String
+  content       String             @db.Text
+  target        AnnouncementTarget @default(ALL)
+  batchId       String?            @map("batch_id")
+  publishDate   DateTime           @map("publish_date")
+  expiryDate    DateTime?          @map("expiry_date")
+  priority      String             @default("MEDIUM") // LOW, MEDIUM, HIGH
+  status        String             @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED, SCHEDULED
+  attachmentUrl String?            @map("attachment_url")
+  isActive      Boolean            @default(true) @map("is_active")
+  deletedAt     DateTime?          @map("deleted_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
 
-  admin       Admin  @relation(fields: [adminId], references: [id])
-  batchRecord Batch? @relation(fields: [batchId], references: [id])
+  admin       Admin? @relation(fields: [adminId], references: [id])
+  sender      User?  @relation("SentAnnouncements", fields: [senderId], references: [id], onDelete: Cascade)
+  batchRecord Batch? @relation("BatchDirectAnnouncements", fields: [batchId], references: [id])
+
+  recipients User[]    @relation("AnnouncementRecipients")
+  batches    Batch[]   @relation("AnnouncementBatches")
+  subjects   Subject[] @relation("AnnouncementSubjects")
 
   @@index([target])
   @@index([publishDate])
+  @@index([status])
   @@index([batchId])
   @@map("announcements")
 }
@@ -1183,14 +1218,15 @@ model Batch {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  students           Student[]
-  materials          StudyMaterial[]
-  assignments        Assignment[]
-  exams              Exam[]
-  announcements      Announcement[]
-  streams            Stream[]
-  subjectAllocations SubjectAllocation[]
-  classSessions      ClassSession[]
+  students            Student[]
+  materials           StudyMaterial[]
+  assignments         Assignment[]
+  exams               Exam[]
+  announcements       Announcement[]      @relation("AnnouncementBatches")
+  announcementsDirect Announcement[]      @relation("BatchDirectAnnouncements")
+  streams             Stream[]
+  subjectAllocations  SubjectAllocation[]
+  classSessions       ClassSession[]
 
   @@map("batches")
 }

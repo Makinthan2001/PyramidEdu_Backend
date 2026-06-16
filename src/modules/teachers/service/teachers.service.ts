@@ -47,6 +47,7 @@ export class TeachersService {
         subjectAllocations: {
           include: {
             subject: true,
+            batches: true,
           },
         },
       },
@@ -72,6 +73,7 @@ export class TeachersService {
         subjectAllocations: {
           include: {
             subject: true,
+            batches: true,
           },
         },
       },

@@ -1,10 +1,12 @@
 import { Role, Prisma, AuditAction } from '@prisma/client';
 import prisma from '../../../config/prisma.config';
+import { notificationService } from '../../notification/service/notification.service';
 import { hashPassword, generateTemporaryPassword, comparePasswords } from '../../../utils/password.util';
 import { AppError } from '../../../utils/AppError';
 import type { UpdateUserDto } from '../dto';
 import fs from 'fs/promises';
 import path from 'path';
+import { deleteCloudinaryImage } from '../../../utils/cloudinary.util';
 
 export interface UsersQueryParams {
   page?: number;
@@ -383,6 +385,34 @@ export class UsersService {
       },
     });
 
+    // Notify all active Admins about the new registration
+    try {
+      const admins = await prisma.user.findMany({
+        where: {
+          role: Role.ADMIN,
+          isActive: true,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (admins.length > 0) {
+        const adminIds = admins.map((a) => a.id);
+        const roleLabel = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase().replace('_', ' ');
+        await notificationService.createNotifications({
+          senderId: user.id,
+          receiverIds: adminIds,
+          title: `New ${roleLabel} Registered`,
+          message: `${userData.fullName} created an account.`,
+          type: 'USER_REGISTRATION',
+          referenceType: 'USER',
+          referenceId: user.id,
+        });
+      }
+    } catch (notificationError) {
+      console.error('Failed to send registration notifications to admins:', notificationError);
+    }
+
     return { user, temporaryPassword: providedPassword };
   }
 
@@ -511,6 +541,7 @@ export class UsersService {
       updateData.fullName = `${existingFirstName} ${existingLastName}`.trim();
     }
     if (dto.phoneNumber) updateData.phone = dto.phoneNumber;
+    if (dto.profileImage !== undefined) updateData.profileImage = dto.profileImage;
 
     if (Object.keys(updateData).length > 0) {
       await prisma.user.update({
@@ -599,6 +630,21 @@ export class UsersService {
         description: `User ${user.email} updated`,
       },
     });
+
+    // Send profile update notification
+    try {
+      await notificationService.createNotification({
+        senderId: null,
+        receiverId: userId,
+        title: 'Profile Updated',
+        message: 'Your account profile information has been successfully updated.',
+        type: 'SYSTEM',
+        referenceType: 'PROFILE',
+        referenceId: userId,
+      });
+    } catch (err) {
+      console.error('Failed to trigger profile update notification:', err);
+    }
 
     return formatUserListItem(updatedUserWithData);
   }
@@ -720,13 +766,33 @@ export class UsersService {
     }
 
     // If there is an old profile image, try to delete it to save space
-    if (user.profileImage && user.profileImage.startsWith('/uploads/profile/')) {
-      try {
-        const oldImagePath = path.join(__dirname, '../../../../', user.profileImage);
-        await fs.unlink(oldImagePath);
-      } catch (err) {
-        console.error(`Failed to delete old profile image: ${user.profileImage}`, err);
-        // Continue even if delete fails
+    if (user.profileImage) {
+      if (user.profileImage.startsWith('/uploads/profile/')) {
+        try {
+          const oldImagePath = path.join(__dirname, '../../../../', user.profileImage);
+          await fs.unlink(oldImagePath);
+        } catch (err) {
+          console.error(`Failed to delete old local profile image: ${user.profileImage}`, err);
+          // Continue even if delete fails
+        }
+      } else if (user.profileImage.includes('res.cloudinary.com')) {
+        try {
+          const parts = user.profileImage.split('/upload/');
+          if (parts.length > 1) {
+            const pathAfterUpload = parts[1];
+            const pathParts = pathAfterUpload.split('/');
+            if (pathParts[0].startsWith('v') && /^\d+$/.test(pathParts[0].slice(1))) {
+              pathParts.shift();
+            }
+            const fullPathWithExt = pathParts.join('/');
+            const dotIdx = fullPathWithExt.lastIndexOf('.');
+            const publicId = dotIdx !== -1 ? fullPathWithExt.substring(0, dotIdx) : fullPathWithExt;
+            
+            await deleteCloudinaryImage(publicId);
+          }
+        } catch (err) {
+          console.error(`Failed to delete old Cloudinary image: ${user.profileImage}`, err);
+        }
       }
     }
 

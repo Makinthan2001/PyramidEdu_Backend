@@ -148,6 +148,18 @@ export async function updateQuestion(req: Request, res: Response, next: NextFunc
   }
 }
 
+export async function getExamSubmissions(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId as string;
+    const userRole = (req as any).userRole as string;
+    const teacherId = await resolveTeacherProfileId(userId, userRole);
+    const submissions = await examsService.getExamSubmissions(req.params.id as string, teacherId);
+    res.status(200).json({ success: true, data: submissions });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // STUDENT CONTROLLERS
 
 export async function getStudentQuestions(req: Request, res: Response, next: NextFunction) {
@@ -175,6 +187,82 @@ export async function getMyUpcomingExams(req: Request, res: Response, next: Next
     const actualStudentId = (req as any).studentId as string || (req as any).userId as string;
     const exams = await examsService.getStudentUpcomingExams(actualStudentId);
     res.status(200).json({ success: true, data: exams });
+  } catch (error) {
+    next(error);
+  }
+}
+
+import { uploadToCloudinary } from '../../../utils/cloudinary.util';
+import { enqueuePdfIngestion } from '../../rag/services/pdf-ingestion.service';
+
+export async function uploadFileToCloudinary(req: Request, res: Response, next: NextFunction) {
+  try {
+    const file = req.file;
+    const bucket = req.body.bucket;
+
+    if (!file) {
+      throw new AppError('No file uploaded', 400);
+    }
+    if (!bucket) {
+      throw new AppError('Bucket name is required', 400);
+    }
+
+    let folder = '';
+    let resourceType: 'image' | 'raw' | 'video' | 'auto' = 'auto';
+
+    // Server-side validation
+    if (bucket === 'question-images' || bucket === 'profile-images') {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+        throw new AppError('Invalid image format. Allowed formats: JPEG, PNG, WEBP.', 400);
+      }
+      if (file.size > 7 * 1024 * 1024) {
+        throw new AppError('Image size cannot exceed 7MB.', 400);
+      }
+      folder = process.env.CLOUDINARY_QUESTION_FOLDER || 'pyramidEdu/question-images';
+      resourceType = 'image';
+    } else if (bucket === 'essay-pdfs') {
+      if (file.mimetype !== 'application/pdf') {
+        throw new AppError('Invalid document format. Only PDF is allowed.', 400);
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        throw new AppError('PDF size cannot exceed 20MB.', 400);
+      }
+      folder = process.env.CLOUDINARY_ESSAY_FOLDER || 'pyramidEdu/essay-pdfs';
+      resourceType = 'auto';
+    } else if (bucket === 'answer-pdfs') {
+      if (file.mimetype !== 'application/pdf') {
+        throw new AppError('Invalid document format. Only PDF is allowed.', 400);
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        throw new AppError('PDF size cannot exceed 20MB.', 400);
+      }
+      folder = process.env.CLOUDINARY_EXAM_ANSWER_FOLDER || 'pyramidEdu/answer-pdfs';
+      resourceType = 'auto';
+    } else {
+      throw new AppError('Invalid bucket specified', 400);
+    }
+
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    const uploadResult = await uploadToCloudinary(file.buffer, {
+      folder,
+      publicId: fileName,
+      resourceType,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'File uploaded successfully',
+      url: uploadResult.secure_url,
+      public_id: uploadResult.public_id
+    });
+
+    if (bucket === 'essay-pdfs') {
+      enqueuePdfIngestion({
+        buffer: file.buffer,
+        sourceUrl: uploadResult.secure_url,
+      });
+    }
   } catch (error) {
     next(error);
   }

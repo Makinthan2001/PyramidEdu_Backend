@@ -15,7 +15,7 @@ function validateEnv() {
             '\n');
         process.exit(1);
     }
-    const optional = ['PORT', 'NODE_ENV', 'CORS_ORIGIN', 'JWT_ACCESS_EXPIRES_IN', 'JWT_REFRESH_EXPIRES_IN', 'JWT_RESET_EXPIRES_IN'];
+    const optional = ['PORT', 'NODE_ENV', 'CORS_ORIGIN', 'JWT_ACCESS_EXPIRES_IN', 'JWT_REFRESH_EXPIRES_IN', 'JWT_RESET_EXPIRES_IN', 'CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
     const missingOptional = optional.filter((key) => !process.env[key]);
     if (missingOptional.length > 0) {
         console.warn(`Optional env vars not set: ${missingOptional.join(', ')}`);

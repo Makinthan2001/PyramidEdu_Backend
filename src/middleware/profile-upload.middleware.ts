@@ -1,42 +1,9 @@
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { v4 as uuidv4 } from 'uuid';
 import { AppError } from '../utils/AppError';
 import { Request } from 'express';
 
-// Define the root uploads directory
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
-
-// Create storage engine
-const storage = multer.diskStorage({
-  destination: (req: Request, file, cb) => {
-    // Determine the role from the request (assumes auth middleware sets req.userRole)
-    const role = (req as any).userRole?.toLowerCase() || 'unknown';
-    
-    // Determine the target directory
-    let folder = 'profile/misc';
-    if (role === 'admin') folder = 'profile/admin';
-    else if (role === 'teacher') folder = 'profile/teacher';
-    else if (role === 'manager') folder = 'profile/manager';
-    else if (role === 'student') folder = 'profile/student';
-    
-    const targetDir = path.join(UPLOADS_DIR, folder);
-
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-
-    cb(null, targetDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename: uuid-timestamp.extension
-    const ext = path.extname(file.originalname).toLowerCase();
-    const uniqueFilename = `${uuidv4()}-${Date.now()}${ext}`;
-    cb(null, uniqueFilename);
-  }
-});
+// Use memory storage to store files in buffer for Cloudinary uploads
+const storage = multer.memoryStorage();
 
 // File filter to allow only specific image types
 const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {

@@ -17,9 +17,22 @@ router.get('/my-upcoming', roleGuard(Role.STUDENT), controller.getMyUpcomingExam
 router.get('/:id/questions', roleGuard(Role.STUDENT), controller.getStudentQuestions);
 router.post('/:id/submit', roleGuard(Role.STUDENT), validate(validators.submitExamSchema), controller.submitExam);
 
+import multer from 'multer';
+const uploadInMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
+});
+
 // ----------------------------------------------------
 // TEACHER / ADMIN ROUTES
 // ----------------------------------------------------
+router.post(
+  '/upload-file',
+  roleGuard(Role.TEACHER, Role.ADMIN, Role.MANAGER),
+  uploadInMemory.single('file'),
+  controller.uploadFileToCloudinary
+);
+
 router.post(
   '/',
   roleGuard(Role.TEACHER, Role.ADMIN),
@@ -37,6 +50,12 @@ router.get(
   '/:id',
   roleGuard(Role.TEACHER, Role.ADMIN),
   controller.getExamById
+);
+
+router.get(
+  '/:id/submissions',
+  roleGuard(Role.TEACHER, Role.ADMIN),
+  controller.getExamSubmissions
 );
 
 router.patch(

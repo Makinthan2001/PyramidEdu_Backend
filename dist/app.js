@@ -13,6 +13,7 @@ const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const errorHandler_1 = __importDefault(require("./middleware/errorHandler"));
 const validateEnv_1 = require("./utils/validateEnv");
+const cloudinary_util_1 = require("./utils/cloudinary.util");
 const auth_1 = __importDefault(require("./modules/auth"));
 const health_1 = __importDefault(require("./modules/health"));
 const mobile_1 = __importDefault(require("./modules/mobile"));
@@ -26,7 +27,11 @@ const qr_1 = require("./modules/qr");
 const attendance_1 = require("./modules/attendance");
 const exams_1 = __importDefault(require("./modules/exams"));
 const teachers_1 = __importDefault(require("./modules/teachers"));
+const support_staff_1 = __importDefault(require("./modules/support-staff"));
+const chat_1 = require("./modules/chat");
+const announcements_1 = __importDefault(require("./modules/announcements"));
 (0, validateEnv_1.validateEnv)();
+(0, cloudinary_util_1.configureCloudinary)();
 const app = (0, express_1.default)();
 // Secure security headers
 app.use((0, helmet_1.default)({
@@ -90,8 +95,14 @@ app.use('/api/v1/qr', qr_1.qrRoutes);
 app.use('/api/v1/attendance', attendance_1.attendanceRoutes);
 // Teachers routes
 app.use('/api/v1/teachers', teachers_1.default);
+// Support Staff routes
+app.use('/api/v1/support-staff', support_staff_1.default);
 // Exams routes
 app.use('/api/v1/exams', exams_1.default);
+// Chat routes
+app.use('/api/v1/chat', chat_1.chatRouter);
+// Announcements routes
+app.use('/api/v1/announcements', announcements_1.default);
 // centralized error handler - must be last
 app.use(errorHandler_1.default);
 exports.default = app;

@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import errorHandler from './middleware/errorHandler';
 import { validateEnv } from './utils/validateEnv';
+import { configureCloudinary } from './utils/cloudinary.util';
 import authRouter from './modules/auth';
 import healthRouter from './modules/health';
 import mobileRouter from './modules/mobile';
@@ -21,8 +22,13 @@ import { qrRoutes } from './modules/qr';
 import { attendanceRoutes } from './modules/attendance';
 import examsRouter from './modules/exams';
 import teachersRouter from './modules/teachers';
+import supportStaffRouter from './modules/support-staff';
+import { chatRouter } from './modules/chat';
+import announcementsRouter from './modules/announcements';
+import notificationsRouter from './modules/notification';
 
 validateEnv();
+configureCloudinary();
 
 const app = express();
 
@@ -106,8 +112,20 @@ app.use('/api/v1/attendance', attendanceRoutes);
 // Teachers routes
 app.use('/api/v1/teachers', teachersRouter);
 
+// Support Staff routes
+app.use('/api/v1/support-staff', supportStaffRouter);
+
 // Exams routes
 app.use('/api/v1/exams', examsRouter);
+
+// Chat routes
+app.use('/api/v1/chat', chatRouter);
+
+// Announcements routes
+app.use('/api/v1/announcements', announcementsRouter);
+
+// Notifications routes
+app.use('/api/v1/notifications', notificationsRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);

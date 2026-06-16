@@ -4,12 +4,14 @@ import { createStudyMaterialSchema } from '../validators/study-materials.validat
 import fs from 'fs';
 import path from 'path';
 import prisma from '../../../config/prisma.config';
+import { processRAGIngestion, generateRAGAnswer } from '../../../utils/rag.util';
+import { uploadToCloudinary } from '../../../utils/cloudinary.util';
 
 export async function createStudyMaterial(req: Request, res: Response, next: NextFunction) {
   try {
     // Parse form data using the zod schema
     const dto = createStudyMaterialSchema.parse(req.body);
-    
+
     // Check files
     // Assuming authenticate middleware sets req.user and we can get teacherProfileId
     // Wait, authenticate sets req.user to JwtAccessPayload. 
@@ -17,10 +19,10 @@ export async function createStudyMaterial(req: Request, res: Response, next: Nex
     // For now, let's assume the client passes teacherId or we get it from auth
     // Let's get it from the database if they are a teacher
     const userId = req.user!.sub;
-    
+
     // Actually, it's better to fetch teacherProfileId if it's not in the token
     const user = await prisma.user.findUnique({ where: { id: userId }, include: { teacher: true } });
-    
+
     if (req.user!.role === 'TEACHER' && !user?.teacher) {
       throw new Error("Teacher profile not found");
     }
@@ -34,28 +36,52 @@ export async function createStudyMaterial(req: Request, res: Response, next: Nex
     const subject = await prisma.subject.findUnique({ where: { id: dto.subjectId } });
     if (!subject) throw new Error("Subject not found");
 
-    const subjectFolder = subject.subjectName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    const teacherFolder = user.fullName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-
-    const finalDir = path.join(__dirname, '../../../../uploads/study-materials', subjectFolder, teacherFolder);
-    if (!fs.existsSync(finalDir)) {
-      fs.mkdirSync(finalDir, { recursive: true });
-    }
-
     const fileUrls: string[] = [];
     const files = req.files as Express.Multer.File[];
-    
+
     if (files && files.length > 0) {
       for (const file of files) {
-        const finalPath = path.join(finalDir, file.filename);
-        fs.renameSync(file.path, finalPath);
-        // Save relative path
-        fileUrls.push(`/uploads/study-materials/${subjectFolder}/${teacherFolder}/${file.filename}`);
+        const fileBuffer = fs.readFileSync(file.path);
+
+        // Generate a safe filename that includes the extension to ensure correct download behavior
+        const timestamp = Date.now();
+        const originalName = file.originalname || 'document.pdf';
+        const nameWithoutExt = originalName.replace(/\.[^/.]+$/, '');
+        const safeFilename = `${timestamp}_${nameWithoutExt.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
+
+        // Upload directly to Cloudinary
+        const uploadResult = await uploadToCloudinary(fileBuffer, {
+          folder: process.env.CLOUDINARY_STUDY_MATERIAL_FOLDER || 'pyramidEdu/study_material',
+          resourceType: 'raw',
+          publicId: safeFilename,
+        });
+
+        fileUrls.push(uploadResult.secure_url);
+
+        // We no longer delete the temporary local file here because
+        // we need it for the RAG ingestion pipeline later.
+        // It will be deleted after processRAGIngestion completes.
       }
     }
 
     const result = await service.createStudyMaterial(teacherProfileId, { ...dto, fileUrls });
-    
+
+    // Trigger RAG ingestion in the background asynchronously
+    if (files && files.length > 0) {
+      processRAGIngestion(result.id, files.map(f => f.path))
+        .catch((err) => {
+          console.error("RAG Ingestion failed:", err);
+        })
+        .finally(() => {
+          // Clean up temp files AFTER ingestion
+          files.forEach(f => {
+            if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
+          });
+        });
+    } else if (fileUrls.length > 0) {
+      processRAGIngestion(result.id, fileUrls).catch(err => console.error("RAG Ingestion failed:", err));
+    }
+
     res.status(201).json({
       success: true,
       message: 'Study material uploaded successfully',
@@ -70,7 +96,7 @@ export async function createStudyMaterial(req: Request, res: Response, next: Nex
         if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
       });
     }
-    
+
     res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : "An error occurred during upload"
@@ -120,7 +146,7 @@ export async function deleteStudyMaterial(req: Request, res: Response, next: Nex
     const role = req.user!.role;
 
     const user = await prisma.user.findUnique({ where: { id: userId }, include: { teacher: true } });
-    
+
     const teacherProfileId = user?.teacher?.id || '';
 
     await service.deleteStudyMaterial(id, teacherProfileId, role);
@@ -139,7 +165,7 @@ export async function updateStudyMaterial(req: Request, res: Response, next: Nex
     const id = req.params.id as string;
     const userId = req.user!.sub;
     const role = req.user!.role;
-    
+
     // Fetch teacher profile if teacher
     let teacherProfileId = '';
     if (role === 'TEACHER') {
@@ -149,36 +175,53 @@ export async function updateStudyMaterial(req: Request, res: Response, next: Nex
     }
 
     const { title, text, batch, status } = req.body;
-    
+
     // Process files if any are uploaded
     const fileUrls: string[] = [];
     const files = req.files as Express.Multer.File[];
-    
+
     if (files && files.length > 0) {
-      // Get material to know the teacher and subject for folder structure
-      const material = await prisma.studyMaterial.findUnique({
-        where: { id },
-        include: { subject: true, teacher: { include: { user: true } } }
-      });
-      
-      if (material) {
-        const subjectFolder = material.subject.subjectName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-        const teacherFolder = (material.teacher.user.fullName || "Teacher").replace(/[^a-zA-Z0-9.\-_]/g, '_');
+      for (const file of files) {
+        const fileBuffer = fs.readFileSync(file.path);
 
-        const finalDir = path.join(__dirname, '../../../../uploads/study-materials', subjectFolder, teacherFolder);
-        if (!fs.existsSync(finalDir)) {
-          fs.mkdirSync(finalDir, { recursive: true });
-        }
+        // Generate a safe filename that includes the extension to ensure correct download behavior
+        const timestamp = Date.now();
+        const originalName = file.originalname || 'document.pdf';
+        const nameWithoutExt = originalName.replace(/\.[^/.]+$/, '');
+        const safeFilename = `${timestamp}_${nameWithoutExt.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
 
-        for (const file of files) {
-          const finalPath = path.join(finalDir, file.filename);
-          fs.renameSync(file.path, finalPath);
-          fileUrls.push(`/uploads/study-materials/${subjectFolder}/${teacherFolder}/${file.filename}`);
-        }
+        // Upload directly to Cloudinary
+        const uploadResult = await uploadToCloudinary(fileBuffer, {
+          folder: process.env.CLOUDINARY_STUDY_MATERIAL_FOLDER || 'pyramidEdu/study_material',
+          resourceType: 'raw',
+          publicId: safeFilename,
+        });
+
+        fileUrls.push(uploadResult.secure_url);
+
+        // We no longer delete the temporary local file here because
+        // we need it for the RAG ingestion pipeline later.
+        // It will be deleted after processRAGIngestion completes.
       }
     }
 
     const result = await service.updateStudyMaterial(id, teacherProfileId, role, { title, text, batch, status, fileUrls });
+
+    // Trigger RAG ingestion in the background asynchronously
+    if (files && files.length > 0) {
+      processRAGIngestion(result.id, files.map(f => f.path))
+        .catch((err) => {
+          console.error("RAG Ingestion failed:", err);
+        })
+        .finally(() => {
+          // Clean up temp files AFTER ingestion
+          files.forEach(f => {
+            if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
+          });
+        });
+    } else if (fileUrls.length > 0) {
+      processRAGIngestion(result.id, fileUrls).catch(err => console.error("RAG Ingestion failed:", err));
+    }
 
     res.status(200).json({
       success: true,
@@ -189,6 +232,29 @@ export async function updateStudyMaterial(req: Request, res: Response, next: Nex
     res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : "An error occurred during update"
+    });
+  }
+}
+
+export async function chatWithMaterials(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { question, subjectId, batchId } = req.body;
+
+    if (!question || !question.trim()) {
+      return res.status(400).json({ success: false, message: 'Question is required' });
+    }
+
+    const answer = await generateRAGAnswer(question.trim(), { subjectId, batchId });
+
+    res.status(200).json({
+      success: true,
+      data: { answer }
+    });
+  } catch (error) {
+    console.error("RAG Chat Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "An error occurred during RAG chat"
     });
   }
 }
