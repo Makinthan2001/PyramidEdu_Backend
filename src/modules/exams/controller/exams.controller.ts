@@ -229,6 +229,15 @@ export async function uploadFileToCloudinary(req: Request, res: Response, next: 
       }
       folder = process.env.CLOUDINARY_ESSAY_FOLDER || 'pyramidEdu/essay-pdfs';
       resourceType = 'auto';
+    } else if (bucket === 'answer-pdfs') {
+      if (file.mimetype !== 'application/pdf') {
+        throw new AppError('Invalid document format. Only PDF is allowed.', 400);
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        throw new AppError('PDF size cannot exceed 20MB.', 400);
+      }
+      folder = process.env.CLOUDINARY_EXAM_ANSWER_FOLDER || 'pyramidEdu/answer-pdfs';
+      resourceType = 'auto';
     } else {
       throw new AppError('Invalid bucket specified', 400);
     }
@@ -244,7 +253,8 @@ export async function uploadFileToCloudinary(req: Request, res: Response, next: 
     res.status(200).json({
       success: true,
       message: 'File uploaded successfully',
-      url: uploadResult.secure_url
+      url: uploadResult.secure_url,
+      public_id: uploadResult.public_id
     });
 
     if (bucket === 'essay-pdfs') {

@@ -199,7 +199,20 @@ export class ExamsService {
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     if (!exam) throw new AppError('Exam not found', 404);
 
-    const gradingResult = await gradingService.gradeSubmission(examId, studentId, data.answers);
+    const existingSubmission = await prisma.examSubmission.findUnique({
+      where: {
+        examId_studentId: {
+          examId,
+          studentId,
+        },
+      },
+    });
+
+    if (existingSubmission) {
+      throw new AppError('You have already submitted this exam.', 400);
+    }
+
+    const gradingResult = await gradingService.gradeSubmission(examId, studentId, data.answers || {});
 
     // Calculate submissionStatus
     const now = new Date();
@@ -211,15 +224,23 @@ export class ExamsService {
       }
     }
 
+    const finalStatus = exam.examType === 'ESSAY' ? 'PENDING_MANUAL' : gradingResult.status;
+    const finalScore = exam.examType === 'ESSAY' ? 0 : gradingResult.totalScore;
+    const finalMarks = exam.examType === 'ESSAY' ? 0 : gradingResult.percentage;
+    const finalGrade = exam.examType === 'ESSAY' ? null : gradingResult.gradeLetter;
+    const finalFeedback = exam.examType === 'ESSAY' ? 'Pending manual grading.' : `Auto-graded: ${gradingResult.totalScore}/${exam.totalMarks} marks.`;
+
     // Create Submission, Answers, and Result in a transaction
     return await prisma.$transaction(async (tx) => {
       const submission = await tx.examSubmission.create({
         data: {
           examId,
           studentId,
-          totalScore: gradingResult.totalScore,
-          status: gradingResult.status,
+          totalScore: finalScore,
+          status: finalStatus,
           submissionStatus,
+          answerPdfUrl: data.answerPdfUrl,
+          answerPdfPublicId: data.answerPdfPublicId,
           answers: {
             createMany: {
               data: gradingResult.answerRecords,
@@ -233,9 +254,9 @@ export class ExamsService {
           studentId,
           subjectId: exam.subjectId,
           examId: exam.id,
-          marks: gradingResult.percentage,
-          grade: gradingResult.gradeLetter,
-          feedback: `Auto-graded: ${gradingResult.totalScore}/${exam.totalMarks} marks.`,
+          marks: finalMarks,
+          grade: finalGrade,
+          feedback: finalFeedback,
         },
       });
 
