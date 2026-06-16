@@ -85,8 +85,11 @@ export async function uploadFileToCloudinary(
     const file = req.file;
     const bucket = req.body.bucket;
 
+    console.log("Upload file hit! req.body:", req.body);
+    console.log("Upload file hit! req.file:", req.file ? "present" : "missing");
+
     if (!file) {
-      throw new AppError("No file uploaded", 400);
+      throw new AppError("No file uploaded. req.body was: " + JSON.stringify(req.body), 400);
     }
     if (!bucket) {
       throw new AppError("Bucket name is required", 400);
@@ -104,13 +107,24 @@ export async function uploadFileToCloudinary(
       }
       folder = process.env.CLOUDINARY_ESSAY_FOLDER || "pyramidEdu/essay-pdfs";
       resourceType = "auto";
+    } else if (bucket === "answer-pdfs") {
+      // Allow both application/pdf and generic octet-stream for React Native edge cases
+      if (file.mimetype !== "application/pdf" && file.mimetype !== "application/octet-stream") {
+        throw new AppError("Invalid document format. Only PDF is allowed. Received: " + file.mimetype, 400);
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        throw new AppError("PDF size cannot exceed 20MB.", 400);
+      }
+      folder = process.env.CLOUDINARY_EXAM_ANSWER_FOLDER || "pyramidEdu/answer-pdfs";
+      resourceType = "raw";
     } else {
       throw new AppError("Invalid bucket specified for mobile upload", 400);
     }
 
-    const fileName = `${Date.now()}-${Math.random()
-      .toString(36)
-      .substring(2, 9)}`;
+    let fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    if (resourceType === "raw" || bucket === "essay-pdfs" || bucket === "answer-pdfs") {
+      fileName += ".pdf";
+    }
 
     const uploadResult = await uploadToCloudinary(file.buffer, {
       folder,
@@ -122,6 +136,7 @@ export async function uploadFileToCloudinary(
       success: true,
       message: "File uploaded successfully",
       url: uploadResult.secure_url,
+      public_id: uploadResult.public_id,
     });
 
     if (bucket === "essay-pdfs") {
