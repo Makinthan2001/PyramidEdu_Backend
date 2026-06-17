@@ -1,18 +1,15 @@
 import app from './app';
 import { notificationService } from './modules/notification/service/notification.service';
+import { notificationCronService } from './modules/mobile/notification/notification-cron.service';
+
 
 const PORT = Number(process.env.PORT) || 5000;
 
 const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT} (env=${process.env.NODE_ENV || 'development'})`);
   
-  // Check monthly reports trigger
-  notificationService.triggerMonthlyReportNotifications().catch(console.error);
-  
-  // Setup daily check
-  setInterval(() => {
-    notificationService.triggerMonthlyReportNotifications().catch(console.error);
-  }, 24 * 60 * 60 * 1000);
+  // Initialize Cron Jobs
+  notificationCronService; // The constructor calls init()
 });
 
 const shutdown = (reason: string) => {
