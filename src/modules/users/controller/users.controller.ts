@@ -320,6 +320,23 @@ export async function uploadProfileImage(req: Request, res: Response, next: Next
   }
 }
 
+/**
+ * GET /api/v1/users/admin/dashboard-stats
+ * Get admin dashboard statistics
+ */
+export async function getAdminDashboardStats(req: Request, res: Response, next: NextFunction) {
+  try {
+    const stats = await UsersService.getAdminDashboardStats();
+    res.status(200).json({
+      success: true,
+      message: 'Admin dashboard statistics retrieved successfully',
+      data: stats,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export default {
   getUsers,
   getUserById,
@@ -332,4 +349,5 @@ export default {
   getProfile,
   updateProfile,
   uploadProfileImage,
+  getAdminDashboardStats,
 };
