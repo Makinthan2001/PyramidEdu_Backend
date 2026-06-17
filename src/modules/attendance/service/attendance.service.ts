@@ -1,8 +1,39 @@
 import prisma from '../../../config/prisma.config';
 import { AppError } from '../../../utils/AppError';
 import { AttendanceStatus, AttendanceMethod, EnrollmentStatus } from '@prisma/client';
+import { NotificationService } from '../../mobile/notification/notification.service';
 
 export class AttendanceService {
+  static async checkAndNotifyAttendanceDrop(studentId: string, subjectId: string) {
+    try {
+      const allAttendances = await prisma.attendance.findMany({
+        where: { studentId, subjectId },
+      });
+      if (allAttendances.length === 0) return;
+
+      const presentCount = allAttendances.filter(a => a.isPresent).length;
+      const percentage = (presentCount / allAttendances.length) * 100;
+
+      await prisma.student.update({
+        where: { id: studentId },
+        data: { attendancePercentage: percentage },
+      });
+
+      if (percentage < 75) {
+        const subject = await prisma.subject.findUnique({ where: { id: subjectId } });
+        await NotificationService.sendIfNotAlreadySent(
+          [studentId],
+          'ATTENDANCE_WARNING',
+          `${subjectId}-${new Date().toISOString().split('T')[0]}`,
+          'Attendance Warning',
+          `Your attendance for ${subject?.subjectName} has dropped to ${percentage.toFixed(1)}%.`,
+          { type: 'ATTENDANCE_WARNING', route: '/(tabs)/more/attendance' }
+        );
+      }
+    } catch (err) {
+      console.error('Failed to check attendance drop:', err);
+    }
+  }
   static async markAttendanceByQR(
     token: string,
     subjectId: string,
@@ -135,6 +166,9 @@ export class AttendanceService {
         markedAt: new Date(),
       },
     });
+
+    // Check attendance percentage and notify if below 75%
+    await AttendanceService.checkAndNotifyAttendanceDrop(student.id, subjectId);
 
     return {
       success: true,
@@ -317,6 +351,7 @@ export class AttendanceService {
       });
 
       results.push(attendance);
+      await AttendanceService.checkAndNotifyAttendanceDrop(record.studentId, record.subjectId);
     }
 
     return results;
@@ -465,6 +500,10 @@ export class AttendanceService {
         data: absentRecords,
         skipDuplicates: true,
       });
+
+      for (const record of absentRecords) {
+        await AttendanceService.checkAndNotifyAttendanceDrop(record.studentId, session.subjectId);
+      }
     }
 
     return {

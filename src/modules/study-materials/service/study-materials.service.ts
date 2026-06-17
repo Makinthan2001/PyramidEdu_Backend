@@ -31,8 +31,36 @@ export async function createStudyMaterial(
     },
     include: {
       subject: { select: { subjectName: true } },
+      teacher: { include: { user: { select: { fullName: true } } } },
     },
   });
+
+  try {
+    const enrollments = await prisma.enrollment.findMany({
+      where: {
+        subjectId: dto.subjectId,
+        enrollmentStatus: 'ACTIVE',
+        ...(dto.batch && { student: { batch: dto.batch } }),
+      },
+      include: { student: true },
+    });
+
+    const studentIds = enrollments.map((e) => e.student.id);
+    if (studentIds.length > 0) {
+      const teacherName = material.teacher?.user?.fullName || 'Your teacher';
+      const { NotificationService } = require('../../mobile/notification/notification.service');
+      await NotificationService.sendIfNotAlreadySent(
+        studentIds,
+        'MATERIAL_UPLOADED',
+        material.id,
+        'New Study Material Available',
+        `${teacherName} uploaded '${material.title}' for ${material.subject?.subjectName}`,
+        { type: 'MATERIAL_UPLOADED', materialId: material.id, route: '/(tabs)/more/materials' }
+      );
+    }
+  } catch (err) {
+    console.error('Failed to notify students of new study material:', err);
+  }
 
   return material;
 }
