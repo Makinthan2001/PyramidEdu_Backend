@@ -208,7 +208,7 @@ export class ManagerService {
           title = 'Payment Approved';
           message = `Your registration fee payment of LKR ${studentDetails.totalFeeAmount} has been approved.`;
         }
-        
+
         await notificationService.createNotification({
           senderId: null,
           receiverId: studentDetails.userId,
@@ -352,7 +352,7 @@ export class ManagerService {
         for (const sub of data.subjects) {
           const subject = await tx.subject.findUnique({ where: { id: sub.subjectId } });
           if (!subject) throw new AppError(`Subject not found: ${sub.subjectId}`, 404);
-          
+
           totalFee += Number(subject.feeAmount);
 
           await tx.enrollment.create({
@@ -368,7 +368,7 @@ export class ManagerService {
         // Update total fee
         await tx.student.update({
           where: { id },
-          data: { 
+          data: {
             totalFeeAmount: totalFee,
             lastFeeUpdateDate: new Date(),
           },
@@ -384,14 +384,14 @@ export class ManagerService {
         where: { studentId: id, enrollmentStatus: 'ACTIVE' },
         include: { teacher: true, student: { include: { user: true } } }
       });
-      
+
       for (const enrollment of enrollments) {
         const teacher = enrollment.teacher;
         if (teacher) {
           const teacherUserId = teacher.userId;
           const studentName = enrollment.student.user.fullName;
           const batchName = enrollment.student.batch || 'Class';
-          
+
           await notificationService.createNotification({
             senderId: enrollment.student.userId,
             receiverId: teacherUserId,
@@ -459,11 +459,11 @@ export class ManagerService {
       for (const sub of data.subjects) {
         const subject = await tx.subject.findUnique({ where: { id: sub.subjectId } });
         if (!subject) throw new AppError(`Subject not found: ${sub.subjectId}`, 404);
-        
+
         let teacherName = null;
         if (sub.teacherId) {
-           const teacher = await tx.teacher.findUnique({ where: { id: sub.teacherId }, include: { user: true } });
-           if (teacher) teacherName = teacher.user.fullName;
+          const teacher = await tx.teacher.findUnique({ where: { id: sub.teacherId }, include: { user: true } });
+          if (teacher) teacherName = teacher.user.fullName;
         }
 
         newMonthlyFee += Number(subject.feeAmount);
@@ -520,14 +520,14 @@ export class ManagerService {
         where: { studentId: id, enrollmentStatus: 'ACTIVE' },
         include: { teacher: true, student: { include: { user: true } } }
       });
-      
+
       for (const enrollment of enrollments) {
         const teacher = enrollment.teacher;
         if (teacher) {
           const teacherUserId = teacher.userId;
           const studentName = enrollment.student.user.fullName;
           const batchName = enrollment.student.batch || 'Class';
-          
+
           await notificationService.createNotification({
             senderId: enrollment.student.userId,
             receiverId: teacherUserId,
