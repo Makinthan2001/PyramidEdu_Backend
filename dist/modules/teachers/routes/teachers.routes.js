@@ -39,6 +39,7 @@ const jwt_guard_1 = require("../../../modules/auth/guards/jwt.guard");
 const role_guard_1 = require("../../../modules/auth/guards/role.guard");
 const validate_1 = require("../../../middleware/validate");
 const controller = __importStar(require("../controller/teachers.controller"));
+const teacherStudentsController = __importStar(require("../controller/teacher-students.controller"));
 const teachers_validator_1 = require("../validators/teachers.validator");
 const router = (0, express_1.Router)();
 // Protected routes
@@ -48,6 +49,9 @@ router.get('/', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN, client_1.Role.M
 // Self‑service routes for the logged‑in teacher
 router.get('/me', (0, role_guard_1.roleGuard)(client_1.Role.TEACHER), controller.getMyProfile);
 router.patch('/me', (0, role_guard_1.roleGuard)(client_1.Role.TEACHER), (0, validate_1.validate)(teachers_validator_1.teachersValidator.updateTeacherSchema), controller.updateMyProfile);
+router.get('/me/dashboard', (0, role_guard_1.roleGuard)(client_1.Role.TEACHER), controller.getMyDashboardData);
+router.get('/me/students', (0, role_guard_1.roleGuard)(client_1.Role.TEACHER), teacherStudentsController.getMyStudents);
+router.get('/me/students/:studentId', (0, role_guard_1.roleGuard)(client_1.Role.TEACHER), teacherStudentsController.getMyStudentById);
 // Get teacher by ID – ADMIN, MANAGER, or the teacher themselves
 router.get('/:id', (0, role_guard_1.roleGuard)(client_1.Role.ADMIN, client_1.Role.MANAGER, client_1.Role.TEACHER), controller.getTeacherById);
 // Create teacher – ADMIN only

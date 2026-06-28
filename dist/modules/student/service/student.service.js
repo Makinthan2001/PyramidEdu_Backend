@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.StudentService = void 0;
 const prisma_config_1 = __importDefault(require("../../../config/prisma.config"));
+const notification_service_1 = require("../../notification/service/notification.service");
 const AppError_1 = require("../../../utils/AppError");
 const password_util_1 = require("../../../utils/password.util");
 const client_1 = require("@prisma/client");
@@ -244,6 +245,33 @@ class StudentService {
             yield prisma_config_1.default.otpVerification.delete({
                 where: { email: dto.email },
             });
+            // Notify Teachers about student assignment
+            try {
+                const studentId = result.student.id;
+                const enrollments = yield prisma_config_1.default.enrollment.findMany({
+                    where: { studentId, enrollmentStatus: 'ACTIVE' },
+                    include: { teacher: true }
+                });
+                for (const enrollment of enrollments) {
+                    if (enrollment.teacher) {
+                        const teacherUserId = enrollment.teacher.userId;
+                        const studentName = result.user.fullName;
+                        const batchName = result.student.batch || 'Class';
+                        yield notification_service_1.notificationService.createNotification({
+                            senderId: result.user.id,
+                            receiverId: teacherUserId,
+                            title: 'New Student Assigned',
+                            message: `${studentName} joined Batch ${batchName}.`,
+                            type: 'STUDENT_ENROLLMENT',
+                            referenceType: 'ENROLLMENT',
+                            referenceId: enrollment.id,
+                        });
+                    }
+                }
+            }
+            catch (err) {
+                console.error('Failed to trigger notifications for student registration enrollments:', err);
+            }
             return result;
         });
     }

@@ -18,6 +18,7 @@ router.get('/', roleGuard(Role.ADMIN, Role.MANAGER), controller.getTeachers);
 // Self‑service routes for the logged‑in teacher
 router.get('/me', roleGuard(Role.TEACHER), controller.getMyProfile);
 router.patch('/me', roleGuard(Role.TEACHER), validate(teachersValidator.updateTeacherSchema), controller.updateMyProfile);
+router.get('/me/dashboard', roleGuard(Role.TEACHER), controller.getMyDashboardData);
 router.get('/me/students', roleGuard(Role.TEACHER), teacherStudentsController.getMyStudents);
 router.get('/me/students/:studentId', roleGuard(Role.TEACHER), teacherStudentsController.getMyStudentById);
 

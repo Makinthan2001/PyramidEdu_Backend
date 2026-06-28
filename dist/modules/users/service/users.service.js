@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.UsersService = void 0;
 const client_1 = require("@prisma/client");
 const prisma_config_1 = __importDefault(require("../../../config/prisma.config"));
+const notification_service_1 = require("../../notification/service/notification.service");
 const password_util_1 = require("../../../utils/password.util");
 const AppError_1 = require("../../../utils/AppError");
 const promises_1 = __importDefault(require("fs/promises"));
@@ -358,6 +359,33 @@ class UsersService {
                     description: `User ${user.email} created with role ${role}`,
                 },
             });
+            // Notify all active Admins about the new registration
+            try {
+                const admins = yield prisma_config_1.default.user.findMany({
+                    where: {
+                        role: client_1.Role.ADMIN,
+                        isActive: true,
+                        deletedAt: null,
+                    },
+                    select: { id: true },
+                });
+                if (admins.length > 0) {
+                    const adminIds = admins.map((a) => a.id);
+                    const roleLabel = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase().replace('_', ' ');
+                    yield notification_service_1.notificationService.createNotifications({
+                        senderId: user.id,
+                        receiverIds: adminIds,
+                        title: `New ${roleLabel} Registered`,
+                        message: `${userData.fullName} created an account.`,
+                        type: 'USER_REGISTRATION',
+                        referenceType: 'USER',
+                        referenceId: user.id,
+                    });
+                }
+            }
+            catch (notificationError) {
+                console.error('Failed to send registration notifications to admins:', notificationError);
+            }
             return { user, temporaryPassword: providedPassword };
         });
     }
@@ -575,6 +603,21 @@ class UsersService {
                     description: `User ${user.email} updated`,
                 },
             });
+            // Send profile update notification
+            try {
+                yield notification_service_1.notificationService.createNotification({
+                    senderId: null,
+                    receiverId: userId,
+                    title: 'Profile Updated',
+                    message: 'Your account profile information has been successfully updated.',
+                    type: 'SYSTEM',
+                    referenceType: 'PROFILE',
+                    referenceId: userId,
+                });
+            }
+            catch (err) {
+                console.error('Failed to trigger profile update notification:', err);
+            }
             return formatUserListItem(updatedUserWithData);
         });
     }
@@ -727,6 +770,55 @@ class UsersService {
                 },
             });
             return formatUserListItem(updatedUser);
+        });
+    }
+    /**
+     * Get admin dashboard stats (counts and recent registrations)
+     */
+    static getAdminDashboardStats() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const [totalStudents, totalTeachers, totalManagers, totalAdmins, totalSubjects, totalBatches, recentAdmins,] = yield Promise.all([
+                prisma_config_1.default.student.count({ where: { deletedAt: null } }),
+                prisma_config_1.default.teacher.count({ where: { deletedAt: null } }),
+                prisma_config_1.default.manager.count({ where: { deletedAt: null } }),
+                prisma_config_1.default.admin.count(),
+                prisma_config_1.default.subject.count({ where: { isActive: true } }),
+                prisma_config_1.default.batch.count({ where: { isActive: true } }),
+                prisma_config_1.default.user.findMany({
+                    where: {
+                        role: client_1.Role.ADMIN,
+                        deletedAt: null,
+                    },
+                    orderBy: {
+                        createdAt: 'desc',
+                    },
+                    take: 5,
+                    select: {
+                        id: true,
+                        fullName: true,
+                        email: true,
+                        isActive: true,
+                        createdAt: true,
+                    },
+                }),
+            ]);
+            const memoryUsage = process.memoryUsage();
+            const totalMem = 8 * 1024 * 1024 * 1024; // estimate 8GB total
+            const memoryPercent = Math.min(95, Math.max(5, Math.round((memoryUsage.heapUsed / totalMem) * 100)));
+            return {
+                totalStudents,
+                totalTeachers,
+                totalManagers,
+                totalAdmins,
+                totalSubjects,
+                totalBatches,
+                recentAdmins,
+                systemStats: {
+                    cpuUsage: "15%",
+                    memoryUsage: `${memoryPercent}%`,
+                    uptime: `${Math.round(process.uptime() / 3600)}h`,
+                }
+            };
         });
     }
 }

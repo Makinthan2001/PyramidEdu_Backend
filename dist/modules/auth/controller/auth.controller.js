@@ -88,6 +88,7 @@ function login(req, res, next) {
                 data: {
                     user,
                     accessToken: tokens.accessToken,
+                    refreshToken: tokens.refreshToken,
                 },
             });
         }
@@ -98,9 +99,9 @@ function login(req, res, next) {
 }
 function refreshToken(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a;
+        var _a, _b;
         try {
-            const token = (_a = req.cookies) === null || _a === void 0 ? void 0 : _a.refreshToken;
+            const token = (((_a = req.cookies) === null || _a === void 0 ? void 0 : _a.refreshToken) || ((_b = req.body) === null || _b === void 0 ? void 0 : _b.refreshToken));
             if (!token) {
                 throw new AppError_1.AppError('No refresh token provided. Please log in again.', 401);
             }
@@ -109,7 +110,10 @@ function refreshToken(req, res, next) {
             res.status(200).json({
                 success: true,
                 message: 'Token refreshed successfully.',
-                data: { accessToken: tokens.accessToken },
+                data: {
+                    accessToken: tokens.accessToken,
+                    refreshToken: tokens.refreshToken
+                },
             });
         }
         catch (error) {
@@ -119,9 +123,9 @@ function refreshToken(req, res, next) {
 }
 function logout(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a;
+        var _a, _b;
         try {
-            const token = (_a = req.cookies) === null || _a === void 0 ? void 0 : _a.refreshToken;
+            const token = (((_a = req.cookies) === null || _a === void 0 ? void 0 : _a.refreshToken) || ((_b = req.body) === null || _b === void 0 ? void 0 : _b.refreshToken));
             const logoutAll = req.query.all === 'true';
             if (token) {
                 yield authService.logoutUser(token, logoutAll);
