@@ -281,6 +281,7 @@ model Teacher {
   enrollments        Enrollment[]
   attendances        Attendance[]
   classSessions      ClassSession[]
+  manualExams        ManualExam[]
 
   @@map("teachers")
 }
@@ -332,6 +333,7 @@ model Student {
   rewards                Reward[]
   enrollmentHistories    EnrollmentHistory[]
   deviceTokens           StudentDeviceToken[]
+  manualExamMarks        ManualExamMark[]
 
   @@index([streamId])
   @@index([batch])
@@ -439,6 +441,7 @@ model Subject {
   courseSchedules    CourseSchedule[]
   classSessions      ClassSession[]
   announcements      Announcement[]      @relation("AnnouncementSubjects")
+  manualExams        ManualExam[]
 
   @@map("subjects")
 }
@@ -634,6 +637,7 @@ model Exam {
   isPublished Boolean   @default(false) @map("is_published")
   startTime   DateTime? @map("start_time")
   duration    Int? // minutes
+  lateExamAvailableTime Int? @map("late_exam_available_time") // in minutes
   pdfUrl      String?   @map("pdf_url") @db.Text
   batch       String?
   batchId     String?   @map("batch_id")
@@ -698,6 +702,7 @@ model ExamSubmission {
   totalScore       Decimal? @map("total_score") @db.Decimal(6, 2)
   status           String   @default("GRADED") // GRADED, PENDING_MANUAL
   submissionStatus  String   @default("SUBMITTED") @map("submission_status") // SUBMITTED, LATE_SUBMISSION
+  attendanceStatus AttendanceStatus @default(PRESENT) @map("attendance_status")
   answerPdfUrl      String?  @map("answer_pdf_url") @db.Text
   answerPdfPublicId String?  @map("answer_pdf_public_id")
 
@@ -1228,6 +1233,7 @@ model Batch {
   streams             Stream[]
   subjectAllocations  SubjectAllocation[]
   classSessions       ClassSession[]
+  manualExams         ManualExam[]
 
   @@map("batches")
 }
@@ -1260,4 +1266,49 @@ model NotificationLog {
 
   @@unique([studentId, eventType, eventId])
   @@map("notification_logs")
+}
+
+// ─────────────────────────────────────────────────────────────
+// MANUAL (PHYSICAL) EXAMS
+// ─────────────────────────────────────────────────────────────
+
+model ManualExam {
+  id          String   @id @default(uuid())
+  examTitle   String   @map("exam_title")
+  subjectId   String   @map("subject_id")
+  teacherId   String   @map("teacher_id")
+  batchId     String   @map("batch_id")
+  totalMarks  Int      @map("total_marks")
+  examDate    DateTime @map("exam_date")
+  duration    Int?     @map("duration") // in minutes
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  subject     Subject          @relation(fields: [subjectId], references: [id])
+  teacher     Teacher          @relation(fields: [teacherId], references: [id])
+  batch       Batch            @relation(fields: [batchId], references: [id])
+  marks       ManualExamMark[]
+
+  @@index([subjectId])
+  @@index([teacherId])
+  @@index([batchId])
+  @@map("manual_exams")
+}
+
+model ManualExamMark {
+  id            String   @id @default(uuid())
+  manualExamId  String   @map("manual_exam_id")
+  studentId     String   @map("student_id")
+  marksObtained Decimal?  @map("marks_obtained") @db.Decimal(6, 2)
+  isAbsent      Boolean  @default(false) @map("is_absent")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  manualExam    ManualExam @relation(fields: [manualExamId], references: [id], onDelete: Cascade)
+  student       Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([manualExamId, studentId])
+  @@index([manualExamId])
+  @@index([studentId])
+  @@map("manual_exam_marks")
 }
