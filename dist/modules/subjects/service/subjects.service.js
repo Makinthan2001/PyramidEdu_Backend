@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubjectsService = void 0;
 const client_1 = require("@prisma/client");
 const prisma_config_1 = __importDefault(require("../../../config/prisma.config"));
+const notification_service_1 = require("../../notification/service/notification.service");
 const AppError_1 = require("../../../utils/AppError");
 function generateSubjectCode(name) {
     const normalized = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -804,6 +805,34 @@ class SubjectsService {
                         enrollmentStatus: client_1.EnrollmentStatus.ACTIVE,
                     },
                 });
+            // Notify Teacher about student assignment
+            try {
+                const allocation = yield prisma_config_1.default.subjectAllocation.findFirst({
+                    where: { subjectId, status: client_1.SubjectAllocationStatus.ACTIVE },
+                    include: { teacher: { include: { user: true } } }
+                });
+                const studentDetails = yield prisma_config_1.default.student.findUnique({
+                    where: { id: studentId },
+                    include: { user: true }
+                });
+                if (allocation && allocation.teacher && studentDetails) {
+                    const teacherUserId = allocation.teacher.userId;
+                    const studentName = studentDetails.user.fullName;
+                    const batchName = studentDetails.batch || 'Class';
+                    yield notification_service_1.notificationService.createNotification({
+                        senderId: studentDetails.userId,
+                        receiverId: teacherUserId,
+                        title: 'New Student Assigned',
+                        message: `${studentName} joined Batch ${batchName}.`,
+                        type: 'STUDENT_ENROLLMENT',
+                        referenceType: 'ENROLLMENT',
+                        referenceId: enrollment.id,
+                    });
+                }
+            }
+            catch (err) {
+                console.error('Failed to trigger notification for student enrollment:', err);
+            }
             if (actor === null || actor === void 0 ? void 0 : actor.userId) {
                 yield prisma_config_1.default.auditLog.create({
                     data: {

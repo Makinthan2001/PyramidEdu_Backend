@@ -27,9 +27,11 @@ const qr_1 = require("./modules/qr");
 const attendance_1 = require("./modules/attendance");
 const exams_1 = __importDefault(require("./modules/exams"));
 const teachers_1 = __importDefault(require("./modules/teachers"));
+const manual_exams_1 = __importDefault(require("./modules/manual-exams"));
 const support_staff_1 = __importDefault(require("./modules/support-staff"));
 const chat_1 = require("./modules/chat");
 const announcements_1 = __importDefault(require("./modules/announcements"));
+const notification_1 = __importDefault(require("./modules/notification"));
 (0, validateEnv_1.validateEnv)();
 (0, cloudinary_util_1.configureCloudinary)();
 const app = (0, express_1.default)();
@@ -95,6 +97,7 @@ app.use('/api/v1/qr', qr_1.qrRoutes);
 app.use('/api/v1/attendance', attendance_1.attendanceRoutes);
 // Teachers routes
 app.use('/api/v1/teachers', teachers_1.default);
+app.use('/api/v1/manual-exams', manual_exams_1.default);
 // Support Staff routes
 app.use('/api/v1/support-staff', support_staff_1.default);
 // Exams routes
@@ -103,6 +106,8 @@ app.use('/api/v1/exams', exams_1.default);
 app.use('/api/v1/chat', chat_1.chatRouter);
 // Announcements routes
 app.use('/api/v1/announcements', announcements_1.default);
+// Notifications routes
+app.use('/api/v1/notifications', notification_1.default);
 // centralized error handler - must be last
 app.use(errorHandler_1.default);
 exports.default = app;

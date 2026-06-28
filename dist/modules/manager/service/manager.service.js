@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ManagerService = void 0;
 const prisma_config_1 = __importDefault(require("../../../config/prisma.config"));
 const AppError_1 = require("../../../utils/AppError");
+const notification_service_1 = require("../../notification/service/notification.service");
 class ManagerService {
     /**
      * Get all newly registered students
@@ -157,8 +158,9 @@ class ManagerService {
             const student = yield prisma_config_1.default.student.findUnique({ where: { id } });
             if (!student)
                 throw new AppError_1.AppError('Student not found.', 404);
+            let resultStudent;
             if (paymentStatus === 'PAID' && student.paymentStatus !== 'PAID') {
-                return prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+                resultStudent = yield prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
                     const updatedStudent = yield tx.student.update({
                         where: { id },
                         data: { paymentStatus },
@@ -201,10 +203,40 @@ class ManagerService {
                     return updatedStudent;
                 }));
             }
-            return prisma_config_1.default.student.update({
-                where: { id },
-                data: { paymentStatus },
-            });
+            else {
+                resultStudent = yield prisma_config_1.default.student.update({
+                    where: { id },
+                    data: { paymentStatus },
+                });
+            }
+            // Notify student about payment status change
+            try {
+                const studentDetails = yield prisma_config_1.default.student.findUnique({
+                    where: { id },
+                    include: { user: true }
+                });
+                if (studentDetails) {
+                    let title = 'Payment Status Updated';
+                    let message = `Your registration payment status has been updated to ${paymentStatus}.`;
+                    if (paymentStatus === 'PAID') {
+                        title = 'Payment Approved';
+                        message = `Your registration fee payment of LKR ${studentDetails.totalFeeAmount} has been approved.`;
+                    }
+                    yield notification_service_1.notificationService.createNotification({
+                        senderId: null,
+                        receiverId: studentDetails.userId,
+                        title,
+                        message,
+                        type: 'PAYMENT',
+                        referenceType: 'PAYMENT',
+                        referenceId: id,
+                    });
+                }
+            }
+            catch (err) {
+                console.error('Failed to send payment notification to student:', err);
+            }
+            return resultStudent;
         });
     }
     /**
@@ -228,10 +260,20 @@ class ManagerService {
                     return updatedStudent;
                 }));
             }
-            return prisma_config_1.default.student.update({
+            const updatedStudent = yield prisma_config_1.default.student.update({
                 where: { id },
                 data: { approvalStatus },
             });
+            if (approvalStatus === 'REJECTED') {
+                try {
+                    const { NotificationService } = require('../../mobile/notification/notification.service');
+                    yield NotificationService.sendIfNotAlreadySent([id], 'ACCOUNT_ALERT', `${approvalStatus}-${new Date().toISOString().split('T')[0]}`, `Account ${approvalStatus}`, `Your account has been marked as ${approvalStatus.toLowerCase()}.`, { type: 'ACCOUNT_ALERT' });
+                }
+                catch (err) {
+                    console.error('Failed to notify student of account restriction:', err);
+                }
+            }
+            return updatedStudent;
         });
     }
     /**
@@ -262,7 +304,7 @@ class ManagerService {
             });
             if (!student)
                 throw new AppError_1.AppError('Student not found.', 404);
-            return prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+            const result = yield prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
                 // 1. Update User
                 if (data.fullName || data.phone || data.email) {
                     yield tx.user.update({
@@ -320,6 +362,34 @@ class ManagerService {
                 }
                 return { success: true };
             }));
+            // Notify Teachers about student assignment
+            try {
+                const enrollments = yield prisma_config_1.default.enrollment.findMany({
+                    where: { studentId: id, enrollmentStatus: 'ACTIVE' },
+                    include: { teacher: true, student: { include: { user: true } } }
+                });
+                for (const enrollment of enrollments) {
+                    const teacher = enrollment.teacher;
+                    if (teacher) {
+                        const teacherUserId = teacher.userId;
+                        const studentName = enrollment.student.user.fullName;
+                        const batchName = enrollment.student.batch || 'Class';
+                        yield notification_service_1.notificationService.createNotification({
+                            senderId: enrollment.student.userId,
+                            receiverId: teacherUserId,
+                            title: 'New Student Assigned',
+                            message: `${studentName} joined Batch ${batchName}.`,
+                            type: 'STUDENT_ENROLLMENT',
+                            referenceType: 'ENROLLMENT',
+                            referenceId: enrollment.id,
+                        });
+                    }
+                }
+            }
+            catch (err) {
+                console.error('Failed to trigger notifications for student enrollments update:', err);
+            }
+            return result;
         });
     }
     /**
@@ -339,7 +409,7 @@ class ManagerService {
             });
             if (!student)
                 throw new AppError_1.AppError('Student not found.', 404);
-            return prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+            const result = yield prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
                 var _a;
                 // 1. Snapshot previous data
                 const previousStream = ((_a = student.stream) === null || _a === void 0 ? void 0 : _a.streamName) || null;
@@ -422,6 +492,34 @@ class ManagerService {
                 });
                 return { success: true };
             }));
+            // Notify Teachers about student assignment
+            try {
+                const enrollments = yield prisma_config_1.default.enrollment.findMany({
+                    where: { studentId: id, enrollmentStatus: 'ACTIVE' },
+                    include: { teacher: true, student: { include: { user: true } } }
+                });
+                for (const enrollment of enrollments) {
+                    const teacher = enrollment.teacher;
+                    if (teacher) {
+                        const teacherUserId = teacher.userId;
+                        const studentName = enrollment.student.user.fullName;
+                        const batchName = enrollment.student.batch || 'Class';
+                        yield notification_service_1.notificationService.createNotification({
+                            senderId: enrollment.student.userId,
+                            receiverId: teacherUserId,
+                            title: 'New Student Assigned',
+                            message: `${studentName} joined Batch ${batchName}.`,
+                            type: 'STUDENT_ENROLLMENT',
+                            referenceType: 'ENROLLMENT',
+                            referenceId: enrollment.id,
+                        });
+                    }
+                }
+            }
+            catch (err) {
+                console.error('Failed to trigger notifications for student re-enrollment:', err);
+            }
+            return result;
         });
     }
 }
