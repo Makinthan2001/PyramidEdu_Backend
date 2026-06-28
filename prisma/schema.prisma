@@ -94,6 +94,12 @@ enum QuestionType {
   IMAGE
 }
 
+enum DifficultyLevel {
+  EASY
+  MEDIUM
+  HARD
+}
+
 enum PerformanceLevel {
   EXCELLENT
   GOOD
@@ -684,6 +690,7 @@ model Question {
   options       Json? // Stores array: [{ id: "opt1", text: "A" }, ...]
   correctAnswer String?      @map("correct_answer") // Securely stores the correct optionId (e.g. "opt2")
   explanation   String?      @db.Text
+  difficultyLevel DifficultyLevel @default(MEDIUM) @map("difficulty_level")
   order         Int          @default(0)
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")

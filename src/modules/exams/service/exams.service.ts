@@ -130,6 +130,7 @@ export class ExamsService {
         options: data.options ? (data.options as any) : undefined,
         correctAnswer: data.correctAnswer || undefined,
         explanation: data.explanation || null,
+        difficultyLevel: data.difficultyLevel,
         order: data.order,
       },
     });
@@ -162,9 +163,10 @@ export class ExamsService {
         questionType: data.questionType,
         marks: data.marks,
         options: data.options ? (data.options as any) : undefined,
-        correctAnswer: data.correctAnswer || undefined,
+        correctAnswer: data.correctAnswer !== undefined ? data.correctAnswer : undefined,
         explanation: data.explanation !== undefined ? data.explanation : undefined,
-        order: data.order,
+        difficultyLevel: data.difficultyLevel !== undefined ? data.difficultyLevel : undefined,
+        order: data.order !== undefined ? data.order : undefined,
       },
     });
   }
