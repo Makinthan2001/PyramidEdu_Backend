@@ -637,6 +637,7 @@ model Exam {
   isPublished Boolean   @default(false) @map("is_published")
   startTime   DateTime? @map("start_time")
   duration    Int? // minutes
+  lateExamAvailableTime Int? @map("late_exam_available_time") // in minutes
   pdfUrl      String?   @map("pdf_url") @db.Text
   batch       String?
   batchId     String?   @map("batch_id")
@@ -701,6 +702,7 @@ model ExamSubmission {
   totalScore       Decimal? @map("total_score") @db.Decimal(6, 2)
   status           String   @default("GRADED") // GRADED, PENDING_MANUAL
   submissionStatus  String   @default("SUBMITTED") @map("submission_status") // SUBMITTED, LATE_SUBMISSION
+  attendanceStatus AttendanceStatus @default(PRESENT) @map("attendance_status")
   answerPdfUrl      String?  @map("answer_pdf_url") @db.Text
   answerPdfPublicId String?  @map("answer_pdf_public_id")
 

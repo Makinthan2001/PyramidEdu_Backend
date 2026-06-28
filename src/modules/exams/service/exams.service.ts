@@ -215,13 +215,15 @@ export class ExamsService {
 
     const gradingResult = await gradingService.gradeSubmission(examId, studentId, data.answers || {});
 
-    // Calculate submissionStatus
+    // Calculate submissionStatus and attendanceStatus
     const now = new Date();
     let submissionStatus = 'SUBMITTED';
+    let attendanceStatus: 'PRESENT' | 'LATE' | 'ABSENT' = 'PRESENT';
     if (exam.startTime && exam.duration) {
       const endTime = new Date(exam.startTime.getTime() + exam.duration * 60000);
       if (now > endTime) {
         submissionStatus = 'LATE_SUBMISSION';
+        attendanceStatus = 'LATE';
       }
     }
 
@@ -240,6 +242,7 @@ export class ExamsService {
           totalScore: finalScore,
           status: finalStatus,
           submissionStatus,
+          attendanceStatus,
           answerPdfUrl: data.answerPdfUrl,
           answerPdfPublicId: data.answerPdfPublicId,
           answers: {

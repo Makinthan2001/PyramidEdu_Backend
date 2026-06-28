@@ -10,6 +10,7 @@ export const baseExamSchema = z.object({
   totalMarks: z.number().int().positive('Total marks must be a positive integer'),
   startTime: z.coerce.date().optional(),
   duration: z.number().int().positive('Duration must be positive').optional(),
+  lateExamAvailableTime: z.number().int().nonnegative('Late exam time must be non-negative').optional(),
   pdfUrl: z.string().url('Invalid PDF URL').optional().or(z.literal('')),
   batch: z.string().optional(),
   batchId: z.string().uuid().optional(),
