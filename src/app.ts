@@ -22,6 +22,7 @@ import { qrRoutes } from './modules/qr';
 import { attendanceRoutes } from './modules/attendance';
 import examsRouter from './modules/exams';
 import teachersRouter from './modules/teachers';
+import manualExamsRouter from './modules/manual-exams';
 import supportStaffRouter from './modules/support-staff';
 import { chatRouter } from './modules/chat';
 import announcementsRouter from './modules/announcements';
@@ -111,6 +112,7 @@ app.use('/api/v1/attendance', attendanceRoutes);
 
 // Teachers routes
 app.use('/api/v1/teachers', teachersRouter);
+app.use('/api/v1/manual-exams', manualExamsRouter);
 
 // Support Staff routes
 app.use('/api/v1/support-staff', supportStaffRouter);
