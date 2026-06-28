@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { QuestionType } from '@prisma/client';
+import { QuestionType, DifficultyLevel } from '@prisma/client';
 
 export const createQuestionSchema = z.object({
   examId: z.string().uuid('Exam ID must be a valid UUID').optional(),
@@ -15,6 +15,7 @@ export const createQuestionSchema = z.object({
   ),
   correctAnswer: z.string().min(1, 'Correct answer is required'),
   explanation: z.string().optional().or(z.literal('')),
+  difficultyLevel: z.nativeEnum(DifficultyLevel).optional().default(DifficultyLevel.MEDIUM),
   order: z.number().int().min(0).default(0),
 }).superRefine((data, ctx) => {
   if (data.questionType === QuestionType.IMAGE && !data.imageUrl) {
