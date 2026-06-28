@@ -33,6 +33,12 @@ router.use(jwtGuard);
 router.get('/', canManageUsers, controller.getUsers);
 
 /**
+ * GET /api/v1/users/admin/dashboard-stats
+ * Get admin dashboard statistics
+ */
+router.get('/admin/dashboard-stats', canManageUsers, controller.getAdminDashboardStats);
+
+/**
  * GET /api/v1/users/profile
  * Get current user profile
  */

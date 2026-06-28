@@ -7,6 +7,7 @@ import { CreateQuestionDto } from '../dto/create-question.dto';
 import { SubmitExamDto } from '../dto/submit-exam.dto';
 import { examAccessService } from './exam-access.service';
 import { gradingService } from './grading.service';
+import { NotificationService } from '../../mobile/notification/notification.service';
 
 export class ExamsService {
   async createExam(teacherId: string, data: CreateExamDto) {
@@ -129,6 +130,7 @@ export class ExamsService {
         options: data.options ? (data.options as any) : undefined,
         correctAnswer: data.correctAnswer || undefined,
         explanation: data.explanation || null,
+        difficultyLevel: data.difficultyLevel,
         order: data.order,
       },
     });
@@ -161,9 +163,10 @@ export class ExamsService {
         questionType: data.questionType,
         marks: data.marks,
         options: data.options ? (data.options as any) : undefined,
-        correctAnswer: data.correctAnswer || undefined,
+        correctAnswer: data.correctAnswer !== undefined ? data.correctAnswer : undefined,
         explanation: data.explanation !== undefined ? data.explanation : undefined,
-        order: data.order,
+        difficultyLevel: data.difficultyLevel !== undefined ? data.difficultyLevel : undefined,
+        order: data.order !== undefined ? data.order : undefined,
       },
     });
   }
@@ -214,13 +217,15 @@ export class ExamsService {
 
     const gradingResult = await gradingService.gradeSubmission(examId, studentId, data.answers || {});
 
-    // Calculate submissionStatus
+    // Calculate submissionStatus and attendanceStatus
     const now = new Date();
     let submissionStatus = 'SUBMITTED';
+    let attendanceStatus: 'PRESENT' | 'LATE' | 'ABSENT' = 'PRESENT';
     if (exam.startTime && exam.duration) {
       const endTime = new Date(exam.startTime.getTime() + exam.duration * 60000);
       if (now > endTime) {
         submissionStatus = 'LATE_SUBMISSION';
+        attendanceStatus = 'LATE';
       }
     }
 
@@ -231,7 +236,7 @@ export class ExamsService {
     const finalFeedback = exam.examType === 'ESSAY' ? 'Pending manual grading.' : `Auto-graded: ${gradingResult.totalScore}/${exam.totalMarks} marks.`;
 
     // Create Submission, Answers, and Result in a transaction
-    return await prisma.$transaction(async (tx) => {
+    const submissionRecord = await prisma.$transaction(async (tx) => {
       const submission = await tx.examSubmission.create({
         data: {
           examId,
@@ -239,6 +244,7 @@ export class ExamsService {
           totalScore: finalScore,
           status: finalStatus,
           submissionStatus,
+          attendanceStatus,
           answerPdfUrl: data.answerPdfUrl,
           answerPdfPublicId: data.answerPdfPublicId,
           answers: {
@@ -262,6 +268,53 @@ export class ExamsService {
 
       return submission;
     });
+
+    try {
+      if (exam.examType !== 'ESSAY') {
+        const { NotificationService } = require('../../mobile/notification/notification.service');
+        await NotificationService.sendIfNotAlreadySent(
+          [studentId],
+          'RESULT_PUBLISHED',
+          exam.id,
+          'Exam Result Published',
+          `Your result for ${exam.examTitle} is available!`,
+          { type: 'RESULT_PUBLISHED', examId: exam.id, route: `/(tabs)/exams/${exam.id}/result` }
+        );
+
+        const student = await prisma.student.findUnique({ where: { id: studentId } });
+        const previousTier = student?.performanceStatus;
+
+        let currentTier = previousTier;
+        if (Number(finalMarks) < 40) currentTier = 'AT_RISK';
+        else if (Number(finalMarks) >= 75) currentTier = 'EXCELLENT';
+        else currentTier = 'AVERAGE';
+
+        if (currentTier === 'AT_RISK' && previousTier !== 'AT_RISK') {
+          await prisma.student.update({
+            where: { id: studentId },
+            data: { performanceStatus: 'AT_RISK', trendStatus: 'DECLINING' }
+          });
+          
+          await NotificationService.sendIfNotAlreadySent(
+            [studentId],
+            'AI_ALERT',
+            `AI-${exam.id}`,
+            'Academic Performance Alert',
+            'Your performance has been flagged as At-Risk. View your AI recommendations.',
+            { type: 'AI_ALERT', route: '/(tabs)/academic' }
+          );
+        } else if (currentTier !== previousTier && currentTier) {
+           await prisma.student.update({
+            where: { id: studentId },
+            data: { performanceStatus: currentTier as any }
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to dispatch post-exam notifications:', e);
+    }
+
+    return submissionRecord;
   }
 
   async getStudentUpcomingExams(studentId: string) {
@@ -319,6 +372,22 @@ export class ExamsService {
         referenceType: 'EXAM',
         referenceId: exam.id,
       });
+
+      // Send push notification via Expo Push Notifications
+      const studentIds = enrollments.map(e => e.student.id);
+      NotificationService.sendIfNotAlreadySent(
+        studentIds,
+        'EXAM_PUBLISHED',
+        exam.id,
+        'New Exam Published',
+        `${exam.examTitle} published by ${teacherName}.`,
+        {
+          type: 'EXAM_PUBLISHED',
+          examId: exam.id,
+          route: '/(tabs)/exams'
+        }
+      ).catch(err => console.error('FCM sending error:', err));
+
     } catch (err) {
       console.error('Failed to notify students of new exam:', err);
     }

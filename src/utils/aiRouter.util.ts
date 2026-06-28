@@ -102,7 +102,7 @@ interface RouterResponse {
 
 export async function routeQuery(
   question: string,
-  filters: { subjectId?: string; batchId?: string } = {}
+  filters: { subjectId?: string; batchId?: string; userId?: string } = {}
 ): Promise<string> {
   try {
     const model = genAI.getGenerativeModel({
@@ -139,13 +139,25 @@ export async function routeQuery(
 
 async function executeTool(
   routeData: RouterResponse,
-  filters: { subjectId?: string; batchId?: string }
+  filters: { subjectId?: string; batchId?: string; userId?: string }
 ): Promise<string> {
   const { tool, parameters } = routeData;
 
   switch (tool) {
     case 'getAttendance': {
-      const studentIdsInput = Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId];
+      let studentIdsInput = parameters.studentId 
+        ? (Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId]).filter(Boolean)
+        : [];
+
+      if (studentIdsInput.length === 0 && filters.userId) {
+        const student = await prisma.student.findUnique({ where: { userId: filters.userId } });
+        if (student) studentIdsInput = [student.id];
+      }
+
+      if (studentIdsInput.length === 0) {
+        return "I need a student ID to check attendance, or you must be logged in as a student.";
+      }
+
       const students = await prisma.student.findMany({
         where: {
           OR: [
@@ -183,7 +195,19 @@ async function executeTool(
     }
 
     case 'getMarks': {
-      const studentIdsInput = Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId];
+      let studentIdsInput = parameters.studentId 
+        ? (Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId]).filter(Boolean)
+        : [];
+
+      if (studentIdsInput.length === 0 && filters.userId) {
+        const student = await prisma.student.findUnique({ where: { userId: filters.userId } });
+        if (student) studentIdsInput = [student.id];
+      }
+
+      if (studentIdsInput.length === 0) {
+        return "I need a student ID to check marks, or you must be logged in as a student.";
+      }
+
       const students = await prisma.student.findMany({
         where: {
           OR: [
@@ -222,7 +246,19 @@ async function executeTool(
     }
 
     case 'getFeeStatus': {
-      const studentIdsInput = Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId];
+      let studentIdsInput = parameters.studentId 
+        ? (Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId]).filter(Boolean)
+        : [];
+
+      if (studentIdsInput.length === 0 && filters.userId) {
+        const student = await prisma.student.findUnique({ where: { userId: filters.userId } });
+        if (student) studentIdsInput = [student.id];
+      }
+
+      if (studentIdsInput.length === 0) {
+        return "I need a student ID to check fee status, or you must be logged in as a student.";
+      }
+
       const students = await prisma.student.findMany({
         where: {
           OR: [

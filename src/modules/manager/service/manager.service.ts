@@ -247,10 +247,28 @@ export class ManagerService {
       });
     }
 
-    return prisma.student.update({
+    const updatedStudent = await prisma.student.update({
       where: { id },
       data: { approvalStatus },
     });
+
+    if (approvalStatus === 'REJECTED') {
+      try {
+        const { NotificationService } = require('../../mobile/notification/notification.service');
+        await NotificationService.sendIfNotAlreadySent(
+          [id],
+          'ACCOUNT_ALERT',
+          `${approvalStatus}-${new Date().toISOString().split('T')[0]}`,
+          `Account ${approvalStatus}`,
+          `Your account has been marked as ${approvalStatus.toLowerCase()}.`,
+          { type: 'ACCOUNT_ALERT' }
+        );
+      } catch (err) {
+        console.error('Failed to notify student of account restriction:', err);
+      }
+    }
+
+    return updatedStudent;
   }
   /**
    * Toggle student's active status

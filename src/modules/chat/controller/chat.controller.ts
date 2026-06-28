@@ -65,9 +65,10 @@ export const askQuestion = async (
       }
     });
 
-    const filters: { subjectId?: string; batchId?: string } = {};
+    const filters: { subjectId?: string; batchId?: string; userId?: string } = {};
     if (subjectId) filters.subjectId = subjectId;
     if (batchId) filters.batchId = batchId;
+    if (userId) filters.userId = userId;
 
     // 3 & 4. Send message to AI Router pipeline & Receive response
     const answer = await routeQuery(question, filters);

@@ -28,12 +28,13 @@ export class ExamAccessService {
       throw new AppError('Exam has not started yet', 403);
     }
 
-    // if (exam.startTime && exam.duration) {
-    //   const endTime = new Date(exam.startTime.getTime() + exam.duration * 60000);
-    //   if (now > endTime) {
-    //     throw new AppError('Exam has already ended', 403);
-    //   }
-    // }
+    if (exam.startTime && exam.duration) {
+      const lateTimeMinutes = (exam as any).lateExamAvailableTime || 0;
+      const endTime = new Date(exam.startTime.getTime() + (exam.duration + lateTimeMinutes) * 60000);
+      if (now > endTime) {
+        throw new AppError('Exam has already ended and the late submission period is over', 403);
+      }
+    }
 
     // Enrollment validation
     const enrollment = await prisma.enrollment.findFirst({

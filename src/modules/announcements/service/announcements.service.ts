@@ -686,6 +686,25 @@ export class AnnouncementsService {
 
       if (targetRecipientIds.length === 0) return;
 
+      // Push Notifications for Students
+      const studentProfiles = await prisma.student.findMany({
+        where: { userId: { in: targetRecipientIds } },
+        select: { id: true },
+      });
+      const studentIdsToNotify = studentProfiles.map(s => s.id);
+
+      if (studentIdsToNotify.length > 0) {
+        const { NotificationService } = require('../../mobile/notification/notification.service');
+        await NotificationService.sendIfNotAlreadySent(
+          studentIdsToNotify,
+          'ANNOUNCEMENT',
+          announcement.id,
+          'New Announcement',
+          announcement.title,
+          { type: 'ANNOUNCEMENT', announcementId: announcement.id, route: '/(tabs)/more/notifications' }
+        );
+      }
+
       const notificationData = targetRecipientIds.map(receiverId => ({
         senderId: announcement.senderId,
         receiverId,

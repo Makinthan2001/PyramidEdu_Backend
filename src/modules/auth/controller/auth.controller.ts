@@ -44,6 +44,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       data: {
         user,
         accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       },
     });
   } catch (error) {
@@ -53,7 +54,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
 export async function refreshToken(req: Request, res: Response, next: NextFunction) {
   try {
-    const token = req.cookies?.refreshToken as string | undefined;
+    const token = (req.cookies?.refreshToken || req.body?.refreshToken) as string | undefined;
 
     if (!token) {
       throw new AppError('No refresh token provided. Please log in again.', 401);
@@ -65,7 +66,10 @@ export async function refreshToken(req: Request, res: Response, next: NextFuncti
     res.status(200).json({
       success: true,
       message: 'Token refreshed successfully.',
-      data: { accessToken: tokens.accessToken },
+      data: { 
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken
+      },
     });
   } catch (error) {
     next(error);
@@ -74,7 +78,7 @@ export async function refreshToken(req: Request, res: Response, next: NextFuncti
 
 export async function logout(req: Request, res: Response, next: NextFunction) {
   try {
-    const token = req.cookies?.refreshToken as string | undefined;
+    const token = (req.cookies?.refreshToken || req.body?.refreshToken) as string | undefined;
     const logoutAll = req.query.all === 'true';
 
     if (token) {
