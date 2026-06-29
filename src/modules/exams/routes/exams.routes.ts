@@ -58,6 +58,12 @@ router.get(
   controller.getExamSubmissions
 );
 
+router.post(
+  '/:id/results',
+  roleGuard(Role.TEACHER, Role.ADMIN),
+  controller.gradeSubmission
+);
+
 router.patch(
   '/:id',
   roleGuard(Role.TEACHER, Role.ADMIN),

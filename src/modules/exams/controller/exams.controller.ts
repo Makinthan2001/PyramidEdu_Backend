@@ -80,6 +80,18 @@ export async function getExamById(req: Request, res: Response, next: NextFunctio
   }
 }
 
+export async function gradeSubmission(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId as string;
+    const userRole = (req as any).userRole as string;
+    const teacherId = await resolveTeacherProfileId(userId, userRole);
+    const result = await examsService.gradeSubmission(req.params.id as string, teacherId, req.body);
+    res.status(200).json({ success: true, message: 'Grading saved successfully', data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function updateExam(req: Request, res: Response, next: NextFunction) {
   try {
     const userId = (req as any).userId as string;
