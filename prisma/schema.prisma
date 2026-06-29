@@ -626,24 +626,24 @@ model Quiz {
 }
 
 model Exam {
-  id          String    @id @default(uuid())
-  subjectId   String    @map("subject_id")
-  teacherId   String    @map("teacher_id")
-  termId      String?   @map("term_id")
-  examTitle   String    @map("exam_title")
-  examType    ExamType  @default(MCQ) @map("exam_type")
-  examDate    DateTime  @map("exam_date")
-  totalMarks  Int       @default(100) @map("total_marks")
-  isPublished Boolean   @default(false) @map("is_published")
-  startTime   DateTime? @map("start_time")
-  duration    Int? // minutes
-  lateExamAvailableTime Int? @map("late_exam_available_time") // in minutes
-  pdfUrl      String?   @map("pdf_url") @db.Text
-  batch       String?
-  batchId     String?   @map("batch_id")
-  deletedAt   DateTime? @map("deleted_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id                    String    @id @default(uuid())
+  subjectId             String    @map("subject_id")
+  teacherId             String    @map("teacher_id")
+  termId                String?   @map("term_id")
+  examTitle             String    @map("exam_title")
+  examType              ExamType  @default(MCQ) @map("exam_type")
+  examDate              DateTime  @map("exam_date")
+  totalMarks            Int       @default(100) @map("total_marks")
+  isPublished           Boolean   @default(false) @map("is_published")
+  startTime             DateTime? @map("start_time")
+  duration              Int? // minutes
+  lateExamAvailableTime Int?      @map("late_exam_available_time") // in minutes
+  pdfUrl                String?   @map("pdf_url") @db.Text
+  batch                 String?
+  batchId               String?   @map("batch_id")
+  deletedAt             DateTime? @map("deleted_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   subject       Subject          @relation(fields: [subjectId], references: [id])
   teacher       Teacher          @relation(fields: [teacherId], references: [id])
@@ -695,16 +695,16 @@ model Question {
 }
 
 model ExamSubmission {
-  id               String   @id @default(uuid())
-  examId           String   @map("exam_id")
-  studentId        String   @map("student_id")
-  submittedAt      DateTime @default(now()) @map("submitted_at")
-  totalScore       Decimal? @map("total_score") @db.Decimal(6, 2)
-  status           String   @default("GRADED") // GRADED, PENDING_MANUAL
-  submissionStatus  String   @default("SUBMITTED") @map("submission_status") // SUBMITTED, LATE_SUBMISSION
-  attendanceStatus AttendanceStatus @default(PRESENT) @map("attendance_status")
-  answerPdfUrl      String?  @map("answer_pdf_url") @db.Text
-  answerPdfPublicId String?  @map("answer_pdf_public_id")
+  id                String           @id @default(uuid())
+  examId            String           @map("exam_id")
+  studentId         String           @map("student_id")
+  submittedAt       DateTime         @default(now()) @map("submitted_at")
+  totalScore        Decimal?         @map("total_score") @db.Decimal(6, 2)
+  status            String           @default("GRADED") // GRADED, PENDING_MANUAL
+  submissionStatus  String           @default("SUBMITTED") @map("submission_status") // SUBMITTED, LATE_SUBMISSION
+  attendanceStatus  AttendanceStatus @default(PRESENT) @map("attendance_status")
+  answerPdfUrl      String?          @map("answer_pdf_url") @db.Text
+  answerPdfPublicId String?          @map("answer_pdf_public_id")
 
   exam    Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
   student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -925,6 +925,7 @@ model ParentReport {
   trendAnalysis     String?   @map("trend_analysis")
   aiRecommendation  String?   @map("ai_recommendation") @db.Text
   isActive          Boolean   @default(true) @map("is_active")
+  isSent            Boolean   @default(false) @map("is_sent")
   paymentDate       DateTime? @map("payment_date")
   generatedAt       DateTime  @default(now()) @map("generated_at")
   createdAt         DateTime  @default(now()) @map("created_at")
@@ -1260,8 +1261,8 @@ model StudentDeviceToken {
 model NotificationLog {
   id        String   @id @default(uuid())
   studentId String   @map("student_id")
-  eventType String   @map("event_type")// e.g. "EXAM_PUBLISHED"
-  eventId   String   @map("event_id")  // e.g. examId
+  eventType String   @map("event_type") // e.g. "EXAM_PUBLISHED"
+  eventId   String   @map("event_id") // e.g. examId
   sentAt    DateTime @default(now()) @map("sent_at")
 
   @@unique([studentId, eventType, eventId])
@@ -1273,21 +1274,21 @@ model NotificationLog {
 // ─────────────────────────────────────────────────────────────
 
 model ManualExam {
-  id          String   @id @default(uuid())
-  examTitle   String   @map("exam_title")
-  subjectId   String   @map("subject_id")
-  teacherId   String   @map("teacher_id")
-  batchId     String   @map("batch_id")
-  totalMarks  Int      @map("total_marks")
-  examDate    DateTime @map("exam_date")
-  duration    Int?     @map("duration") // in minutes
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(uuid())
+  examTitle  String   @map("exam_title")
+  subjectId  String   @map("subject_id")
+  teacherId  String   @map("teacher_id")
+  batchId    String   @map("batch_id")
+  totalMarks Int      @map("total_marks")
+  examDate   DateTime @map("exam_date")
+  duration   Int?     @map("duration") // in minutes
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  subject     Subject          @relation(fields: [subjectId], references: [id])
-  teacher     Teacher          @relation(fields: [teacherId], references: [id])
-  batch       Batch            @relation(fields: [batchId], references: [id])
-  marks       ManualExamMark[]
+  subject Subject          @relation(fields: [subjectId], references: [id])
+  teacher Teacher          @relation(fields: [teacherId], references: [id])
+  batch   Batch            @relation(fields: [batchId], references: [id])
+  marks   ManualExamMark[]
 
   @@index([subjectId])
   @@index([teacherId])
@@ -1299,13 +1300,13 @@ model ManualExamMark {
   id            String   @id @default(uuid())
   manualExamId  String   @map("manual_exam_id")
   studentId     String   @map("student_id")
-  marksObtained Decimal?  @map("marks_obtained") @db.Decimal(6, 2)
+  marksObtained Decimal? @map("marks_obtained") @db.Decimal(6, 2)
   isAbsent      Boolean  @default(false) @map("is_absent")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  manualExam    ManualExam @relation(fields: [manualExamId], references: [id], onDelete: Cascade)
-  student       Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  manualExam ManualExam @relation(fields: [manualExamId], references: [id], onDelete: Cascade)
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([manualExamId, studentId])
   @@index([manualExamId])
