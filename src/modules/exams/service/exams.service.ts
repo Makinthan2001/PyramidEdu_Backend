@@ -268,6 +268,44 @@ export class ExamsService {
 
   // STUDENT ENDPOINTS
 
+  async getStudentExamResult(examId: string, studentId: string) {
+    // We do NOT call validateStudentAccess here because it checks if the exam is currently active/submittable
+    // which throws a 403 for past exams, preventing students from seeing their results.
+    // Security is still maintained as we only fetch the submission for this specific studentId.
+
+    const exam = await prisma.exam.findUnique({
+      where: { id: examId },
+      include: {
+        questions: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    if (!exam) throw new AppError('Exam not found', 404);
+
+    const submission = await prisma.examSubmission.findUnique({
+      where: { examId_studentId: { examId, studentId } },
+      include: {
+        answers: true,
+      },
+    });
+
+    if (!submission) {
+      throw new AppError('Submission not found', 404);
+    }
+
+    const result = await prisma.result.findFirst({
+      where: { examId, studentId },
+    });
+
+    return {
+      exam,
+      submission,
+      result,
+    };
+  }
+
   async getQuestionsForStudent(examId: string, studentId: string) {
     await examAccessService.validateStudentAccess(examId, studentId);
 
