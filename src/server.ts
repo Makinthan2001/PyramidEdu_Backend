@@ -1,6 +1,7 @@
 import app from './app';
 import { notificationService } from './modules/notification/service/notification.service';
 import { notificationCronService } from './modules/mobile/notification/notification-cron.service';
+import './cron/parentReportsCron';
 
 
 const PORT = Number(process.env.PORT) || 5000;

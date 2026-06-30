@@ -27,6 +27,8 @@ import supportStaffRouter from './modules/support-staff';
 import { chatRouter } from './modules/chat';
 import announcementsRouter from './modules/announcements';
 import notificationsRouter from './modules/notification';
+import parentReportsRouter from './modules/parent-reports';
+import analyticsReportsRouter from './modules/analytics-reports';
 
 validateEnv();
 configureCloudinary();
@@ -128,6 +130,12 @@ app.use('/api/v1/announcements', announcementsRouter);
 
 // Notifications routes
 app.use('/api/v1/notifications', notificationsRouter);
+
+// Reports routes
+app.use('/api/v1/parent-reports', parentReportsRouter);
+
+// Analytics routes
+app.use('/api/v1/analytics', analyticsReportsRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);
