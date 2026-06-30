@@ -49,6 +49,26 @@ export async function getStudentQuestions(
   }
 }
 
+export async function getStudentExamResult(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) throw new AppError("Unauthorized", 401);
+
+    const studentId = await getStudentIdFromUserId(userId);
+    const resultData = await examsService.getStudentExamResult(
+      req.params.id as string,
+      studentId
+    );
+    res.status(200).json({ success: true, data: resultData });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function submitExam(
   req: Request,
   res: Response,

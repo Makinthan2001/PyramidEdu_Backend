@@ -14,6 +14,7 @@ router.use(jwtGuard);
 // STUDENT ROUTES
 // ----------------------------------------------------
 router.get('/my-upcoming', roleGuard(Role.STUDENT), controller.getMyUpcomingExams);
+router.get('/:id/result', roleGuard(Role.STUDENT), controller.getStudentExamResult);
 router.get('/:id/questions', roleGuard(Role.STUDENT), controller.getStudentQuestions);
 router.post('/:id/submit', roleGuard(Role.STUDENT), validate(validators.submitExamSchema), controller.submitExam);
 
@@ -56,6 +57,12 @@ router.get(
   '/:id/submissions',
   roleGuard(Role.TEACHER, Role.ADMIN),
   controller.getExamSubmissions
+);
+
+router.post(
+  '/:id/results',
+  roleGuard(Role.TEACHER, Role.ADMIN),
+  controller.gradeSubmission
 );
 
 router.patch(

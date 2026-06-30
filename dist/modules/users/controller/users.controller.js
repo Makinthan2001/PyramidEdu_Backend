@@ -25,6 +25,7 @@ exports.approveStudent = approveStudent;
 exports.getProfile = getProfile;
 exports.updateProfile = updateProfile;
 exports.uploadProfileImage = uploadProfileImage;
+exports.getAdminDashboardStats = getAdminDashboardStats;
 const users_service_1 = __importDefault(require("../service/users.service"));
 const cloudinary_util_1 = require("../../../utils/cloudinary.util");
 /**
@@ -341,6 +342,25 @@ function uploadProfileImage(req, res, next) {
         }
     });
 }
+/**
+ * GET /api/v1/users/admin/dashboard-stats
+ * Get admin dashboard statistics
+ */
+function getAdminDashboardStats(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const stats = yield users_service_1.default.getAdminDashboardStats();
+            res.status(200).json({
+                success: true,
+                message: 'Admin dashboard statistics retrieved successfully',
+                data: stats,
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
 exports.default = {
     getUsers,
     getUserById,
@@ -353,4 +373,5 @@ exports.default = {
     getProfile,
     updateProfile,
     uploadProfileImage,
+    getAdminDashboardStats,
 };

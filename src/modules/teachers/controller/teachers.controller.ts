@@ -163,6 +163,20 @@ export async function assignSubject(req: Request, res: Response, next: NextFunct
   }
 }
 
+/**
+ * GET /api/v1/teachers/me/dashboard
+ * Retrieve dashboard statistics and data for the logged-in teacher
+ */
+export async function getMyDashboardData(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId as string;
+    const dashboardData = await TeachersService.getMyDashboardData(userId);
+    res.status(200).json({ success: true, message: 'Dashboard data retrieved', data: dashboardData });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export default {
   getTeachers,
   getTeacherById,
@@ -174,4 +188,5 @@ export default {
   getTeacherSubjects,
   updateSalary,
   assignSubject,
+  getMyDashboardData,
 };

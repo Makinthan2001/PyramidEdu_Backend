@@ -81,6 +81,101 @@ export class ExamsService {
     });
   }
 
+  async gradeSubmission(examId: string, teacherId: string, payload: any) {
+    const exam = await this.getExamById(examId, teacherId);
+
+    const { submissionId, totalScore, answers, feedback, status } = payload;
+
+    const submission = await prisma.examSubmission.findUnique({
+      where: { id: submissionId },
+      include: { student: true }
+    });
+
+    if (!submission || submission.examId !== examId) {
+      throw new AppError('Submission not found', 404);
+    }
+
+    const percentage = exam.totalMarks > 0 ? (Number(totalScore) / exam.totalMarks) * 100 : 0;
+    const gradeLetter = gradingService.calculateLetterGrade(percentage);
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Update submission
+      await tx.examSubmission.update({
+        where: { id: submissionId },
+        data: {
+          totalScore,
+          status: status || 'GRADED',
+        }
+      });
+
+      // 2. Update answers
+      if (answers && answers.length > 0) {
+        for (const ans of answers) {
+          if (ans.questionId) {
+            const existingAnswer = await tx.examAnswer.findFirst({
+              where: { submissionId, questionId: ans.questionId }
+            });
+            if (existingAnswer) {
+              await tx.examAnswer.update({
+                where: { id: existingAnswer.id },
+                data: {
+                  marksAwarded: ans.marksAwarded,
+                  isCorrect: ans.isCorrect
+                }
+              });
+            }
+          }
+        }
+      }
+
+      // 3. Update or Create Result
+      const existingResult = await tx.result.findFirst({
+        where: {
+          examId,
+          studentId: submission.studentId
+        }
+      });
+
+      if (existingResult) {
+        await tx.result.update({
+          where: { id: existingResult.id },
+          data: {
+            marks: percentage,
+            grade: gradeLetter,
+            feedback,
+          }
+        });
+      } else {
+        await tx.result.create({
+          data: {
+            studentId: submission.studentId,
+            subjectId: exam.subjectId,
+            examId: exam.id,
+            marks: percentage,
+            grade: gradeLetter,
+            feedback,
+          }
+        });
+      }
+    });
+
+    try {
+      const { NotificationService } = require('../../mobile/notification/notification.service');
+      await NotificationService.sendIfNotAlreadySent(
+        [submission.studentId],
+        'RESULT_PUBLISHED',
+        exam.id,
+        'Exam Result Published',
+        `Your result for ${exam.examTitle} is available!`,
+        { type: 'RESULT_PUBLISHED', examId: exam.id, route: `/(tabs)/exams/${exam.id}/result` }
+      );
+    } catch (e) {
+      console.error('Failed to notify student:', e);
+    }
+
+    return { success: true };
+  }
+
   async updateExam(examId: string, teacherId: string, data: UpdateExamDto) {
     const exam = await this.getExamById(examId, teacherId);
     const wasPublished = exam.isPublished;
@@ -172,6 +267,44 @@ export class ExamsService {
   }
 
   // STUDENT ENDPOINTS
+
+  async getStudentExamResult(examId: string, studentId: string) {
+    // We do NOT call validateStudentAccess here because it checks if the exam is currently active/submittable
+    // which throws a 403 for past exams, preventing students from seeing their results.
+    // Security is still maintained as we only fetch the submission for this specific studentId.
+
+    const exam = await prisma.exam.findUnique({
+      where: { id: examId },
+      include: {
+        questions: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    if (!exam) throw new AppError('Exam not found', 404);
+
+    const submission = await prisma.examSubmission.findUnique({
+      where: { examId_studentId: { examId, studentId } },
+      include: {
+        answers: true,
+      },
+    });
+
+    if (!submission) {
+      throw new AppError('Submission not found', 404);
+    }
+
+    const result = await prisma.result.findFirst({
+      where: { examId, studentId },
+    });
+
+    return {
+      exam,
+      submission,
+      result,
+    };
+  }
 
   async getQuestionsForStudent(examId: string, studentId: string) {
     await examAccessService.validateStudentAccess(examId, studentId);

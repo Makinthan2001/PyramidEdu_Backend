@@ -12,6 +12,7 @@ const uploadInMemory = multer({
 router.use(authenticateMobileStudent);
 
 router.get("/my-upcoming", controller.getMyUpcomingExams);
+router.get("/:id/result", controller.getStudentExamResult);
 router.get("/:id/questions", controller.getStudentQuestions);
 router.post("/:id/submit", controller.submitExam);
 router.post(

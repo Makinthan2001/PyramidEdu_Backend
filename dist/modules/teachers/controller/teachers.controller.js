@@ -22,6 +22,7 @@ exports.updateMyProfile = updateMyProfile;
 exports.getTeacherSubjects = getTeacherSubjects;
 exports.updateSalary = updateSalary;
 exports.assignSubject = assignSubject;
+exports.getMyDashboardData = getMyDashboardData;
 const teachers_service_1 = __importDefault(require("../service/teachers.service"));
 /**
  * GET /api/v1/teachers
@@ -204,6 +205,22 @@ function assignSubject(req, res, next) {
         }
     });
 }
+/**
+ * GET /api/v1/teachers/me/dashboard
+ * Retrieve dashboard statistics and data for the logged-in teacher
+ */
+function getMyDashboardData(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const userId = req.userId;
+            const dashboardData = yield teachers_service_1.default.getMyDashboardData(userId);
+            res.status(200).json({ success: true, message: 'Dashboard data retrieved', data: dashboardData });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
 exports.default = {
     getTeachers,
     getTeacherById,
@@ -215,4 +232,5 @@ exports.default = {
     getTeacherSubjects,
     updateSalary,
     assignSubject,
+    getMyDashboardData,
 };

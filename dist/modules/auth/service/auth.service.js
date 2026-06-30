@@ -22,6 +22,7 @@ exports.forgotPassword = forgotPassword;
 exports.resetPassword = resetPassword;
 const client_1 = require("@prisma/client");
 const prisma_config_1 = __importDefault(require("../../../config/prisma.config"));
+const notification_service_1 = require("../../notification/service/notification.service");
 const password_util_1 = require("../../../utils/password.util");
 const jwt_util_1 = require("../../../utils/jwt.util");
 const AppError_1 = require("../../../utils/AppError");
@@ -110,6 +111,33 @@ function registerUser(dto) {
                 });
             }
         }));
+        // Notify all active Admins about the new registration
+        try {
+            const admins = yield prisma_config_1.default.user.findMany({
+                where: {
+                    role: client_1.Role.ADMIN,
+                    isActive: true,
+                    deletedAt: null,
+                },
+                select: { id: true },
+            });
+            if (admins.length > 0) {
+                const adminIds = admins.map((a) => a.id);
+                const roleLabel = dto.role.charAt(0).toUpperCase() + dto.role.slice(1).toLowerCase().replace('_', ' ');
+                yield notification_service_1.notificationService.createNotifications({
+                    senderId: user.id,
+                    receiverIds: adminIds,
+                    title: `New ${roleLabel} Registered`,
+                    message: `${dto.fullName} created an account.`,
+                    type: 'USER_REGISTRATION',
+                    referenceType: 'USER',
+                    referenceId: user.id,
+                });
+            }
+        }
+        catch (notificationError) {
+            console.error('Failed to send registration notifications to admins:', notificationError);
+        }
         return yield toSafeUser(user);
     });
 }
@@ -233,6 +261,21 @@ function changePassword(userId, dto) {
             }),
             prisma_config_1.default.refreshToken.deleteMany({ where: { userId } }),
         ]);
+        // Send security notification
+        try {
+            yield notification_service_1.notificationService.createNotification({
+                senderId: null,
+                receiverId: userId,
+                title: 'Password Changed',
+                message: 'Your account password was updated successfully. If you did not make this change, please contact support.',
+                type: 'SYSTEM',
+                referenceType: 'SECURITY',
+                referenceId: userId,
+            });
+        }
+        catch (err) {
+            console.error('Failed to trigger password change notification:', err);
+        }
     });
 }
 function forgotPassword(dto) {

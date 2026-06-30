@@ -22,6 +22,16 @@ export class ManagerController {
       next(error);
     }
   }
+  static async getDashboardData(req: Request, res: Response, next: NextFunction) {
+    try {
+      // const { id } = req.param/s;
+      // const data = await ManagerService.getRegisteredStudents();
+      const data={}
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
 
   static async updatePaymentStatus(req: Request, res: Response, next: NextFunction) {
     try {
@@ -56,7 +66,14 @@ export class ManagerController {
   }
   static async getApprovedStudents(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = await ManagerService.getApprovedStudents();
+      const filters = {
+        search: req.query.search as string,
+        indexNumber: req.query.indexNumber as string,
+        batchId: req.query.batchId as string,
+        subjectId: req.query.subjectId as string,
+        status: req.query.status as string,
+      };
+      const data = await ManagerService.getApprovedStudents(filters);
       res.status(200).json({ success: true, data });
     } catch (error) {
       next(error);
@@ -88,12 +105,12 @@ export class ManagerController {
     try {
       const { id } = req.params;
       const data = req.body;
-      
+
       console.log('RE-ENROLL REQ USER:', (req as any).user);
       console.log('RE-ENROLL REQ USER ID:', (req as any).userId);
-      
+
       const actorId = (req as any).user?.sub || (req as any).user?.id || (req as any).userId;
-      
+
       if (!actorId) {
         throw new AppError('Unauthorized: Manager ID required for re-enrollment.', 401);
       }

@@ -43,6 +43,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       message: 'Login successful.',
       data: {
         user,
+        student: user.role === 'STUDENT' ? user : undefined,
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       },
@@ -103,7 +104,10 @@ export async function getMe(req: Request, res: Response, next: NextFunction) {
 
     res.status(200).json({
       success: true,
-      data: { user },
+      data: { 
+        user,
+        student: user.role === 'STUDENT' ? user : undefined
+      },
     });
   } catch (error) {
     next(error);

@@ -16,5 +16,6 @@ router.get('/students', ManagerController.getApprovedStudents);
 router.patch('/students/:id/toggle-status', ManagerController.toggleStudentStatus);
 router.put('/students/:id', ManagerController.updateStudent);
 router.post('/students/:id/re-enroll', ManagerController.reEnrollStudent);
+router.get('/dashboard', ManagerController.getDashboardData);
 
 export default router;
