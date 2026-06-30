@@ -66,7 +66,14 @@ export class ManagerController {
   }
   static async getApprovedStudents(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = await ManagerService.getApprovedStudents();
+      const filters = {
+        search: req.query.search as string,
+        indexNumber: req.query.indexNumber as string,
+        batchId: req.query.batchId as string,
+        subjectId: req.query.subjectId as string,
+        status: req.query.status as string,
+      };
+      const data = await ManagerService.getApprovedStudents(filters);
       res.status(200).json({ success: true, data });
     } catch (error) {
       next(error);

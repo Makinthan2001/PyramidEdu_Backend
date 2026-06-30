@@ -44,9 +44,53 @@ export class ManagerService {
   /**
    * Get all approved students for Student Management
    */
-  static async getApprovedStudents() {
+  static async getApprovedStudents(filters?: {
+    search?: string;
+    indexNumber?: string;
+    batchId?: string;
+    subjectId?: string;
+    status?: string;
+  }) {
+    const where: any = { approvalStatus: 'APPROVED' };
+
+    if (filters) {
+      const userConditions: any = {};
+      
+      if (filters.search) {
+        userConditions.OR = [
+          { fullName: { contains: filters.search, mode: 'insensitive' } },
+          { email: { contains: filters.search, mode: 'insensitive' } },
+        ];
+      }
+
+      if (filters.status) {
+        userConditions.isActive = filters.status === 'ACTIVE';
+      }
+
+      if (Object.keys(userConditions).length > 0) {
+        where.user = userConditions;
+      }
+
+      if (filters.indexNumber) {
+        where.indexNumber = { contains: filters.indexNumber, mode: 'insensitive' };
+      }
+
+      if (filters.batchId) {
+        where.batchId = filters.batchId;
+      }
+
+      if (filters.subjectId) {
+        where.enrollments = {
+          some: {
+            subjectId: filters.subjectId,
+            enrollmentStatus: 'ACTIVE',
+          },
+        };
+      }
+    }
+
     const students = await prisma.student.findMany({
-      where: { approvalStatus: 'APPROVED' },
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         user: {
@@ -310,7 +354,7 @@ export class ManagerService {
       }
 
       // 2. Update Parent
-      if (data.parentName || data.parentPhone || data.parentOccupation) {
+      if (data.parentName || data.parentPhone || data.parentOccupation || data.parentRelation || data.parentEmail) {
         if (student.parentId) {
           await tx.parent.update({
             where: { id: student.parentId },
@@ -318,7 +362,23 @@ export class ManagerService {
               ...(data.parentName && { parentName: data.parentName }),
               ...(data.parentPhone && { phone: data.parentPhone }),
               ...(data.parentOccupation && { occupation: data.parentOccupation }),
+              ...(data.parentRelation && { relation: data.parentRelation }),
+              ...(data.parentEmail && { email: data.parentEmail }),
             },
+          });
+        } else {
+          const newParent = await tx.parent.create({
+            data: {
+              parentName: data.parentName || 'Parent',
+              phone: data.parentPhone || null,
+              occupation: data.parentOccupation || null,
+              relation: data.parentRelation || null,
+              email: data.parentEmail || null,
+            },
+          });
+          await tx.student.update({
+            where: { id },
+            data: { parentId: newParent.id },
           });
         }
       }
@@ -332,6 +392,7 @@ export class ManagerService {
           ...(data.dateOfBirth && { dateOfBirth: new Date(data.dateOfBirth) }),
           ...(data.gender && { gender: data.gender }),
           ...(data.streamId && { streamId: data.streamId }),
+          ...(data.nic !== undefined && { nic: data.nic }),
         },
       });
 

@@ -3,6 +3,7 @@ import prisma from '../../../config/prisma.config';
 import { notificationService } from '../../notification/service/notification.service';
 import { hashPassword, generateTemporaryPassword, comparePasswords } from '../../../utils/password.util';
 import { AppError } from '../../../utils/AppError';
+import { sendEmail } from '../../../utils/email.util';
 import type { UpdateUserDto } from '../dto';
 import fs from 'fs/promises';
 import path from 'path';
@@ -44,6 +45,7 @@ const userListSelect = {
       gender: true,
       batch: true,
       approvalStatus: true,
+      dateOfBirth: true,
     },
   },
   teacher: {
@@ -94,6 +96,7 @@ function formatUserListItem(user: any) {
     response.gender = user.student.gender;
     response.batch = user.student.batch;
     response.approvalStatus = user.student.approvalStatus;
+    response.dateOfBirth = user.student.dateOfBirth ? new Date(user.student.dateOfBirth).toISOString().split('T')[0] : null;
   }
 
   if (user.teacher) {
@@ -301,6 +304,7 @@ export class UsersService {
     };
 
     let user: any;
+    let studentResult: any;
     try {
       await prisma.$transaction(async (tx) => {
         user = await tx.user.create({
@@ -343,19 +347,94 @@ export class UsersService {
             break;
 
           case Role.STUDENT:
-            await tx.student.create({
+            // 1. Create Parent if parentName is provided
+            let parentId: string | undefined = undefined;
+            if (dto.parentName) {
+              const parent = await tx.parent.create({
+                data: {
+                  parentName: dto.parentName,
+                  relation: dto.parentRelation,
+                  email: dto.parentEmail || null,
+                  phone: dto.parentPhone || null,
+                },
+              });
+              parentId = parent.id;
+            }
+
+            // 2. Generate indexNumber
+            const batchPrefix = `STD${dto.alExamBatch}`;
+            const latestStudent = await tx.student.findFirst({
+              where: { indexNumber: { startsWith: batchPrefix } },
+              orderBy: { indexNumber: 'desc' },
+            });
+            
+            let nextRunningNum = 1;
+            if (latestStudent && latestStudent.indexNumber) {
+              const lastNumStr = latestStudent.indexNumber.slice(-4);
+              const lastNum = parseInt(lastNumStr, 10);
+              if (!isNaN(lastNum)) {
+                nextRunningNum = lastNum + 1;
+              }
+            }
+            const newIndexNumber = `${batchPrefix}${nextRunningNum.toString().padStart(4, '0')}`;
+            
+            // 3. Generate QR code token
+            const qrToken = `QR-${newIndexNumber}-${Math.random().toString(36).substring(2, 10)}`;
+
+            // 4. Calculate fee amount
+            const subjects = await tx.subject.findMany({
+              where: { id: { in: dto.selectedCourseIds } },
+              select: { feeAmount: true }
+            });
+            const totalFeeAmount = subjects.reduce((sum, s) => sum + Number(s.feeAmount), 0);
+
+            // 5. Create student (manually created student accounts are APPROVED)
+            const student = await tx.student.create({
               data: {
                 userId: user.id,
-                indexNumber: dto.indexNumber || null,
+                parentId,
+                streamId: dto.selectedStreamId,
+                indexNumber: newIndexNumber,
+                nic: dto.nic || null,
+                qrCode: qrToken,
                 dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
                 phone: dto.phone || dto.phoneNumber || null,
                 address: dto.address || null,
-                gender: dto.gender || null,
-                batch: dto.batch || null,
-                nic: dto.nic || dto.nicNumber || null,
-                approvalStatus: dto.approvalStatus || 'PENDING',
+                gender: dto.gender,
+                school: dto.school || null,
+                batch: dto.alExamBatch,
+                batchId: dto.batchId || null,
+                approvalStatus: 'APPROVED',
+                paymentStatus: dto.paymentStatus || 'PENDING',
+                totalFeeAmount: totalFeeAmount,
+                feeEffectiveDate: new Date(),
+                lastFeeUpdateDate: new Date(),
               },
             });
+            studentResult = student;
+
+            // 6. Create corresponding QRCode record
+            await tx.qRCode.create({
+              data: {
+                studentId: student.id,
+                qrToken: qrToken,
+              }
+            });
+
+            // 7. Create enrollments
+            if (dto.selectedCourseIds && Array.isArray(dto.selectedCourseIds)) {
+              for (const subjectId of dto.selectedCourseIds) {
+                const teacherId = dto.selectedTeacherIds?.[subjectId];
+                await tx.enrollment.create({
+                  data: {
+                    studentId: student.id,
+                    subjectId,
+                    teacherId: teacherId || null,
+                    enrollmentStatus: 'ACTIVE',
+                  },
+                });
+              }
+            }
             break;
 
           case Role.ADMIN:
@@ -413,7 +492,36 @@ export class UsersService {
       console.error('Failed to send registration notifications to admins:', notificationError);
     }
 
-    return { user, temporaryPassword: providedPassword };
+    // Post-creation email sending for STUDENT, TEACHER, MANAGER
+    if (role === Role.STUDENT || role === Role.TEACHER || role === Role.MANAGER) {
+      const roleLabel = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase().replace('_', ' ');
+      const emailContent = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <h2 style="color: #059669;">Welcome to PyramidEdu!</h2>
+          <p>Dear ${userData.fullName},</p>
+          <p>Your ${roleLabel} account has been manually created by an administrator.</p>
+          <p>Here are your temporary login credentials:</p>
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 10px 0;"><strong>Email/Username:</strong> ${userData.email}</p>
+            <p style="margin: 0;"><strong>Temporary Password:</strong> <code style="font-size: 1.1em; color: #dc2626; background: #fee2e2; padding: 2px 6px; border-radius: 4px;">${providedPassword}</code></p>
+          </div>
+          <p style="color: #475569; font-size: 0.9em; margin-bottom: 20px;">
+            <strong>Important:</strong> You are required to change your password immediately upon your first login.
+          </p>
+        </div>
+      `;
+      try {
+        await sendEmail(
+          userData.email,
+          'PyramidEdu - Account Created & Temporary Password',
+          emailContent
+        );
+      } catch (err) {
+        console.error(`Failed to send email to ${roleLabel}:`, err);
+      }
+    }
+
+    return { user, student: studentResult, temporaryPassword: providedPassword };
   }
 
   /**
