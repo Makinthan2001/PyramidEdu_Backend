@@ -112,16 +112,31 @@ export class ManagerService {
       },
     });
 
-    return students.map((student) => ({
-      id: student.id,
-      studentName: student.user.fullName,
-      indexNumber: student.indexNumber,
-      email: student.user.email,
-      stream: student.stream?.streamName || 'N/A',
-      qrCode: student.qrCode,
-      isActive: student.user.isActive,
-      monthlyFeeStatus: student.fees.length > 0 ? student.fees[0].status : 'UNPAID',
-    }));
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    return students.map((student) => {
+      let monthlyFeeStatus = 'UNPAID';
+      
+      if (student.fees.length > 0) {
+        const latestFee = student.fees[0];
+        const feeDate = new Date(latestFee.monthYear);
+        if (feeDate.getMonth() === currentMonth && feeDate.getFullYear() === currentYear) {
+          monthlyFeeStatus = latestFee.status;
+        }
+      }
+
+      return {
+        id: student.id,
+        studentName: student.user.fullName,
+        indexNumber: student.indexNumber,
+        email: student.user.email,
+        stream: student.stream?.streamName || 'N/A',
+        qrCode: student.qrCode,
+        isActive: student.user.isActive,
+        monthlyFeeStatus,
+      };
+    });
   }
 
   /**
@@ -175,6 +190,37 @@ export class ManagerService {
     console.log(`[getRegisteredStudentById] Returning ${student.enrollments.length} ACTIVE enrollments for student ${id}`);
 
     return student;
+  }
+
+  /**
+   * Update monthly fee status of a student
+   */
+  static async updateMonthlyFeeStatus(id: string, status: 'PAID' | 'UNPAID') {
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student) throw new AppError('Student not found.', 404);
+
+    const now = new Date();
+    const monthYear = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+
+    await prisma.fee.upsert({
+      where: {
+        studentId_monthYear: {
+          studentId: id,
+          monthYear: monthYear,
+        },
+      },
+      update: {
+        status: status,
+        paid: status === 'PAID' ? student.totalFeeAmount : 0,
+      },
+      create: {
+        studentId: id,
+        monthYear: monthYear,
+        status: status,
+        total: student.totalFeeAmount,
+        paid: status === 'PAID' ? student.totalFeeAmount : 0,
+      },
+    });
   }
 
   /**

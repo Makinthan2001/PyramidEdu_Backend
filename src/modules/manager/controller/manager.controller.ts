@@ -90,6 +90,20 @@ export class ManagerController {
     }
   }
 
+  static async updateMonthlyFeeStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      if (!status || !['PAID', 'UNPAID'].includes(status)) {
+        return res.status(400).json({ success: false, message: 'Invalid status provided.' });
+      }
+      await ManagerService.updateMonthlyFeeStatus(id as string, status);
+      res.status(200).json({ success: true, message: 'Monthly fee status updated successfully.' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async updateStudent(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;

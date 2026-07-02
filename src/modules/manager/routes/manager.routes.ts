@@ -14,6 +14,7 @@ router.patch('/registered-students/:id/payment-status', ManagerController.update
 router.patch('/registered-students/:id/approval-status', ManagerController.updateApprovalStatus);
 router.get('/students', ManagerController.getApprovedStudents);
 router.patch('/students/:id/toggle-status', ManagerController.toggleStudentStatus);
+router.patch('/students/:id/monthly-fee-status', ManagerController.updateMonthlyFeeStatus);
 router.put('/students/:id', ManagerController.updateStudent);
 router.post('/students/:id/re-enroll', ManagerController.reEnrollStudent);
 router.get('/dashboard', ManagerController.getDashboardData);
