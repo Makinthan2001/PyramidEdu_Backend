@@ -13,6 +13,8 @@ router.get('/registered-students/:id', ManagerController.getRegisteredStudentByI
 router.patch('/registered-students/:id/payment-status', ManagerController.updatePaymentStatus);
 router.patch('/registered-students/:id/approval-status', ManagerController.updateApprovalStatus);
 router.get('/students', ManagerController.getApprovedStudents);
+router.get('/fees', ManagerController.getFeeManagementData);
+router.get('/fees/:id/history', ManagerController.getStudentPaymentHistory);
 router.patch('/students/:id/toggle-status', ManagerController.toggleStudentStatus);
 router.patch('/students/:id/monthly-fee-status', ManagerController.updateMonthlyFeeStatus);
 router.put('/students/:id', ManagerController.updateStudent);
