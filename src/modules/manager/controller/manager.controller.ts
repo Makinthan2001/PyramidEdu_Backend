@@ -90,6 +90,45 @@ export class ManagerController {
     }
   }
 
+  static async updateMonthlyFeeStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      if (!status || !['PAID', 'UNPAID'].includes(status)) {
+        return res.status(400).json({ success: false, message: 'Invalid status provided.' });
+      }
+      await ManagerService.updateMonthlyFeeStatus(id as string, status);
+      res.status(200).json({ success: true, message: 'Monthly fee status updated successfully.' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getFeeManagementData(req: Request, res: Response, next: NextFunction) {
+    try {
+      const filters = {
+        search: req.query.search as string,
+        indexNumber: req.query.indexNumber as string,
+        status: req.query.status as string,
+        method: req.query.method as string,
+      };
+      const data = await ManagerService.getFeeManagementData(filters);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getStudentPaymentHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const data = await ManagerService.getStudentPaymentHistory(id as string);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async updateStudent(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;

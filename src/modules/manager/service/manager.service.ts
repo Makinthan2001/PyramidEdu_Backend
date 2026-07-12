@@ -112,16 +112,31 @@ export class ManagerService {
       },
     });
 
-    return students.map((student) => ({
-      id: student.id,
-      studentName: student.user.fullName,
-      indexNumber: student.indexNumber,
-      email: student.user.email,
-      stream: student.stream?.streamName || 'N/A',
-      qrCode: student.qrCode,
-      isActive: student.user.isActive,
-      monthlyFeeStatus: student.fees.length > 0 ? student.fees[0].status : 'UNPAID',
-    }));
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    return students.map((student) => {
+      let monthlyFeeStatus = 'UNPAID';
+      
+      if (student.fees.length > 0) {
+        const latestFee = student.fees[0];
+        const feeDate = new Date(latestFee.monthYear);
+        if (feeDate.getMonth() === currentMonth && feeDate.getFullYear() === currentYear) {
+          monthlyFeeStatus = latestFee.status;
+        }
+      }
+
+      return {
+        id: student.id,
+        studentName: student.user.fullName,
+        indexNumber: student.indexNumber,
+        email: student.user.email,
+        stream: student.stream?.streamName || 'N/A',
+        qrCode: student.qrCode,
+        isActive: student.user.isActive,
+        monthlyFeeStatus,
+      };
+    });
   }
 
   /**
@@ -175,6 +190,37 @@ export class ManagerService {
     console.log(`[getRegisteredStudentById] Returning ${student.enrollments.length} ACTIVE enrollments for student ${id}`);
 
     return student;
+  }
+
+  /**
+   * Update monthly fee status of a student
+   */
+  static async updateMonthlyFeeStatus(id: string, status: 'PAID' | 'UNPAID') {
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student) throw new AppError('Student not found.', 404);
+
+    const now = new Date();
+    const monthYear = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+
+    await prisma.fee.upsert({
+      where: {
+        studentId_monthYear: {
+          studentId: id,
+          monthYear: monthYear,
+        },
+      },
+      update: {
+        status: status,
+        paid: status === 'PAID' ? student.totalFeeAmount : 0,
+      },
+      create: {
+        studentId: id,
+        monthYear: monthYear,
+        status: status,
+        total: student.totalFeeAmount,
+        paid: status === 'PAID' ? student.totalFeeAmount : 0,
+      },
+    });
   }
 
   /**
@@ -314,6 +360,136 @@ export class ManagerService {
 
     return updatedStudent;
   }
+  static async getFeeManagementData(filters: any) {
+    const { search, indexNumber, status, method } = filters;
+
+    // We'll base the 'current month' logic similarly to StudentManagement
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const students = await prisma.student.findMany({
+      where: {
+        approvalStatus: 'APPROVED',
+        deletedAt: null,
+        ...(search && {
+          OR: [
+            { user: { fullName: { contains: search, mode: 'insensitive' } } },
+            { indexNumber: { contains: search, mode: 'insensitive' } },
+          ],
+        }),
+        ...(indexNumber && { indexNumber: { contains: indexNumber, mode: 'insensitive' } }),
+      },
+      include: {
+        user: true,
+        fees: {
+          orderBy: { monthYear: 'desc' },
+          take: 1,
+          include: {
+            payments: {
+              orderBy: { paymentDate: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let result = students.map((student) => {
+      let monthlyFeeStatus = 'UNPAID';
+      let paymentMethod = 'N/A';
+      
+      if (student.fees.length > 0) {
+        const latestFee = student.fees[0];
+        const feeDate = new Date(latestFee.monthYear);
+        if (feeDate.getMonth() === currentMonth && feeDate.getFullYear() === currentYear) {
+          monthlyFeeStatus = latestFee.status;
+          if (latestFee.payments && latestFee.payments.length > 0) {
+            paymentMethod = latestFee.payments[0].paymentMethod;
+          } else if (monthlyFeeStatus === 'PAID') {
+            paymentMethod = 'CASH'; // Toggled by manager acts as cash counter
+          }
+        }
+      }
+
+      return {
+        id: student.id,
+        studentName: student.user.fullName,
+        indexNumber: student.indexNumber,
+        totalFees: Number(student.totalFeeAmount) || 0,
+        monthlyFeeStatus,
+        paymentMethod,
+      };
+    });
+
+    if (status && status !== 'ALL') {
+      result = result.filter((s) => s.monthlyFeeStatus === status);
+    }
+    if (method && method !== 'ALL') {
+      result = result.filter((s) => 
+        method === 'ONLINE' ? s.paymentMethod === 'CARD' :
+        method === 'CASH' ? s.paymentMethod !== 'CARD' && s.paymentMethod !== 'N/A' :
+        true
+      );
+    }
+
+    return result;
+  }
+
+  static async getStudentPaymentHistory(id: string) {
+    const student = await prisma.student.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        fees: {
+          orderBy: { monthYear: 'desc' },
+          include: {
+            payments: {
+              orderBy: { paymentDate: 'desc' },
+            },
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      throw new AppError('Student not found.', 404);
+    }
+
+    const history: any[] = [];
+    student.fees.forEach((fee) => {
+      fee.payments.forEach((payment) => {
+        history.push({
+          paymentDate: payment.paymentDate,
+          monthYear: fee.monthYear,
+          amount: Number(payment.amount),
+          method: payment.paymentMethod,
+          status: payment.paymentStatus,
+          transactionId: payment.id,
+          receiptNumber: payment.invoiceNumber,
+        });
+      });
+      if (fee.status === 'PAID' && fee.payments.length === 0) {
+        history.push({
+          paymentDate: fee.updatedAt,
+          monthYear: fee.monthYear,
+          amount: Number(fee.paid),
+          method: 'CASH',
+          status: 'COMPLETED',
+          transactionId: 'CASH-' + fee.id.substring(0, 8),
+          receiptNumber: null,
+        });
+      }
+    });
+
+    return {
+      studentName: student.user.fullName,
+      indexNumber: student.indexNumber,
+      history,
+    };
+  }
+
   /**
    * Toggle student's active status
    */
