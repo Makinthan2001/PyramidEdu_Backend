@@ -24,6 +24,7 @@ export async function enqueuePdfIngestion(options: IngestPdfOptions) {
       // const embeddings = await generateEmbeddings(chunks); 
       // await prisma.studyMaterialChunk.createMany({ ... })
       
+      
     } catch (err) {
       console.error(`[RAG Pipeline Error] Failed to ingest PDF from ${options.sourceUrl}:`, err);
     }

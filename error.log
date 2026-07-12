@@ -27,3 +27,227 @@ Unknown argument `teacherId`. Available options are marked with ?.
     at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
     at processTicksAndRejections (node:internal/process/task_queues:105:5)
     at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
+PrismaClientKnownRequestError: 
+Invalid `prisma.attendance.findMany()` invocation in
+D:\6th Semester\Project 2\PyramidEdu_Backend\src\modules\attendance\service\attendance.service.ts:581:49
+
+  578   whereClause.subjectId = filters.subjectId;
+  579 }
+  580 
+→ 581 const attendances = await prisma.attendance.findMany(
+The column `attendances.session_id` does not exist in the current database.
+    at zr.handleRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:237:13)
+    at zr.handleAndLogRequestError (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:183:12)
+    at zr.request (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\RequestHandler.ts:152:12)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at a (D:\6th Semester\Project 2\PyramidEdu_Backend\node_modules\@prisma\client\src\runtime\getPrismaClient.ts:963:24)
