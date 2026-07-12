@@ -31,7 +31,6 @@ export class ExamsService {
       include: {
         subject: { select: { subjectName: true, subjectCode: true } },
         batchRecord: { select: { batchName: true } },
-        term: { select: { name: true } },
         _count: { select: { questions: true, submissions: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -47,7 +46,6 @@ export class ExamsService {
         },
         subject: { select: { subjectName: true, subjectCode: true } },
         batchRecord: { select: { batchName: true } },
-        term: { select: { name: true } },
         _count: { select: { submissions: true } },
       },
     });

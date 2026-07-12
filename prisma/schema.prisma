@@ -26,13 +26,11 @@ model User {
   createdAt             DateTime            @default(now()) @map("created_at")
   updatedAt             DateTime            @updatedAt @map("updated_at")
   admin                 Admin?
-  aiUsageLogs           AIUsageLog[]
   sentAnnouncements     Announcement[]      @relation("SentAnnouncements")
   auditLogs             AuditLog[]
   chatConversations     ChatConversation[]
   classSessions         ClassSession[]
   enrollmentChanges     EnrollmentHistory[] @relation("EnrollmentChangedBy")
-  fileUploads           FileUpload[]
   manager               Manager?
   receivedNotifications Notification[]      @relation("ReceivedNotifications")
   sentNotifications     Notification[]      @relation("SentNotifications")
@@ -131,7 +129,6 @@ model Student {
   feeEffectiveDate       DateTime?                 @map("fee_effective_date")
   lastFeeUpdateDate      DateTime?                 @map("last_fee_update_date")
   batchId                String?                   @map("batch_id")
-  aiRecommendations      AIRecommendation[]
   assignmentSubmissions  AssignmentSubmission[]
   attendances            Attendance[]
   enrollmentHistories    EnrollmentHistory[]
@@ -144,7 +141,6 @@ model Student {
   performancePredictions PerformancePrediction[]
   qrCodes                QRCode[]
   results                Result[]
-  rewards                Reward[]
   deviceTokens           StudentDeviceToken[]
   batchRecord            Batch?                    @relation(fields: [batchId], references: [id])
   parent                 Parent?                   @relation(fields: [parentId], references: [id])
@@ -197,21 +193,6 @@ model OtpVerification {
   @@map("otp_verifications")
 }
 
-model AcademicTerm {
-  id                 String              @id @default(uuid())
-  name               String
-  startDate          DateTime            @map("start_date")
-  endDate            DateTime            @map("end_date")
-  isActive           Boolean             @default(false) @map("is_active")
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @updatedAt @map("updated_at")
-  attendanceSessions AttendanceSession[]
-  examSchedules      ExamSchedule[]
-  exams              Exam[]
-
-  @@map("academic_terms")
-}
-
 model Stream {
   id          String    @id @default(uuid())
   streamName  String    @map("stream_name")
@@ -236,7 +217,6 @@ model Subject {
   updatedAt          DateTime            @updatedAt @map("updated_at")
   assignments        Assignment[]
   classSessions      ClassSession[]
-  courseSchedules    CourseSchedule[]
   enrollments        Enrollment[]
   exams              Exam[]
   manualExams        ManualExam[]
@@ -262,21 +242,6 @@ model SubjectAllocation {
 
   @@unique([teacherId, subjectId])
   @@map("subject_allocations")
-}
-
-model CourseSchedule {
-  id        String   @id @default(uuid())
-  subjectId String   @map("subject_id")
-  dayOfWeek Int      @map("day_of_week")
-  startTime String   @map("start_time")
-  endTime   String   @map("end_time")
-  room      String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-
-  @@index([subjectId])
-  @@map("course_schedules")
 }
 
 model Enrollment {
@@ -419,7 +384,6 @@ model Exam {
   id                    String           @id @default(uuid())
   subjectId             String           @map("subject_id")
   teacherId             String           @map("teacher_id")
-  termId                String?          @map("term_id")
   examTitle             String           @map("exam_title")
   examType              ExamType         @default(MCQ) @map("exam_type")
   examDate              DateTime         @map("exam_date")
@@ -439,7 +403,6 @@ model Exam {
   batchRecord           Batch?           @relation(fields: [batchId], references: [id])
   subject               Subject          @relation(fields: [subjectId], references: [id])
   teacher               Teacher          @relation(fields: [teacherId], references: [id])
-  term                  AcademicTerm?    @relation(fields: [termId], references: [id])
   questions             Question[]
   results               Result[]
 
@@ -450,14 +413,12 @@ model Exam {
 }
 
 model ExamSchedule {
-  id          String       @id @default(uuid())
-  examId      String       @map("exam_id")
-  termId      String       @map("term_id")
+  id          String   @id @default(uuid())
+  examId      String   @map("exam_id")
   room        String?
   invigilator String?
-  createdAt   DateTime     @default(now()) @map("created_at")
-  exam        Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
-  term        AcademicTerm @relation(fields: [termId], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
 
   @@map("exam_schedules")
 }
@@ -574,42 +535,26 @@ model ClassSession {
   @@map("class_sessions")
 }
 
-model AttendanceSession {
-  id          String       @id @default(uuid())
-  termId      String       @map("term_id")
-  subjectId   String       @map("subject_id")
-  sessionDate DateTime     @map("session_date")
-  isActive    Boolean      @default(true) @map("is_active")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  term        AcademicTerm @relation(fields: [termId], references: [id])
-  attendances Attendance[]
-
-  @@index([termId])
-  @@map("attendance_sessions")
-}
-
 model Attendance {
-  id               String             @id @default(uuid())
-  studentId        String             @map("student_id")
-  subjectId        String             @map("subject_id")
-  sessionId        String?            @map("session_id")
-  qrCodeId         String?            @map("qr_code_id")
-  attendanceDate   DateTime           @map("attendance_date")
-  attendanceStatus AttendanceStatus   @default(ABSENT) @map("attendance_status")
-  attendanceMethod AttendanceMethod   @default(MANUAL) @map("attendance_method")
-  scannedTime      DateTime?          @map("scanned_time")
-  isPresent        Boolean            @default(false) @map("is_present")
-  markedAt         DateTime?          @map("marked_at")
+  id               String           @id @default(uuid())
+  studentId        String           @map("student_id")
+  subjectId        String           @map("subject_id")
+  qrCodeId         String?          @map("qr_code_id")
+  attendanceDate   DateTime         @map("attendance_date")
+  attendanceStatus AttendanceStatus @default(ABSENT) @map("attendance_status")
+  attendanceMethod AttendanceMethod @default(MANUAL) @map("attendance_method")
+  scannedTime      DateTime?        @map("scanned_time")
+  isPresent        Boolean          @default(false) @map("is_present")
+  markedAt         DateTime?        @map("marked_at")
   remarks          String?
-  createdAt        DateTime           @default(now()) @map("created_at")
-  updatedAt        DateTime           @updatedAt @map("updated_at")
-  teacherId        String?            @map("teacher_id")
-  classSessionId   String?            @map("class_session_id")
-  classSession     ClassSession?      @relation(fields: [classSessionId], references: [id])
-  qrCode           QRCode?            @relation(fields: [qrCodeId], references: [id])
-  session          AttendanceSession? @relation(fields: [sessionId], references: [id])
-  student          Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacher          Teacher?           @relation(fields: [teacherId], references: [id])
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  teacherId        String?          @map("teacher_id")
+  classSessionId   String?          @map("class_session_id")
+  classSession     ClassSession?    @relation(fields: [classSessionId], references: [id])
+  qrCode           QRCode?          @relation(fields: [qrCodeId], references: [id])
+  student          Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher          Teacher?         @relation(fields: [teacherId], references: [id])
 
   @@unique([studentId, classSessionId])
   @@index([studentId])
@@ -715,19 +660,6 @@ model PerformancePrediction {
   @@map("performance_predictions")
 }
 
-model AIRecommendation {
-  id                 String             @id @default(uuid())
-  studentId          String             @map("student_id")
-  recommendationText String             @map("recommendation_text")
-  recommendationType RecommendationType @map("recommendation_type")
-  generatedAt        DateTime           @default(now()) @map("generated_at")
-  createdAt          DateTime           @default(now()) @map("created_at")
-  student            Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@index([studentId])
-  @@map("ai_recommendations")
-}
-
 model ChatConversation {
   id        String        @id @default(uuid())
   userId    String        @map("user_id")
@@ -755,55 +687,6 @@ model ChatMessage {
 
   @@index([conversationId])
   @@map("chat_messages")
-}
-
-model ChatPDFDocument {
-  id                String        @id @default(uuid())
-  userId            String        @map("user_id")
-  fileName          String        @map("file_name")
-  fileUrl           String        @map("file_url")
-  fileSize          Int?          @map("file_size")
-  summary           String?
-  keyPoints         String?       @map("key_points")
-  studyNotes        String?       @map("study_notes")
-  practiceQuestions String?       @map("practice_questions")
-  processingStatus  ChatPDFStatus @default(UPLOADING) @map("processing_status")
-  deletedAt         DateTime?     @map("deleted_at")
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
-
-  @@index([userId])
-  @@map("chat_pdf_documents")
-}
-
-model AIUsageLog {
-  id             String      @id @default(uuid())
-  userId         String      @map("user_id")
-  usageType      AIUsageType @map("usage_type")
-  prompt         String?
-  response       String?
-  tokensUsed     Int?        @map("tokens_used")
-  responseTimeMs Int?        @map("response_time_ms")
-  createdAt      DateTime    @default(now()) @map("created_at")
-  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([createdAt])
-  @@map("ai_usage_logs")
-}
-
-model Reward {
-  id           String     @id @default(uuid())
-  studentId    String     @map("student_id")
-  rewardPoints Int        @map("reward_points")
-  rewardType   RewardType @map("reward_type")
-  description  String?
-  issuedDate   DateTime   @map("issued_date")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@index([studentId])
-  @@map("rewards")
 }
 
 model Notification {
@@ -861,23 +744,6 @@ model Announcement {
   @@map("announcements")
 }
 
-model FileUpload {
-  id         String         @id @default(uuid())
-  userId     String         @map("user_id")
-  uploadType FileUploadType @map("upload_type")
-  fileName   String         @map("file_name")
-  fileUrl    String         @map("file_url")
-  fileSize   Int?           @map("file_size")
-  mimeType   String?        @map("mime_type")
-  isPublic   Boolean        @default(false) @map("is_public")
-  deletedAt  DateTime?      @map("deleted_at")
-  createdAt  DateTime       @default(now()) @map("created_at")
-  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("file_uploads")
-}
-
 model AuditLog {
   id          String      @id @default(uuid())
   userId      String      @map("user_id")
@@ -895,18 +761,6 @@ model AuditLog {
   @@index([module])
   @@index([createdAt])
   @@map("audit_logs")
-}
-
-model ActivityLog {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  activity  String
-  metadata  Json?
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([userId])
-  @@index([createdAt])
-  @@map("activity_logs")
 }
 
 model SupportStaff {
@@ -1127,38 +981,6 @@ enum AnnouncementTarget {
   PARENT
 }
 
-enum RewardType {
-  ACADEMIC_EXCELLENCE
-  ATTENDANCE_PERFECT
-  IMPROVEMENT
-  PARTICIPATION
-  SPECIAL
-}
-
-enum AIUsageType {
-  CHAT
-  PDF_SUMMARY
-  PDF_QUESTIONS
-  PERFORMANCE_RECOMMENDATION
-  EXAM_RECOMMENDATION
-}
-
-enum RecommendationType {
-  ATTENDANCE
-  QUIZ
-  ASSIGNMENT
-  EXAM
-  GENERAL
-  INTERVENTION
-}
-
-enum ChatPDFStatus {
-  UPLOADING
-  PROCESSING
-  READY
-  FAILED
-}
-
 enum AuditAction {
   CREATE
   READ
@@ -1170,14 +992,6 @@ enum AuditAction {
   IMPORT
   APPROVE
   REJECT
-}
-
-enum FileUploadType {
-  STUDY_MATERIAL
-  CHAT_PDF
-  PROFILE_IMAGE
-  ASSIGNMENT_SUBMISSION
-  EXAM_PAPER
 }
 
 enum SubjectAllocationStatus {

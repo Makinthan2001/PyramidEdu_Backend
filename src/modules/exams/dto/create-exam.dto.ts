@@ -3,7 +3,6 @@ import { ExamType } from '@prisma/client';
 
 export const baseExamSchema = z.object({
   subjectId: z.string().uuid('Subject ID must be a valid UUID'),
-  termId: z.string().uuid('Term ID must be a valid UUID').optional(),
   examTitle: z.string().trim().min(2, 'Exam title must be at least 2 characters').max(255),
   examType: z.nativeEnum(ExamType),
   examDate: z.coerce.date(),
