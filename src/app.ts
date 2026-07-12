@@ -29,6 +29,7 @@ import announcementsRouter from './modules/announcements';
 import notificationsRouter from './modules/notification';
 import parentReportsRouter from './modules/parent-reports';
 import analyticsReportsRouter from './modules/analytics-reports';
+import performanceRouter from './modules/performance';
 
 validateEnv();
 configureCloudinary();
@@ -136,6 +137,9 @@ app.use('/api/v1/parent-reports', parentReportsRouter);
 
 // Analytics routes
 app.use('/api/v1/analytics', analyticsReportsRouter);
+
+// Performance routes
+app.use('/api/v1/performance', performanceRouter);
 
 // centralized error handler - must be last
 app.use(errorHandler);

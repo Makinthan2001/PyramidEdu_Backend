@@ -642,18 +642,22 @@ model ParentReport {
 }
 
 model PerformancePrediction {
-  id                String           @id @default(uuid())
-  studentId         String           @map("student_id")
-  attendanceScore   Decimal          @map("attendance_score") @db.Decimal(5, 2)
-  quizAverage       Decimal          @map("quiz_average") @db.Decimal(5, 2)
-  assignmentAverage Decimal          @map("assignment_average") @db.Decimal(5, 2)
-  examAverage       Decimal          @map("exam_average") @db.Decimal(5, 2)
-  finalScore        Decimal          @map("final_score") @db.Decimal(5, 2)
-  performanceLevel  PerformanceLevel @map("performance_level")
-  trendStatus       TrendStatus      @map("trend_status")
-  generatedAt       DateTime         @default(now()) @map("generated_at")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  student           Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id                    String           @id @default(uuid())
+  studentId             String           @map("student_id")
+  attendanceScore       Decimal          @map("attendance_score") @db.Decimal(5, 2)
+  mcqScore              Decimal          @map("mcq_score") @db.Decimal(5, 2)
+  essayScore            Decimal          @map("essay_score") @db.Decimal(5, 2)
+  manualExamScore       Decimal          @map("manual_exam_score") @db.Decimal(5, 2)
+  finalScore            Decimal          @map("final_score") @db.Decimal(5, 2)
+  performanceLevel      PerformanceLevel @map("performance_level")
+  trendStatus           TrendStatus      @map("trend_status")
+  recommendations       String[]
+  weightsUsed           Json             @map("weights_used")
+  missedExamCount       Int              @default(0) @map("missed_exam_count")
+  absentManualExamCount Int              @default(0) @map("absent_manual_exam_count")
+  generatedAt           DateTime         @default(now()) @map("generated_at")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  student               Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
   @@index([performanceLevel])
@@ -952,8 +956,10 @@ enum DifficultyLevel {
 
 enum PerformanceLevel {
   EXCELLENT
+  VERY_GOOD
   GOOD
   AVERAGE
+  NEEDS_IMPROVEMENT
   AT_RISK
 }
 
