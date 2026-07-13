@@ -28,6 +28,7 @@ export async function createStudyMaterial(
       batch: dto.batch,
       fileUrls: dto.fileUrls || [],
       text: dto.text,
+      status: 'Published',
     },
     include: {
       subject: { select: { subjectName: true } },

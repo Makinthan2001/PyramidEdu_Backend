@@ -110,9 +110,21 @@ export async function getStudyMaterials(req: Request, res: Response, next: NextF
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
 
+    let teacherId = req.query.teacherId as string;
+
+    if (req.user && req.user.role === 'TEACHER') {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: req.user.sub },
+        include: { teacher: true }
+      });
+      if (dbUser?.teacher) {
+        teacherId = dbUser.teacher.id;
+      }
+    }
+
     const filters = {
       subjectId: req.query.subjectId as string,
-      teacherId: req.query.teacherId as string,
+      teacherId,
       skip,
       take: limit,
     };
