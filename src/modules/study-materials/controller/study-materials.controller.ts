@@ -52,7 +52,7 @@ export async function createStudyMaterial(req: Request, res: Response, next: Nex
         // Upload directly to Cloudinary
         const uploadResult = await uploadToCloudinary(fileBuffer, {
           folder: process.env.CLOUDINARY_STUDY_MATERIAL_FOLDER || 'pyramidEdu/study_material',
-          resourceType: 'raw',
+          resourceType: 'auto',
           publicId: safeFilename,
         });
 
