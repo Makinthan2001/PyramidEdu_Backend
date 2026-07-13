@@ -169,3 +169,45 @@ export async function uploadFileToCloudinary(
     next(error);
   }
 }
+
+export async function getMyUpcomingClasses(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) throw new AppError("Unauthorized", 401);
+
+    const studentId = await getStudentIdFromUserId(userId);
+
+    const enrollments = await prisma.enrollment.findMany({
+      where: { studentId, enrollmentStatus: "ACTIVE" },
+      select: { subjectId: true },
+    });
+    const subjectIds = enrollments.map((e) => e.subjectId);
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const classes = await prisma.classSession.findMany({
+      where: {
+        subjectId: { in: subjectIds },
+        sessionDate: { gte: todayStart },
+      },
+      include: {
+        subject: { select: { subjectName: true } },
+        teacher: { include: { user: { select: { fullName: true } } } },
+        batch: { select: { batchName: true } },
+      },
+      orderBy: [
+        { sessionDate: "asc" },
+        { sessionTime: "asc" },
+      ],
+    });
+
+    res.status(200).json({ success: true, data: classes });
+  } catch (error) {
+    next(error);
+  }
+}
