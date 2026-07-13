@@ -42,6 +42,8 @@ function calculateOnlineExamMetrics(submissions: OnlineExamSubmissionInput[]): E
   for (const sub of submissions) {
     if (sub.submissionStatus === 'MISSED') {
       missedCount++;
+      validCount++;
+      // A missed exam is counted as 0 marks
       continue;
     }
     if (sub.totalScore == null) {
@@ -64,7 +66,7 @@ function calculateOnlineExamMetrics(submissions: OnlineExamSubmissionInput[]): E
     average: validCount > 0 ? totalNormalizedScore / validCount : null,
     validCount,
     missedCount,
-    totalAttemptedOrMissed: validCount + missedCount,
+    totalAttemptedOrMissed: validCount,
   };
 }
 
@@ -76,6 +78,8 @@ function calculateManualExamMetrics(marks: ManualExamMarkInput[]): ExamMetrics {
   for (const mark of marks) {
     if (mark.isAbsent) {
       missedCount++;
+      validCount++;
+      // An absent exam is counted as 0 marks
       continue;
     }
     if (mark.marksObtained == null) {
@@ -94,7 +98,7 @@ function calculateManualExamMetrics(marks: ManualExamMarkInput[]): ExamMetrics {
     average: validCount > 0 ? totalNormalizedScore / validCount : null,
     validCount,
     missedCount,
-    totalAttemptedOrMissed: validCount + missedCount,
+    totalAttemptedOrMissed: validCount,
   };
 }
 
@@ -153,6 +157,12 @@ export function calculatePerformanceResult(data: {
   const essayMetrics = calculateOnlineExamMetrics(essayExams);
   const manualMetrics = calculateManualExamMetrics(manualExams);
 
+  // --- Minimum Data Requirement ---
+  const isProvisional =
+    mcqMetrics.validCount === 0 &&
+    essayMetrics.validCount === 0 &&
+    manualMetrics.validCount === 0;
+
   const weights = redistributeWeights({ mcq: mcqMetrics, essay: essayMetrics, manual: manualMetrics });
 
   const finalScore =
@@ -163,7 +173,9 @@ export function calculatePerformanceResult(data: {
 
   // --- Categorization ---
   let performanceLevel: PerformanceLevel = PerformanceLevel.AT_RISK;
-  if (finalScore >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
+  if (isProvisional) {
+    performanceLevel = PerformanceLevel.AVERAGE;
+  } else if (finalScore >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
     performanceLevel = PerformanceLevel.EXCELLENT;
   } else if (finalScore >= PERFORMANCE_THRESHOLDS.VERY_GOOD) {
     performanceLevel = PerformanceLevel.VERY_GOOD;
@@ -189,7 +201,7 @@ export function calculatePerformanceResult(data: {
   // --- Recommendations ---
   const recommendations: string[] = [];
 
-  if (attendanceScore < RECOMMENDATION_THRESHOLDS.LOW_ATTENDANCE) {
+  if (!isProvisional && attendanceScore < RECOMMENDATION_THRESHOLDS.LOW_ATTENDANCE) {
     recommendations.push('Improve attendance');
   }
   if (mcqMetrics.average !== null && mcqMetrics.average < RECOMMENDATION_THRESHOLDS.WEAK_SUBJECT_SCORE) {
@@ -228,6 +240,10 @@ export function calculatePerformanceResult(data: {
     recommendations.push('Attend revision classes (declining trend detected)');
   }
 
+  if (isProvisional) {
+    recommendations.push('More assessment data is required for an accurate prediction');
+  }
+
   return {
     attendanceScore,
     mcqMetrics,
@@ -238,6 +254,7 @@ export function calculatePerformanceResult(data: {
     performanceLevel,
     trendStatus,
     recommendations,
+    isProvisional,
     totalMissedOnline: mcqMetrics.missedCount + essayMetrics.missedCount,
     totalMissedManual: manualMetrics.missedCount,
   };
