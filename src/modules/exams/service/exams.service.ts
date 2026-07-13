@@ -431,7 +431,7 @@ export class ExamsService {
             'AI_ALERT',
             `AI-${exam.id}`,
             'Academic Performance Alert',
-            'Your performance has been flagged as At-Risk. View your AI recommendations.',
+            'Your performance has been flagged as At-Risk. View your recommendations.',
             { type: 'AI_ALERT', route: '/(tabs)/academic' }
           );
         } else if (currentTier !== previousTier && currentTier) {

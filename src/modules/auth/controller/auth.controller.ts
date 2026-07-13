@@ -5,6 +5,7 @@ import type { LoginDto } from '../dto/login.dto';
 import type { ChangePasswordDto } from '../dto/change-password.dto';
 import type { ForgotPasswordDto } from '../dto/forgot-password.dto';
 import type { ResetPasswordDto } from '../dto/reset-password.dto';
+import type { VerifyOtpDto } from '../dto/verify-otp.dto';
 import { AppError } from '../../../utils/AppError';
 
 const REFRESH_COOKIE_OPTIONS = {
@@ -135,17 +136,43 @@ export async function changePassword(req: Request, res: Response, next: NextFunc
 export async function forgotPassword(req: Request, res: Response, next: NextFunction) {
   try {
     const dto = req.body as ForgotPasswordDto;
-    const token = await authService.forgotPassword(dto);
+    const result = await authService.forgotPassword(dto);
 
-    const responseData: Record<string, string> = {
-      message: 'If an account with that email exists, a password-reset link has been sent.',
-    };
-
-    if (process.env.NODE_ENV !== 'production' && token) {
-      responseData.devResetToken = token;
+    if (!result) {
+      // Return a success message even if email doesn't exist for security/privacy
+      res.status(200).json({
+        success: true,
+        data: {
+          message: 'If an account with that email exists, an OTP has been sent.',
+          verificationToken: '',
+        },
+      });
+      return;
     }
 
-    res.status(200).json({ success: true, data: responseData });
+    res.status(200).json({
+      success: true,
+      data: {
+        message: 'OTP has been successfully sent to your email.',
+        verificationToken: result.verificationToken,
+        ...(result.devOtp && { devOtp: result.devOtp }),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function verifyOtp(req: Request, res: Response, next: NextFunction) {
+  try {
+    const dto = req.body as VerifyOtpDto;
+    const resetToken = await authService.verifyOtp(dto);
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP verified successfully.',
+      data: { resetToken },
+    });
   } catch (error) {
     next(error);
   }

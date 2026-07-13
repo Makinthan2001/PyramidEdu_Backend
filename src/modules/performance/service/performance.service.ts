@@ -1,11 +1,5 @@
 import prisma from '../../../config/prisma.config';
-import { 
-  DEFAULT_WEIGHTS, 
-  PERFORMANCE_THRESHOLDS, 
-  TREND_THRESHOLDS, 
-  MISSED_EXAM_RATIO_THRESHOLD 
-} from '../constants/performance.constants';
-import { PerformanceLevel, TrendStatus } from '@prisma/client';
+import { calculatePerformanceResult } from '../utils/performance.calculator';
 
 export class PerformanceService {
 
@@ -68,136 +62,18 @@ export class PerformanceService {
       include: { manualExam: true },
     });
 
-    // --- Calculate Metrics ---
-    
-    // Helper to calculate normalized average and missed counts
-    const calculateExamMetrics = (submissions: any[], isManual = false) => {
-      let totalNormalizedScore = 0;
-      let validCount = 0;
-      let missedCount = 0;
-
-      for (const sub of submissions) {
-        if (isManual) {
-          if (sub.isAbsent) {
-            missedCount++;
-          } else if (sub.marksObtained != null && sub.manualExam?.totalMarks) {
-            const normalized = (Number(sub.marksObtained) / sub.manualExam.totalMarks) * 100;
-            totalNormalizedScore += normalized;
-            validCount++;
-          }
-        } else {
-          if (sub.submissionStatus === 'MISSED') {
-            missedCount++;
-          } else if (sub.totalScore != null && sub.exam?.totalMarks) {
-            const normalized = (Number(sub.totalScore) / sub.exam.totalMarks) * 100;
-            totalNormalizedScore += normalized;
-            validCount++;
-          }
-        }
-      }
-
-      const average = validCount > 0 ? totalNormalizedScore / validCount : null;
-      return { average, validCount, missedCount, totalAttemptedOrMissed: validCount + missedCount };
-    };
-
-    const mcqMetrics = calculateExamMetrics(mcqExams);
-    const essayMetrics = calculateExamMetrics(essayExams);
-    const manualMetrics = calculateExamMetrics(manualExams, true);
-
-    // --- Weight Distribution ---
-    let weights = { ...DEFAULT_WEIGHTS };
-    let weightSum = 1;
-
-    // Remove weight if completely 0 valid submissions (no data)
-    if (mcqMetrics.validCount === 0) {
-      weightSum -= weights.MCQ;
-      weights.MCQ = 0;
-    }
-    if (essayMetrics.validCount === 0) {
-      weightSum -= weights.ESSAY;
-      weights.ESSAY = 0;
-    }
-    if (manualMetrics.validCount === 0) {
-      weightSum -= weights.MANUAL_EXAM;
-      weights.MANUAL_EXAM = 0;
-    }
-    
-    // We assume attendance is always available.
-    
-    // Normalize weights
-    if (weightSum > 0 && weightSum < 1) {
-      weights.ATTENDANCE /= weightSum;
-      weights.MCQ /= weightSum;
-      weights.ESSAY /= weightSum;
-      weights.MANUAL_EXAM /= weightSum;
-    }
-
-    // --- Final Score Calculation ---
-    const finalScore = (
-      (attendanceScore * weights.ATTENDANCE) +
-      ((mcqMetrics.average || 0) * weights.MCQ) +
-      ((essayMetrics.average || 0) * weights.ESSAY) +
-      ((manualMetrics.average || 0) * weights.MANUAL_EXAM)
-    );
-
-    // --- Categorization ---
-    let performanceLevel: PerformanceLevel = PerformanceLevel.AT_RISK;
-    if (finalScore >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
-      performanceLevel = PerformanceLevel.EXCELLENT;
-    } else if (finalScore >= PERFORMANCE_THRESHOLDS.VERY_GOOD) {
-      performanceLevel = PerformanceLevel.VERY_GOOD;
-    } else if (finalScore >= PERFORMANCE_THRESHOLDS.GOOD) {
-      performanceLevel = PerformanceLevel.GOOD;
-    } else if (finalScore >= PERFORMANCE_THRESHOLDS.AVERAGE) {
-      performanceLevel = PerformanceLevel.AVERAGE;
-    } else if (finalScore >= PERFORMANCE_THRESHOLDS.NEEDS_IMPROVEMENT) {
-      performanceLevel = PerformanceLevel.NEEDS_IMPROVEMENT;
-    }
-
-    // --- Trend Calculation ---
     const previousPrediction = await prisma.performancePrediction.findFirst({
       where: { studentId },
       orderBy: { createdAt: 'desc' },
     });
 
-    let trendStatus: TrendStatus = TrendStatus.STABLE;
-    if (previousPrediction) {
-      const diff = finalScore - Number(previousPrediction.finalScore);
-      if (diff >= TREND_THRESHOLDS.IMPROVING_MIN) {
-        trendStatus = TrendStatus.IMPROVING;
-      } else if (diff <= TREND_THRESHOLDS.DECLINING_MAX) {
-        trendStatus = TrendStatus.DECLINING;
-      }
-    }
-
-    // --- Recommendations ---
-    const recommendations: string[] = [];
-    if (attendanceScore < 70) {
-      recommendations.push("Improve attendance");
-    }
-    if (mcqMetrics.validCount > 0 && mcqMetrics.average !== null && mcqMetrics.average < 55) {
-      recommendations.push("Practice more MCQ questions");
-    }
-    if (essayMetrics.validCount > 0 && essayMetrics.average !== null && essayMetrics.average < 55) {
-      recommendations.push("Improve essay writing skills");
-    }
-    if (manualMetrics.validCount > 0 && manualMetrics.average !== null && manualMetrics.average < 55) {
-      recommendations.push("Focus on manual/physical exam preparation");
-    }
-    
-    // Check missed exam ratios
-    const totalMissedOnline = mcqMetrics.missedCount + essayMetrics.missedCount;
-    const totalAttemptedOnline = mcqMetrics.totalAttemptedOrMissed + essayMetrics.totalAttemptedOrMissed;
-    
-    if (totalAttemptedOnline > 0 && (totalMissedOnline / totalAttemptedOnline) >= MISSED_EXAM_RATIO_THRESHOLD) {
-      recommendations.push("Frequently absent for online exams — please follow up");
-    }
-    if (manualMetrics.totalAttemptedOrMissed > 0 && (manualMetrics.missedCount / manualMetrics.totalAttemptedOrMissed) >= MISSED_EXAM_RATIO_THRESHOLD) {
-      recommendations.push("Frequently absent for physical exams — please follow up");
-    }
-    if (trendStatus === TrendStatus.DECLINING) {
-      recommendations.push("Attend revision classes (declining trend detected)");
-    }
+    const calcResult = calculatePerformanceResult({
+      attendanceScore,
+      mcqExams: mcqExams.map(m => ({ ...m, totalScore: m.totalScore ? Number(m.totalScore) : null })),
+      essayExams: essayExams.map(m => ({ ...m, totalScore: m.totalScore ? Number(m.totalScore) : null })),
+      manualExams,
+      previousFinalScore: previousPrediction ? Number(previousPrediction.finalScore) : null,
+    });
 
     // --- Persistence ---
     return prisma.$transaction(async (tx) => {
@@ -205,24 +81,24 @@ export class PerformanceService {
         data: {
           studentId,
           attendanceScore,
-          mcqScore: mcqMetrics.average || 0,
-          essayScore: essayMetrics.average || 0,
-          manualExamScore: manualMetrics.average || 0,
-          finalScore,
-          performanceLevel,
-          trendStatus,
-          recommendations,
-          weightsUsed: weights,
-          missedExamCount: totalMissedOnline,
-          absentManualExamCount: manualMetrics.missedCount,
+          mcqScore: calcResult.mcqMetrics.average || 0,
+          essayScore: calcResult.essayMetrics.average || 0,
+          manualExamScore: calcResult.manualMetrics.average || 0,
+          finalScore: calcResult.finalScore,
+          performanceLevel: calcResult.performanceLevel,
+          trendStatus: calcResult.trendStatus,
+          recommendations: calcResult.recommendations,
+          weightsUsed: calcResult.weights,
+          missedExamCount: calcResult.totalMissedOnline,
+          absentManualExamCount: calcResult.totalMissedManual,
         }
       });
 
       await tx.student.update({
         where: { id: studentId },
         data: {
-          performanceStatus: performanceLevel,
-          trendStatus: trendStatus,
+          performanceStatus: calcResult.performanceLevel,
+          trendStatus: calcResult.trendStatus,
         }
       });
 

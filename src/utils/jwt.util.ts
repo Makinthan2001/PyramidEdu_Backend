@@ -82,6 +82,30 @@ export function verifyResetToken(token: string): PasswordResetPayload {
   }
 }
 
+export function generateOtpToken(email: string, otp: string): string {
+  return jwt.sign(
+    { email, otp, purpose: 'otp_verification' },
+    requireSecret(RESET_SECRET, 'JWT_RESET_SECRET'),
+    { expiresIn: '5m' } as SignOptions,
+  );
+}
+
+export function verifyOtpToken(token: string): { email: string; otp: string } {
+  try {
+    const payload = jwt.verify(token, requireSecret(RESET_SECRET, 'JWT_RESET_SECRET')) as any;
+    if (payload.purpose !== 'otp_verification') {
+      throw new AppError('Invalid token purpose.', 400);
+    }
+    return { email: payload.email, otp: payload.otp };
+  } catch (error: any) {
+    if (error instanceof AppError) throw error;
+    if (error.name === 'TokenExpiredError') {
+      throw new AppError('OTP has expired. Please request a new one.', 400);
+    }
+    throw new AppError('Invalid OTP verification token.', 400);
+  }
+}
+
 export function expiryStringToDate(expiry: string): Date {
   const unit = expiry.slice(-1);
   const value = parseInt(expiry.slice(0, -1), 10);
