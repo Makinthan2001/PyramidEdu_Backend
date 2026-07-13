@@ -15,6 +15,10 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
       token = req.cookies.accessToken as string;
     }
 
+    if (!token && req.query.token) {
+      token = req.query.token as string;
+    }
+
     if (!token) {
       throw new AppError('Authentication required. Please log in.', 401);
     }
