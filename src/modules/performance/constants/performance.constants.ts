@@ -7,10 +7,10 @@
  * configurable per the design document's requirement.
  */
 export const DEFAULT_WEIGHTS = {
-  ATTENDANCE: 0.20,
-  MCQ: 0.30,
+  ATTENDANCE: 0.10,
+  MCQ: 0.20,
   ESSAY: 0.30,
-  MANUAL_EXAM: 0.20,
+  MANUAL_EXAM: 0.40,
 } as const;
 
 export const PERFORMANCE_THRESHOLDS = {
