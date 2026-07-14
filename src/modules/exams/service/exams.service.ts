@@ -31,7 +31,6 @@ export class ExamsService {
       include: {
         subject: { select: { subjectName: true, subjectCode: true } },
         batchRecord: { select: { batchName: true } },
-        term: { select: { name: true } },
         _count: { select: { questions: true, submissions: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -47,7 +46,6 @@ export class ExamsService {
         },
         subject: { select: { subjectName: true, subjectCode: true } },
         batchRecord: { select: { batchName: true } },
-        term: { select: { name: true } },
         _count: { select: { submissions: true } },
       },
     });
@@ -433,7 +431,7 @@ export class ExamsService {
             'AI_ALERT',
             `AI-${exam.id}`,
             'Academic Performance Alert',
-            'Your performance has been flagged as At-Risk. View your AI recommendations.',
+            'Your performance has been flagged as At-Risk. View your recommendations.',
             { type: 'AI_ALERT', route: '/(tabs)/academic' }
           );
         } else if (currentTier !== previousTier && currentTier) {

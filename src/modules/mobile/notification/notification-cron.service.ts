@@ -173,7 +173,7 @@ class NotificationCronService {
             'AI_ALERT',
             prediction.id,
             'Academic Performance Alert',
-            'Your performance has been flagged as At-Risk. View your AI recommendations.',
+            'Your performance has been flagged as At-Risk. View your recommendations.',
             { type: 'AI_ALERT', predictionId: prediction.id, route: '/(tabs)/academic' }
           );
         }
