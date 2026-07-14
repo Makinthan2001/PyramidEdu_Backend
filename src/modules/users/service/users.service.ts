@@ -125,6 +125,7 @@ function formatUserListItem(user: any) {
     response.gender = user.student.gender;
     response.batch = user.student.batch;
     response.approvalStatus = user.student.approvalStatus;
+    response.isApproved = user.student.approvalStatus === 'APPROVED';
     response.dateOfBirth = user.student.dateOfBirth ? new Date(user.student.dateOfBirth).toISOString().split('T')[0] : null;
     response.school = user.student.school;
     response.parent = user.student.parent ? {
@@ -844,14 +845,14 @@ export class UsersService {
       throw new AppError('User is already deactivated.', 400);
     }
 
-    const deactivatedUser = await prisma.user.update({
+    await prisma.user.update({
       where: { id: userId },
       data: { isActive: false },
-      select: {
-        id: true,
-        email: true,
-        isActive: true,
-      },
+    });
+
+    const deactivatedUserWithData = await prisma.user.findUnique({
+      where: { id: userId },
+      select: userListSelect,
     });
 
     await prisma.auditLog.create({
@@ -863,7 +864,27 @@ export class UsersService {
       },
     });
 
-    return deactivatedUser;
+    try {
+      await sendEmail(
+        user.email,
+        'Account Deactivated - PyramidEdu',
+        `
+        <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
+          <h2 style="color: #d32f2f; margin-top: 0;">Account Deactivated</h2>
+          <p>Dear User,</p>
+          <p>We wanted to inform you that your PyramidEdu account associated with this email address has been <strong>deactivated</strong> by the administration.</p>
+          <p>Consequently, you will not be able to log into the platform at this time. If you believe this is a mistake or have any questions regarding this action, please contact our support team.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #777;">This is an automated notification. Please do not reply directly to this email.</p>
+          <p>Best regards,<br>PyramidEdu Administration</p>
+        </div>
+        `
+      );
+    } catch (err) {
+      console.error('Failed to send deactivation email:', err);
+    }
+
+    return formatUserListItem(deactivatedUserWithData);
   }
 
   /**
@@ -880,14 +901,14 @@ export class UsersService {
       throw new AppError('User is already active.', 400);
     }
 
-    const activatedUser = await prisma.user.update({
+    await prisma.user.update({
       where: { id: userId },
       data: { isActive: true },
-      select: {
-        id: true,
-        email: true,
-        isActive: true,
-      },
+    });
+
+    const activatedUserWithData = await prisma.user.findUnique({
+      where: { id: userId },
+      select: userListSelect,
     });
 
     await prisma.auditLog.create({
@@ -899,7 +920,27 @@ export class UsersService {
       },
     });
 
-    return activatedUser;
+    try {
+      await sendEmail(
+        user.email,
+        'Account Activated - PyramidEdu',
+        `
+        <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
+          <h2 style="color: #2e7d32; margin-top: 0;">Account Activated</h2>
+          <p>Dear User,</p>
+          <p>We are pleased to inform you that your PyramidEdu account associated with this email address has been successfully <strong>activated</strong>.</p>
+          <p>You can now log in to the platform and access your dashboard as usual.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #777;">This is an automated notification. Please do not reply directly to this email.</p>
+          <p>Best regards,<br>PyramidEdu Administration</p>
+        </div>
+        `
+      );
+    } catch (err) {
+      console.error('Failed to send activation email:', err);
+    }
+
+    return formatUserListItem(activatedUserWithData);
   }
 
   /**
