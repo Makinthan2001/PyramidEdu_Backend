@@ -46,6 +46,16 @@ const userListSelect = {
       batch: true,
       approvalStatus: true,
       dateOfBirth: true,
+      school: true,
+      parent: {
+        select: {
+          id: true,
+          parentName: true,
+          phone: true,
+          occupation: true,
+          email: true,
+        }
+      }
     },
   },
   teacher: {
@@ -89,6 +99,25 @@ function formatUserListItem(user: any) {
   };
 
   if (user.student) {
+    response.student = {
+      id: user.student.id,
+      indexNumber: user.student.indexNumber,
+      phone: user.student.phone || user.phone,
+      address: user.student.address,
+      nic: user.student.nic,
+      gender: user.student.gender,
+      batch: user.student.batch,
+      approvalStatus: user.student.approvalStatus,
+      dateOfBirth: user.student.dateOfBirth ? new Date(user.student.dateOfBirth).toISOString().split('T')[0] : null,
+      school: user.student.school,
+      parent: user.student.parent ? {
+        id: user.student.parent.id,
+        parentName: user.student.parent.parentName,
+        phone: user.student.parent.phone,
+        occupation: user.student.parent.occupation,
+        email: user.student.parent.email,
+      } : null,
+    };
     response.indexNumber = user.student.indexNumber;
     response.phone = user.student.phone || user.phone;
     response.address = user.student.address;
@@ -97,6 +126,15 @@ function formatUserListItem(user: any) {
     response.batch = user.student.batch;
     response.approvalStatus = user.student.approvalStatus;
     response.dateOfBirth = user.student.dateOfBirth ? new Date(user.student.dateOfBirth).toISOString().split('T')[0] : null;
+    response.school = user.student.school;
+    response.parent = user.student.parent ? {
+      id: user.student.parent.id,
+      parentName: user.student.parent.parentName,
+      phone: user.student.parent.phone,
+      occupation: user.student.parent.occupation,
+      email: user.student.parent.email,
+    } : null;
+    response.parentEmail = user.student.parent ? user.student.parent.email : null;
   }
 
   if (user.teacher) {
@@ -701,7 +739,37 @@ export class UsersService {
           if (dto.phoneNumber !== undefined) studentUpdateData.phone = dto.phoneNumber;
           if (dto.gender !== undefined) studentUpdateData.gender = dto.gender;
           if (dto.nicNumber !== undefined) studentUpdateData.nic = dto.nicNumber;
-          if (dto.roleType !== undefined) studentUpdateData.batch = dto.roleType; // map roleType to batch if it represents the class batch
+          if (dto.roleType !== undefined) studentUpdateData.batch = dto.roleType;
+          if (dto.school !== undefined) studentUpdateData.school = dto.school;
+          if (dto.dateOfBirth !== undefined) {
+            studentUpdateData.dateOfBirth = dto.dateOfBirth ? new Date(dto.dateOfBirth) : null;
+          }
+
+          // Parent info update
+          if (dto.parentName !== undefined || dto.parentPhone !== undefined || dto.parentOccupation !== undefined || dto.parentEmail !== undefined) {
+            const parentUpdateData: any = {};
+            if (dto.parentName !== undefined) parentUpdateData.parentName = dto.parentName;
+            if (dto.parentPhone !== undefined) parentUpdateData.phone = dto.parentPhone;
+            if (dto.parentOccupation !== undefined) parentUpdateData.occupation = dto.parentOccupation;
+            if (dto.parentEmail !== undefined) parentUpdateData.email = dto.parentEmail;
+
+            if (user.student?.parentId) {
+              await prisma.parent.update({
+                where: { id: user.student.parentId },
+                data: parentUpdateData,
+              });
+            } else {
+              const newParent = await prisma.parent.create({
+                data: {
+                  parentName: dto.parentName || 'Parent',
+                  phone: dto.parentPhone || '',
+                  occupation: dto.parentOccupation || '',
+                  email: dto.parentEmail || '',
+                }
+              });
+              studentUpdateData.parentId = newParent.id;
+            }
+          }
 
           if (Object.keys(studentUpdateData).length > 0) {
             await prisma.student.update({
@@ -719,7 +787,12 @@ export class UsersService {
     const updatedUserWithData = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        student: true,
+        student: {
+          include: {
+            parent: true,
+            stream: true,
+          },
+        },
         teacher: true,
         manager: true,
         admin: true,
