@@ -106,8 +106,9 @@ export class PerformanceService {
     });
   }
 
-  async calculatePerformanceForAll() {
+  async calculatePerformanceForAll(studentIds?: string[]) {
     const students = await prisma.student.findMany({
+      where: studentIds ? { id: { in: studentIds } } : undefined,
       select: { id: true },
     });
 
@@ -170,6 +171,8 @@ export class PerformanceService {
         id: true,
         indexNumber: true,
         performanceStatus: true,
+        batchId: true,
+        batchRecord: { select: { batchName: true } },
         user: { select: { fullName: true } }
       }
     });
@@ -186,6 +189,8 @@ export class PerformanceService {
         indexNumber: student.indexNumber,
         fullName: student.user.fullName,
         performanceStatus: student.performanceStatus,
+        batchId: student.batchId,
+        batchName: student.batchRecord?.batchName || 'No Batch',
         latestScore: latestPrediction?.finalScore || null,
         trendStatus: latestPrediction?.trendStatus || null,
       };

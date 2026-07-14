@@ -40,6 +40,13 @@ export interface MobileStudentSession {
     approvalStatus: string;
     paymentStatus: string;
     totalFeeAmount: number;
+    parentName: string | null;
+    parentPhone: string | null;
+    parentOccupation: string | null;
+    parentEmail: string | null;
+    streamName: string | null;
+    subjects: string | null;
+    teachers: string | null;
   };
 }
 
@@ -52,6 +59,18 @@ function toStudentSession(user: StudentAuthRecord): MobileStudentSession {
   if (!user.student) {
     throw new AppError('Student profile not found.', 404);
   }
+
+  const enrollments = user.student.enrollments || [];
+  const subjects = enrollments
+    .map((e: any) => e.subject?.subjectName)
+    .filter(Boolean)
+    .join(', ');
+  
+  const teachers = enrollments
+    .map((e: any) => e.teacher?.user?.fullName)
+    .filter(Boolean)
+    .filter((val: any, index: any, self: any) => self.indexOf(val) === index)
+    .join(', ');
 
   return {
     id: user.id,
@@ -79,6 +98,13 @@ function toStudentSession(user: StudentAuthRecord): MobileStudentSession {
       approvalStatus: user.student.approvalStatus,
       paymentStatus: user.student.paymentStatus,
       totalFeeAmount: Number(user.student.totalFeeAmount),
+      parentName: user.student.parent?.parentName ?? null,
+      parentPhone: user.student.parent?.phone ?? null,
+      parentOccupation: user.student.parent?.occupation ?? null,
+      parentEmail: user.student.parent?.email ?? null,
+      streamName: user.student.stream?.streamName ?? null,
+      subjects: subjects || 'Not Enrolled',
+      teachers: teachers || 'None Assigned',
     },
   };
 }
