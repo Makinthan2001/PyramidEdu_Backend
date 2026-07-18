@@ -199,50 +199,23 @@ export function calculatePerformanceResult(data: {
   }
 
   // --- Recommendations ---
-  const recommendations: string[] = [];
+  const rawRecommendations: string[] = [];
 
   if (!isProvisional && attendanceScore < RECOMMENDATION_THRESHOLDS.LOW_ATTENDANCE) {
-    recommendations.push('Improve attendance');
+    rawRecommendations.push('Improve Class Attendance');
   }
   if (mcqMetrics.average !== null && mcqMetrics.average < RECOMMENDATION_THRESHOLDS.WEAK_SUBJECT_SCORE) {
-    recommendations.push('Practice more MCQ questions');
+    rawRecommendations.push('Practice MCQ Questions');
   }
   if (essayMetrics.average !== null && essayMetrics.average < RECOMMENDATION_THRESHOLDS.WEAK_SUBJECT_SCORE) {
-    recommendations.push('Improve essay writing skills');
+    rawRecommendations.push('Practice for Essay Exams');
   }
   if (manualMetrics.average !== null && manualMetrics.average < RECOMMENDATION_THRESHOLDS.WEAK_SUBJECT_SCORE) {
-    recommendations.push('Focus on manual/physical exam preparation');
+    rawRecommendations.push('Prepare for Physical Exams');
   }
 
-  // Missed-exam ratios are checked PER CATEGORY, not merged. Merging MCQ and
-  // Essay (as in the original version) can hide a category-specific problem:
-  // e.g. a student who attends every MCQ but misses most Essay exams would
-  // produce a healthy combined ratio and never get flagged.
-  if (
-    mcqMetrics.totalAttemptedOrMissed > 0 &&
-    mcqMetrics.missedCount / mcqMetrics.totalAttemptedOrMissed >= MISSED_EXAM_RATIO_THRESHOLD
-  ) {
-    recommendations.push('Frequently absent for MCQ exams — please follow up');
-  }
-  if (
-    essayMetrics.totalAttemptedOrMissed > 0 &&
-    essayMetrics.missedCount / essayMetrics.totalAttemptedOrMissed >= MISSED_EXAM_RATIO_THRESHOLD
-  ) {
-    recommendations.push('Frequently absent for Essay exams — please follow up');
-  }
-  if (
-    manualMetrics.totalAttemptedOrMissed > 0 &&
-    manualMetrics.missedCount / manualMetrics.totalAttemptedOrMissed >= MISSED_EXAM_RATIO_THRESHOLD
-  ) {
-    recommendations.push('Frequently absent for physical exams — please follow up');
-  }
-  if (trendStatus === TrendStatus.DECLINING) {
-    recommendations.push('Attend revision classes (declining trend detected)');
-  }
-
-  if (isProvisional) {
-    recommendations.push('More assessment data is required for an accurate prediction');
-  }
+  // Ensure unique recommendations
+  const recommendations = Array.from(new Set(rawRecommendations));
 
   return {
     attendanceScore,
