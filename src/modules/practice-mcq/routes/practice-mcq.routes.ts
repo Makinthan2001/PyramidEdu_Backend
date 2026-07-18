@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getTodayStatus, generateQuiz, submitQuiz } from '../controller/practice-mcq.controller';
+import { getTodayStatus, generateQuiz, submitQuiz, getQuizHistory, getQuizHistoryDetail } from '../controller/practice-mcq.controller';
 import { authenticate } from '../../../middleware/authenticate';
 import { authorize } from '../../../middleware/authorize';
 import { Role } from '@prisma/client';
@@ -28,6 +28,22 @@ router.post(
   authenticate,
   authorize(Role.STUDENT),
   submitQuiz
+);
+
+// Get all quiz attempt history for the logged-in student
+router.get(
+  '/history',
+  authenticate,
+  authorize(Role.STUDENT),
+  getQuizHistory
+);
+
+// Get specific history detail
+router.get(
+  '/history/:id',
+  authenticate,
+  authorize(Role.STUDENT),
+  getQuizHistoryDetail
 );
 
 export default router;

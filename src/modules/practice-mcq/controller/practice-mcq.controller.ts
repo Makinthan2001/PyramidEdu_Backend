@@ -61,3 +61,30 @@ export const submitQuiz = async (req: Request, res: Response): Promise<void> => 
     }
   }
 };
+
+export const getQuizHistory = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = (req as any).user;
+    const history = await practiceMcqService.getStudentQuizHistory(user.sub);
+    res.json({
+      success: true,
+      data: history,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getQuizHistoryDetail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+    const detail = await practiceMcqService.getStudentQuizHistoryDetail(user.sub, id as string);
+    res.json({
+      success: true,
+      data: detail,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

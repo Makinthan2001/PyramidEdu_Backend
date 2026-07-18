@@ -274,7 +274,39 @@ export class PracticeMcqService {
     const processedAnswers = quiz.questions.map(q => {
       const submission = answers.find(a => a.questionId === q.id);
       const selectedAnswer = submission ? submission.selectedAnswer : '';
-      const isCorrect = q.correctAnswer === selectedAnswer;
+      const normCorrect = (q.correctAnswer || '').trim().toLowerCase();
+      const normSelected = (selectedAnswer || '').trim().toLowerCase();
+      
+      let isCorrect = false;
+      if (normCorrect !== '' && normCorrect === normSelected) {
+        isCorrect = true;
+      } else {
+        try {
+          const options = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+          if (Array.isArray(options)) {
+            options.forEach((opt: any, index: number) => {
+              let optLabel = ["a", "b", "c", "d"][index] || String(index + 1);
+              let optText = "";
+
+              if (typeof opt === 'string') {
+                optText = opt.trim().toLowerCase();
+              } else if (opt && typeof opt === 'object') {
+                optLabel = (opt.label || optLabel).trim().toLowerCase();
+                optText = (opt.text || "").trim().toLowerCase();
+              }
+
+              const isSelectedOption = normSelected === optLabel || normSelected === optText;
+              const isCorrectOption = normCorrect === optLabel || normCorrect === optText;
+
+              if (isSelectedOption && isCorrectOption) {
+                isCorrect = true;
+              }
+            });
+          }
+        } catch (e) {
+          console.error("Error parsing options in answer check:", e);
+        }
+      }
 
       if (isCorrect) {
         correctAnswersCount++;
@@ -396,6 +428,111 @@ export class PracticeMcqService {
       longestStreak,
       isMilestone,
       timeTaken,
+    };
+  }
+
+  /**
+   * Fetches all quiz attempt history for a student
+   */
+  async getStudentQuizHistory(userId: string) {
+    const student = await prisma.student.findUnique({
+      where: { userId },
+    });
+
+    if (!student) {
+      throw new Error('Student record not found.');
+    }
+
+    const results = await prisma.dailyQuizResult.findMany({
+      where: { studentId: student.id },
+      include: { quiz: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return results.map(r => {
+      const correct = r.correctAnswers;
+      let rewardPointsEarned = 0;
+      if (correct === 7) rewardPointsEarned = 1;
+      else if (correct === 8) rewardPointsEarned = 2;
+      else if (correct === 9) rewardPointsEarned = 3;
+      else if (correct === 10) rewardPointsEarned = 5;
+
+      return {
+        id: r.id,
+        quizTitle: r.quiz.quizTitle,
+        score: r.score,
+        percentage: Number(r.percentage),
+        correctAnswers: r.correctAnswers,
+        wrongAnswers: r.wrongAnswers,
+        rewardPointsEarned,
+        timeTaken: r.timeTaken,
+        submittedAt: r.submittedAt,
+      };
+    });
+  }
+
+  /**
+   * Fetches a specific quiz history attempt detail
+   */
+  async getStudentQuizHistoryDetail(userId: string, resultId: string) {
+    const student = await prisma.student.findUnique({
+      where: { userId },
+    });
+
+    if (!student) {
+      throw new Error('Student record not found.');
+    }
+
+    const result = await prisma.dailyQuizResult.findFirst({
+      where: { id: resultId, studentId: student.id },
+      include: {
+        quiz: {
+          include: {
+            questions: true,
+          },
+        },
+        answers: true,
+      },
+    });
+
+    if (!result) {
+      throw new Error('Quiz result not found.');
+    }
+
+    const correct = result.correctAnswers;
+    let rewardPointsEarned = 0;
+    if (correct === 7) rewardPointsEarned = 1;
+    else if (correct === 8) rewardPointsEarned = 2;
+    else if (correct === 9) rewardPointsEarned = 3;
+    else if (correct === 10) rewardPointsEarned = 5;
+
+    const questionsWithAnswers = result.quiz.questions.map(q => {
+      const answer = result.answers.find(a => a.questionId === q.id);
+      return {
+        questionId: q.id,
+        questionText: q.questionText,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        selectedAnswer: answer ? answer.selectedAnswer : '',
+        isCorrect: answer ? answer.isCorrect : false,
+      };
+    });
+
+    return {
+      resultId: result.id,
+      quizTitle: result.quiz.quizTitle,
+      score: result.score,
+      percentage: Number(result.percentage),
+      correctAnswers: result.correctAnswers,
+      wrongAnswers: result.wrongAnswers,
+      rewardPointsEarned,
+      totalRewardPoints: student.rewardPoints,
+      dailyStreak: student.dailyStreak,
+      longestStreak: student.longestStreak,
+      timeTaken: result.timeTaken,
+      submittedAt: result.submittedAt,
+      questions: questionsWithAnswers,
     };
   }
 }
