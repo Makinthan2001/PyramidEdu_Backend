@@ -227,7 +227,7 @@ export async function generateRAGAnswer(
   question: string,
   filters: { subjectId?: string; batchId?: string } = {}
 ): Promise<string> {
-  const SIMILARITY_THRESHOLD = 0.5;
+  const SIMILARITY_THRESHOLD = 0.3;
 
   console.log(`\n--- Chatbot Processing ---`);
   console.log(`Question: "${question}"`);
