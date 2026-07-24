@@ -16,6 +16,21 @@ export async function getUserNotifications(req: Request, res: Response, next: Ne
   }
 }
 
+export async function getReadNotifications(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).userId as string;
+    const result = await notificationService.getUserNotifications(userId, { ...req.query, isRead: 'true' });
+    
+    res.status(200).json({
+      success: true,
+      data: result.notifications,
+      meta: result.meta,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getUnreadCount(req: Request, res: Response, next: NextFunction) {
   try {
     const userId = (req as any).userId as string;
