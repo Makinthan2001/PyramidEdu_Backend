@@ -8,6 +8,7 @@ const router = Router();
 router.use(jwtGuard);
 
 router.get('/', controller.getUserNotifications);
+router.get('/read', controller.getReadNotifications);
 router.get('/unread-count', controller.getUnreadCount);
 router.patch('/read-all', controller.markAllAsRead);
 router.get('/:id', controller.getNotificationDetails);
