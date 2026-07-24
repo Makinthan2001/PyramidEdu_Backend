@@ -31,6 +31,7 @@ import parentReportsRouter from './modules/parent-reports';
 import analyticsReportsRouter from './modules/analytics-reports';
 import performanceRouter from './modules/performance';
 import marksRouter from './modules/marks';
+import practiceMcqRouter from './modules/practice-mcq';
 
 
 validateEnv();
@@ -145,6 +146,9 @@ app.use('/api/v1/performance', performanceRouter);
 
 // Marks routes
 app.use('/api/v1/marks', marksRouter);
+
+// Practice MCQ routes
+app.use('/api/v1/practice-mcq', practiceMcqRouter);
 
 
 // centralized error handler - must be last

@@ -37,6 +37,8 @@ export class NotificationService {
 
     if (query.isRead !== undefined) {
       whereCondition.isRead = query.isRead === 'true';
+    } else {
+      whereCondition.isRead = false;
     }
 
     if (query.type) {

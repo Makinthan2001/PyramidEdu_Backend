@@ -19,6 +19,7 @@ export function authenticateMobileStudent(req: Request, _res: Response, next: Ne
     }
 
     req.user = payload;
+    (req as any).userId = payload.sub;
     next();
   } catch (error) {
     next(error);

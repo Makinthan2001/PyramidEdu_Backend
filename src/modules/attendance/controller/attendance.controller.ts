@@ -233,4 +233,29 @@ export class AttendanceController {
       next(error);
     }
   }
+
+  static async getMyAttendanceDetails(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = (req as any).user?.sub;
+      if (!userId) {
+        throw new AppError('User authentication failed. Missing user ID.', 401);
+      }
+
+      const student = await prisma.student.findUnique({ where: { userId } });
+      if (!student) {
+        throw new AppError('Student profile not found.', 404);
+      }
+
+      const filters = {
+        fromDate: req.query.fromDate as string,
+        toDate: req.query.toDate as string,
+        subjectId: req.query.subjectId as string,
+      };
+
+      const result = await AttendanceService.getManagerStudentDetails(student.id, filters);
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

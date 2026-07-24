@@ -115,6 +115,9 @@ model Student {
   nic                    String?                   @unique
   qrCode                 String?                   @unique @map("qr_code")
   rewardPoints           Int                       @default(0) @map("reward_points")
+  dailyStreak            Int                       @default(0) @map("daily_streak")
+  longestStreak          Int                       @default(0) @map("longest_streak")
+  lastPracticeDate       DateTime?                 @map("last_practice_date")
   attendancePercentage   Decimal                   @default(0) @map("attendance_percentage") @db.Decimal(5, 2)
   performanceStatus      PerformanceLevel?         @map("performance_status")
   trendStatus            TrendStatus?              @map("trend_status")
@@ -139,6 +142,8 @@ model Student {
   parentReports          ParentReport[]
   payments               Payment[]
   performancePredictions PerformancePrediction[]
+  dailyQuizResults       DailyQuizResult[]
+  rewardHistories        RewardHistory[]
   qrCodes                QRCode[]
   results                Result[]
   deviceTokens           StudentDeviceToken[]
@@ -363,18 +368,21 @@ model AssignmentSubmission {
 }
 
 model Quiz {
-  id          String    @id @default(uuid())
-  subjectId   String    @map("subject_id")
-  teacherId   String    @map("teacher_id")
-  quizTitle   String    @map("quiz_title")
-  totalMarks  Int       @default(100) @map("total_marks")
-  isPublished Boolean   @default(false) @map("is_published")
-  deletedAt   DateTime? @map("deleted_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  subject     Subject   @relation(fields: [subjectId], references: [id])
-  teacher     Teacher   @relation(fields: [teacherId], references: [id])
-  results     Result[]
+  id               String            @id @default(uuid())
+  subjectId        String?           @map("subject_id")
+  teacherId        String?           @map("teacher_id")
+  quizTitle        String            @map("quiz_title")
+  totalMarks       Int               @default(100) @map("total_marks")
+  isPublished      Boolean           @default(false) @map("is_published")
+  deletedAt        DateTime?         @map("deleted_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  subject          Subject?          @relation(fields: [subjectId], references: [id])
+  teacher          Teacher?          @relation(fields: [teacherId], references: [id])
+  results          Result[]
+  questions        Question[]        @relation("QuizQuestions")
+  dailyQuizResults DailyQuizResult[]
+  rewardHistories  RewardHistory[]
 
   @@index([subjectId])
   @@map("quizzes")
@@ -437,8 +445,10 @@ model Question {
   explanation     String?
   imageUrl        String?         @map("image_url")
   difficultyLevel DifficultyLevel @default(MEDIUM) @map("difficulty_level")
-  answers         ExamAnswer[]
-  exam            Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  answers          ExamAnswer[]
+  exam             Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  quizzes          Quiz[]            @relation("QuizQuestions")
+  dailyQuizAnswers DailyQuizAnswer[]
 
   @@map("questions")
 }
@@ -1009,4 +1019,54 @@ enum ClassSessionStatus {
   CREATED
   ACTIVE
   COMPLETED
+}
+
+model DailyQuizResult {
+  id               String            @id @default(uuid())
+  quizId           String            @map("quiz_id")
+  studentId        String            @map("student_id")
+  totalQuestions   Int               @map("total_questions")
+  correctAnswers   Int               @map("correct_answers")
+  wrongAnswers     Int               @map("wrong_answers")
+  score            Int
+  percentage       Decimal           @db.Decimal(5, 2)
+  performanceLevel PerformanceLevel  @map("performance_level")
+  startedAt        DateTime          @map("started_at")
+  submittedAt      DateTime          @map("submitted_at")
+  timeTaken        Int               @map("time_taken")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  
+  quiz             Quiz              @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student          Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers          DailyQuizAnswer[]
+
+  @@map("daily_quiz_results")
+}
+
+model DailyQuizAnswer {
+  id             String          @id @default(uuid())
+  resultId       String          @map("result_id")
+  questionId     String          @map("question_id")
+  selectedAnswer String          @map("selected_answer")
+  isCorrect      Boolean         @map("is_correct")
+  
+  result         DailyQuizResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("daily_quiz_answers")
+}
+
+model RewardHistory {
+  id                    String        @id @default(uuid())
+  studentId             String        @map("student_id")
+  quizId                String?       @map("quiz_id")
+  pointsEarned          Int           @map("points_earned")
+  totalPointsAfterUpdate Int          @map("total_points_after_update")
+  reason                String
+  createdAt             DateTime      @default(now()) @map("created_at")
+
+  student               Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  quiz                  Quiz?         @relation(fields: [quizId], references: [id], onDelete: SetNull)
+
+  @@map("reward_histories")
 }
