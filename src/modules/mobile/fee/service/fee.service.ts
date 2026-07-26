@@ -6,11 +6,10 @@ import { notificationService } from '../../../notification/service/notification.
 // import { notificationService } from '../../notification/service/notification.service';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2026-06-24.dahlia",
+  apiVersion: "2022-11-15" as any,
 });
 
-// const frontend_url = process.env.FRONTEND_URL!;
-const frontend_url = "http://localhost:8081";
+const frontend_url = process.env.FRONTEND_URL || "http://localhost:8081";
 export class MobileFeeService {
   static async getFeeHistory(userId: string) {
     const student = await prisma.student.findUnique({
@@ -185,7 +184,7 @@ export class MobileFeeService {
 
 
 
-  static async processPaymentStripe(userId: string, amount: number, method: string) {
+  static async processPaymentStripe(userId: string, amount: number, method: string, backendUrl: string, redirectUrl?: string) {
     const student = await prisma.student.findUnique({
       where: { userId },
       include: {
@@ -225,7 +224,6 @@ export class MobileFeeService {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
-
       line_items: [
         {
           price_data: {
@@ -238,78 +236,147 @@ export class MobileFeeService {
           quantity: 1,
         },
       ],
-
-      success_url: `${frontend_url}/payment-success?feeId=${targetFee.id}`,
-      cancel_url: `${frontend_url}/payment-cancel?feeId=${targetFee.id}`,
+      metadata: {
+        userId,
+        studentId: student.id,
+        feeId: targetFee.id,
+        amount: amount.toString(),
+        redirectUrl: redirectUrl || '',
+      },
+      success_url: `${backendUrl}/api/v1/mobile/fees/stripe-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${backendUrl}/api/v1/mobile/fees/stripe-cancel?feeId=${targetFee.id}`,
     });
 
     return session.url;
-    // Process the payment via Stripe if card details are provided
-    // let paymentStatus = 'VERIFIED';
-    // let transactionId = `INV-${Math.floor(10000 + Math.random() * 90000)}`;
+  }
 
-    // if (cardDetails && process.env.STRIPE_SECRET_KEY) {
-    //   try {
-    //     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-01-27.acacia' as any });
+  static async confirmPayment(
+    paymentIntentId: string,
+    amount: number,
+    feeId: string,
+    studentId: string,
+    userId: string
+  ) {
+    return await prisma.$transaction(async (tx) => {
+      // 1. Check if payment already exists
+      const existingPayment = await tx.payment.findUnique({
+        where: { invoiceNumber: paymentIntentId },
+      });
 
-    //     // Extract expiry month and year
-    //     const [expMonth, expYear] = cardDetails.expiry.split('/');
+      if (existingPayment) {
+        return existingPayment;
+      }
 
-    //     const paymentMethod = await stripe.paymentMethods.create({
-    //       type: 'card',
-    //       card: {
-    //         number: cardDetails.cardNumber.replace(/\s/g, ''),
-    //         exp_month: parseInt(expMonth, 10),
-    //         exp_year: parseInt(expYear, 10) + 2000,
-    //         cvc: cardDetails.cvv,
-    //       },
-    //     });
+      // 2. Retrieve the target fee
+      const fee = await tx.fee.findUnique({
+        where: { id: feeId },
+      });
 
-    //     const paymentIntent = await stripe.paymentIntents.create({
-    //       amount: amount * 100, // amount in cents
-    //       currency: 'lkr',
-    //       payment_method: paymentMethod.id,
-    //       confirm: true,
-    //       automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
-    //     });
+      if (!fee) {
+        throw new AppError('Fee record not found', 404);
+      }
 
-    //     transactionId = paymentIntent.id;
-    //   } catch (stripeError: any) {
-    //     throw new AppError(`Stripe payment failed: ${stripeError.message}`, 400);
-    //   }
-    // }
+      // 3. Create the payment record
+      const payment = await tx.payment.create({
+        data: {
+          studentId,
+          feeId,
+          amount,
+          paymentMethod: 'CARD',
+          paymentStatus: 'VERIFIED',
+          invoiceNumber: paymentIntentId,
+          paymentDate: new Date(),
+          verifiedAt: new Date(),
+        },
+      });
 
-    // const payment = await prisma.payment.create({
-    //   data: {
-    //     studentId: student.id,
-    //     feeId: targetFee.id,
-    //     amount,
-    //     paymentMethod: method.toUpperCase(),
-    //     paymentStatus: "PENDING",
-    //     invoiceNumber: transactionId,
-    //     paymentDate: now,
-    //   }
-    // });
+      // 4. Update the fee record
+      const newPaid = Number(fee.paid) + amount;
+      const status = newPaid >= Number(fee.total) ? 'PAID' : 'PARTIAL';
 
-    // Update the fee status
-    // await prisma.fee.update({
-    //   where: { id: targetFee.id },
-    //   data: {
-    //     paid: { increment: amount },
-    //     status: 'PAID',
-    //   }
-    // });
+      await tx.fee.update({
+        where: { id: feeId },
+        data: {
+          paid: newPaid,
+          status,
+        },
+      });
 
-    // Notify student
-    // await notificationService.createNotification({
-    //   receiverId: student.userId,
-    //   title: 'Payment Successful',
-    //   message: `Your fee payment of Rs. ${amount.toLocaleString()} was processed successfully.`,
-    //   type: 'PAYMENT',
-    //   referenceType: 'PAYMENT',
-    //   referenceId: payment.id,
-    // });
+      // 5. Notify student
+      try {
+        await notificationService.createNotification({
+          receiverId: userId,
+          title: 'Payment Successful',
+          message: `Your fee payment of Rs. ${amount.toLocaleString()} was processed successfully.`,
+          type: 'PAYMENT',
+          referenceType: 'PAYMENT',
+          referenceId: payment.id,
+        });
+      } catch (notifyErr) {
+        console.error('Failed to create payment notification:', notifyErr);
+      }
 
-    // return payment;
+      return payment;
+    });
+  }
+
+  static async handleStripeSuccess(sessionId: string) {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (!session || session.payment_status !== 'paid') {
+      throw new AppError('Payment not completed', 400);
+    }
+
+    const { userId, studentId, feeId, amount, redirectUrl } = session.metadata || {};
+    const paymentIntentId = (session.payment_intent as string) || session.id;
+
+    if (!userId || !studentId || !feeId || !amount) {
+      throw new AppError('Invalid session metadata', 400);
+    }
+
+    const payment = await this.confirmPayment(
+      paymentIntentId,
+      Number(amount),
+      feeId,
+      studentId,
+      userId
+    );
+
+    if (redirectUrl) {
+      const separator = redirectUrl.includes('?') ? '&' : '?';
+      return `${redirectUrl}${separator}transactionId=${payment.id}&amount=${amount}`;
+    }
+
+    const schemeUrl = `pyramideduapp://fees/success?transactionId=${payment.id}&amount=${amount}`;
+    return schemeUrl;
+  }
+
+  static async handleStripeWebhook(signature: string, rawBody: Buffer) {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      throw new AppError('Stripe webhook secret is not configured', 500);
+    }
+
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    } catch (err: any) {
+      throw new AppError(`Webhook signature verification failed: ${err.message}`, 400);
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as any;
+      const { userId, studentId, feeId, amount } = session.metadata || {};
+      const paymentIntentId = (session.payment_intent as string) || session.id;
+
+      if (userId && studentId && feeId && amount) {
+        await this.confirmPayment(
+          paymentIntentId,
+          Number(amount),
+          feeId,
+          studentId,
+          userId
+        );
+      }
+    }
   }
 }
