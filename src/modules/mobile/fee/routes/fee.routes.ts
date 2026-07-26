@@ -9,5 +9,6 @@ router.use(authenticateMobileStudent);
 
 router.get('/history', MobileFeeController.getFeeHistory);
 router.post('/pay', MobileFeeController.processPayment);
+router.post('/pay-stripe', MobileFeeController.processPaymentStripe);
 
 export default router;
