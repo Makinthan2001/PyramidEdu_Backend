@@ -62,7 +62,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, res, buf) => {
+    if (req.originalUrl && req.originalUrl.includes('stripe-webhook')) {
+      req.rawBody = buf;
+    }
+  }
+}));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // Rate limiting for auth routes
