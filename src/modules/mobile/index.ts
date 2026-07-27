@@ -5,6 +5,7 @@ import examRoutes from './exam';
 import notificationRoutes from './notification/notification.routes';
 import feeRoutes from './fee/routes/fee.routes';
 import profileRoutes from './profile/routes/profile.routes';
+import { attendanceRoutes } from '../attendance';
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use('/exams', examRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/fees', feeRoutes);
 router.use('/profile', profileRoutes);
+router.use('/attendance', attendanceRoutes);
 
 export default router;
