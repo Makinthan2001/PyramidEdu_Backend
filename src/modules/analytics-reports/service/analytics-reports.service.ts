@@ -60,7 +60,6 @@ export class AnalyticsReportsService {
       totalExams,
       upcomingExams,
       completedExams,
-      totalAssignments,
       totalMaterials,
       totalAnnouncements,
     ] = await Promise.all([
@@ -71,10 +70,11 @@ export class AnalyticsReportsService {
       prisma.exam.count({ where: { ...recordWhere, deletedAt: null } }),
       prisma.exam.count({ where: { ...recordWhere, examDate: { gt: new Date() }, deletedAt: null } }),
       prisma.exam.count({ where: { ...recordWhere, examDate: { lte: new Date() }, deletedAt: null } }),
-      prisma.assignment.count({ where: recordWhere }),
       prisma.studyMaterial.count({ where: recordWhere }),
       prisma.announcement.count(),
     ]);
+
+    const totalAssignments = 0;
 
     // Payments summary
     const paymentsSum = await prisma.payment.aggregate({
