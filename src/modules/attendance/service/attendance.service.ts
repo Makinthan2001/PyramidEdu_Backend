@@ -653,7 +653,14 @@ export class AttendanceService {
       include: {
         user: { select: { fullName: true } },
         attendances: {
-          where: { subjectId: { in: subjectIds }, teacherId },
+          where: {
+            subjectId: { in: subjectIds },
+            OR: [
+              { teacherId },
+              { teacherId: null },
+              { classSession: { teacherId } }
+            ]
+          },
           orderBy: { attendanceDate: 'desc' },
           take: 7,
           select: { attendanceStatus: true, attendanceDate: true }
@@ -684,9 +691,21 @@ export class AttendanceService {
   }
 
   static async getTeacherStudentDetails(teacherId: string, studentId: string, filters: { fromDate?: string; toDate?: string }) {
+    const enrollments = await prisma.enrollment.findMany({
+      where: { teacherId, studentId, enrollmentStatus: 'ACTIVE' },
+      select: { subjectId: true }
+    });
+
+    const subjectIds = enrollments.map(e => e.subjectId);
+
     const whereClause: any = { 
       studentId,
-      teacherId
+      subjectId: { in: subjectIds },
+      OR: [
+        { teacherId },
+        { teacherId: null },
+        { classSession: { teacherId } }
+      ]
     };
 
     if (filters.fromDate || filters.toDate) {

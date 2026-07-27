@@ -87,6 +87,13 @@ router.get(
   AttendanceController.getTeacherSummary
 );
 
+router.get(
+  '/teacher/student/:studentId',
+  authenticate,
+  authorize(Role.TEACHER),
+  AttendanceController.getTeacherStudentDetails
+);
+
 // Student Attendance Routes
 router.get(
   '/student/my-attendance',
