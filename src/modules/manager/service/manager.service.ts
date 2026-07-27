@@ -202,7 +202,7 @@ export class ManagerService {
     const now = new Date();
     const monthYear = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
 
-    await prisma.fee.upsert({
+    const fee = await prisma.fee.upsert({
       where: {
         studentId_monthYear: {
           studentId: id,
@@ -221,6 +221,39 @@ export class ManagerService {
         paid: status === 'PAID' ? student.totalFeeAmount : 0,
       },
     });
+
+    if (status === 'PAID') {
+      const existingPayment = await prisma.payment.findFirst({
+        where: {
+          feeId: fee.id,
+          studentId: id,
+          paymentStatus: 'VERIFIED',
+        },
+      });
+
+      if (!existingPayment) {
+        await prisma.payment.create({
+          data: {
+            studentId: id,
+            feeId: fee.id,
+            amount: student.totalFeeAmount,
+            paymentMethod: 'CASH',
+            paymentStatus: 'VERIFIED',
+            paymentDate: new Date(),
+            verifiedBy: 'Manager',
+            verifiedAt: new Date(),
+          },
+        });
+      }
+    } else {
+      await prisma.payment.deleteMany({
+        where: {
+          feeId: fee.id,
+          studentId: id,
+          paymentStatus: 'VERIFIED',
+        },
+      });
+    }
   }
 
   /**
