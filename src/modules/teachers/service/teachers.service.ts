@@ -473,17 +473,7 @@ export class TeachersService {
     const recentActivities: { name: string; action: string; time: string; timestamp: Date }[] = [];
 
     if (studentIds.length > 0) {
-      const [assignmentSubmissions, examSubmissions, absentAttendances] = await Promise.all([
-        prisma.assignmentSubmission.findMany({
-          where: {
-            studentId: { in: studentIds },
-          },
-          include: {
-            assignment: { select: { title: true } },
-          },
-          orderBy: { submittedAt: 'desc' },
-          take: 10,
-        }),
+      const [examSubmissions, absentAttendances] = await Promise.all([
         prisma.examSubmission.findMany({
           where: {
             studentId: { in: studentIds },
@@ -504,15 +494,7 @@ export class TeachersService {
         }),
       ]);
 
-      for (const sub of assignmentSubmissions) {
-        const sName = studentNameMap.get(sub.studentId) || 'Student';
-        recentActivities.push({
-          name: sName,
-          action: `Submitted assignment: ${sub.assignment.title}`,
-          time: sub.submittedAt.toISOString(),
-          timestamp: sub.submittedAt,
-        });
-      }
+      const assignmentSubmissions: any[] = [];
 
       for (const sub of examSubmissions) {
         const sName = studentNameMap.get(sub.studentId) || 'Student';

@@ -132,7 +132,6 @@ model Student {
   feeEffectiveDate       DateTime?                 @map("fee_effective_date")
   lastFeeUpdateDate      DateTime?                 @map("last_fee_update_date")
   batchId                String?                   @map("batch_id")
-  assignmentSubmissions  AssignmentSubmission[]
   attendances            Attendance[]
   enrollmentHistories    EnrollmentHistory[]
   enrollments            Enrollment[]
@@ -220,7 +219,6 @@ model Subject {
   isActive           Boolean             @default(true) @map("is_active")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
-  assignments        Assignment[]
   classSessions      ClassSession[]
   enrollments        Enrollment[]
   exams              Exam[]
@@ -323,48 +321,6 @@ model StudyMaterialChunk {
 
   @@index([materialId])
   @@map("study_material_chunks")
-}
-
-model Assignment {
-  id          String                 @id @default(uuid())
-  subjectId   String                 @map("subject_id")
-  title       String
-  description String?
-  fileUrl     String?                @map("file_url")
-  dueDate     DateTime               @map("due_date")
-  totalMarks  Int                    @default(100) @map("total_marks")
-  isPublished Boolean                @default(false) @map("is_published")
-  deletedAt   DateTime?              @map("deleted_at")
-  createdAt   DateTime               @default(now()) @map("created_at")
-  updatedAt   DateTime               @updatedAt @map("updated_at")
-  batch       String?
-  batchId     String?                @map("batch_id")
-  submissions AssignmentSubmission[]
-  batchRecord Batch?                 @relation(fields: [batchId], references: [id])
-  subject     Subject                @relation(fields: [subjectId], references: [id])
-
-  @@index([subjectId])
-  @@index([batchId])
-  @@map("assignments")
-}
-
-model AssignmentSubmission {
-  id           String     @id @default(uuid())
-  assignmentId String     @map("assignment_id")
-  studentId    String     @map("student_id")
-  fileUrl      String?    @map("file_url")
-  text         String?
-  marks        Decimal?   @db.Decimal(6, 2)
-  feedback     String?
-  submittedAt  DateTime   @default(now()) @map("submitted_at")
-  gradedAt     DateTime?  @map("graded_at")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([assignmentId, studentId])
-  @@index([studentId])
-  @@map("assignment_submissions")
 }
 
 model Quiz {
@@ -805,7 +761,6 @@ model Batch {
   createdAt           DateTime            @default(now()) @map("created_at")
   updatedAt           DateTime            @updatedAt @map("updated_at")
   announcementsDirect Announcement[]      @relation("BatchDirectAnnouncements")
-  assignments         Assignment[]
   classSessions       ClassSession[]
   exams               Exam[]
   manualExams         ManualExam[]
