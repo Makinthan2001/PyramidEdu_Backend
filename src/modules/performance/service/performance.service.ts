@@ -172,6 +172,8 @@ export class PerformanceService {
         indexNumber: true,
         performanceStatus: true,
         batchId: true,
+        rewardPoints: true,
+        dailyStreak: true,
         batchRecord: { select: { batchName: true } },
         user: { select: { fullName: true } }
       }
@@ -193,6 +195,8 @@ export class PerformanceService {
         batchName: student.batchRecord?.batchName || 'No Batch',
         latestScore: latestPrediction?.finalScore || null,
         trendStatus: latestPrediction?.trendStatus || null,
+        rewardPoints: student.rewardPoints,
+        dailyStreak: student.dailyStreak,
       };
     }));
 

@@ -196,38 +196,7 @@ export class MarksService {
     });
 
     // 3. Fetch Assignments Submissions
-    const assignmentSubmissionWhere: any = {
-      student: studentFilter,
-      marks: { not: null }, // Only graded ones
-    };
-
-    if (subjectId) {
-      assignmentSubmissionWhere.assignment = { subjectId };
-    }
-    if (batchId) {
-      assignmentSubmissionWhere.assignment = {
-        ...assignmentSubmissionWhere.assignment,
-        batchId,
-      };
-    }
-
-    const assignmentSubmissions = await prisma.assignmentSubmission.findMany({
-      where: assignmentSubmissionWhere,
-      include: {
-        student: {
-          include: {
-            user: { select: { fullName: true } },
-            stream: { select: { streamName: true } },
-            batchRecord: { select: { batchName: true } },
-          },
-        },
-        assignment: {
-          include: {
-            batchRecord: { select: { batchName: true } },
-          },
-        },
-      },
-    });
+    const assignmentSubmissions: any[] = [];
 
     // Combine and unify
     const unifiedMarks: any[] = [];

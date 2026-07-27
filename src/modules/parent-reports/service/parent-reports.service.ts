@@ -102,18 +102,9 @@ export class ParentReportsService {
         const quizMarks = resultsData.filter((r) => r.quizId !== null).map((r) => Number(r.marks));
         const examMarks = resultsData.filter((r) => r.examId !== null).map((r) => Number(r.marks));
 
-        // Fetch assignment submissions
-        const assignmentSubmissions = await prisma.assignmentSubmission.findMany({
-          where: {
-            studentId,
-            marks: { not: null },
-            gradedAt: {
-              gte: startDate,
-              lte: endDate,
-            },
-          },
-        });
-        const assignmentMarks = assignmentSubmissions.map((a) => Number(a.marks));
+        // Fetch assignment submissions (removed table)
+        const assignmentSubmissions: any[] = [];
+        const assignmentMarks: number[] = [];
 
         // Calculate averages (default to 75 if no submissions exist for that month)
         const quizAverage = quizMarks.length > 0 ? quizMarks.reduce((a, b) => a + b, 0) / quizMarks.length : 75.0;
