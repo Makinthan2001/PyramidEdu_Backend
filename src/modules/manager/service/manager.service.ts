@@ -733,6 +733,41 @@ export class ManagerService {
         },
       });
 
+      // Update Fee record for the current month if it exists
+      const feeYear = effectiveDate.getFullYear();
+      const feeMonth = effectiveDate.getMonth();
+      const monthYearStart = new Date(Date.UTC(feeYear, feeMonth, 1));
+
+      const existingFee = await tx.fee.findUnique({
+        where: {
+          studentId_monthYear: {
+            studentId: id,
+            monthYear: monthYearStart,
+          },
+        },
+      });
+
+      if (existingFee) {
+        const paidAmount = Number(existingFee.paid);
+        let newStatus = existingFee.status;
+        if (paidAmount >= newMonthlyFee) {
+          newStatus = 'PAID';
+        } else if (paidAmount > 0) {
+          newStatus = 'PARTIAL';
+        } else {
+          newStatus = 'UNPAID';
+        }
+
+        await tx.fee.update({
+          where: { id: existingFee.id },
+          data: {
+            total: newMonthlyFee,
+            status: newStatus,
+          },
+        });
+      }
+
+
       // 5. Create History Record
       await tx.enrollmentHistory.create({
         data: {

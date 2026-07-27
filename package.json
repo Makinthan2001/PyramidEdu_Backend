@@ -1,7 +1,7 @@
 {
   "name": "pyramidedu_backend",
   "version": "1.0.0",
-  "description": "#\u0000 \u0000P\u0000y\u0000r\u0000a\u0000m\u0000i\u0000d\u0000E\u0000d\u0000u\u0000_\u0000B\u0000a\u0000c\u0000k\u0000e\u0000n\u0000d\u0000\r\u0000 \u0000",
+  "description": "PyramidEdu Backend API",
   "main": "src/server.ts",
   "scripts": {
     "postinstall": "prisma generate",
@@ -22,6 +22,7 @@
   "homepage": "https://github.com/Makinthan2001/PyramidEdu_Backend#readme",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@neondatabase/serverless": "^1.1.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@supabase/supabase-js": "^2.108.1",
@@ -46,6 +47,7 @@
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
     "qrcode": "^1.5.4",
+    "stripe": "^22.3.2",
     "uuid": "^14.0.0",
     "ws": "^8.21.0",
     "zod": "^4.1.12"

@@ -194,12 +194,31 @@ export class UsersService {
       where.isActive = params.status === 'ACTIVE';
     }
 
-    // Search by email or fullName
-    if (params.search) {
-      where.OR = [
-        { email: { contains: params.search, mode: 'insensitive' } },
-        { fullName: { contains: params.search, mode: 'insensitive' } },
+    // Search by email, fullName, phone, indexNumber, or role name
+    if (params.search && params.search.trim()) {
+      const term = params.search.trim();
+      const lower = term.toLowerCase();
+      const orConditions: Prisma.UserWhereInput[] = [
+        { email: { contains: term, mode: 'insensitive' } },
+        { fullName: { contains: term, mode: 'insensitive' } },
+        { phone: { contains: term, mode: 'insensitive' } },
+        { student: { indexNumber: { contains: term, mode: 'insensitive' } } },
       ];
+
+      if ('student'.includes(lower) || 'students'.includes(lower)) {
+        orConditions.push({ role: Role.STUDENT });
+      }
+      if ('teacher'.includes(lower) || 'teachers'.includes(lower)) {
+        orConditions.push({ role: Role.TEACHER });
+      }
+      if ('manager'.includes(lower) || 'managers'.includes(lower)) {
+        orConditions.push({ role: Role.MANAGER });
+      }
+      if ('admin'.includes(lower) || 'admins'.includes(lower)) {
+        orConditions.push({ role: Role.ADMIN });
+      }
+
+      where.OR = orConditions;
     }
 
     const [users, total] = await Promise.all([
