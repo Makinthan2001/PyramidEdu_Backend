@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { calculateForStudent, calculateForAll, getStudentHistory, getStudentsList } from '../controller/performance.controller';
+import { calculateForStudent, calculateForAll, getStudentHistory, getStudentsList, updateFreeCard } from '../controller/performance.controller';
 import { authenticate } from '../../../middleware/authenticate';
 import { authorize } from '../../../middleware/authorize';
 import { Role } from '@prisma/client';
@@ -34,8 +34,16 @@ router.get(
 router.get(
   '/students',
   authenticate,
-  authorize(Role.MANAGER, Role.TEACHER),
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
   getStudentsList
+);
+
+// Update student Free Card status
+router.patch(
+  '/student/:id/free-card',
+  authenticate,
+  authorize(Role.MANAGER, Role.ADMIN),
+  updateFreeCard
 );
 
 export default router;

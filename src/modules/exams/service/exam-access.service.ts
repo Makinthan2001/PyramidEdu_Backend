@@ -48,8 +48,17 @@ export class ExamAccessService {
       throw new AppError('You must be actively enrolled in this subject to take the exam', 403);
     }
 
-    // Fee validation (Skipped in this service as Fee is managed independently)
-    // If you need strict fee validation, query the Fee table here.
+    // Fee policy validation (3-month unpaid fee restriction)
+    const { FeePolicyService } = await import('../../payments/service/fee-policy.service');
+    const feeStatus = await FeePolicyService.getStudentUnpaidFeeDetails(studentId);
+    if (feeStatus.isRestricted) {
+      // Trigger manager alert and parent email dispatch
+      await FeePolicyService.enforceThreeMonthPolicy(studentId);
+      throw new AppError(
+        `Exam access restricted due to ${feeStatus.unpaidCount} unpaid fee months. Please settle outstanding fees of Rs. ${feeStatus.totalOutstanding.toLocaleString()}.`,
+        403
+      );
+    }
 
     // Duplicate submission check
     const existingSubmission = await prisma.examSubmission.findUnique({
