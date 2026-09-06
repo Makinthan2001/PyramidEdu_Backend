@@ -70,3 +70,27 @@ export const getStudentsList = async (req: Request, res: Response): Promise<void
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const updateFreeCard = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const studentId = req.params.id as string;
+    const { freeCardType } = req.body;
+
+    if (!['NONE', 'HALF_CARD', 'FREE_CARD'].includes(freeCardType)) {
+      res.status(400).json({ success: false, message: 'Invalid freeCardType' });
+      return;
+    }
+
+    const updated = await prisma.student.update({
+      where: { id: studentId },
+      data: { freeCardType: freeCardType as any },
+    });
+
+    res.json({
+      success: true,
+      data: updated,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

@@ -14,6 +14,8 @@ router.get('/dashboard-overview', PaymentController.getDashboardOverview);
 router.get('/analytics', PaymentController.getAnalytics);
 router.get('/fee-overview', PaymentController.getFeeOverview);
 router.get('/student-summaries', PaymentController.getStudentSummaries);
+router.get('/fee-enforcement/status/:studentId', PaymentController.getFeeRestrictionStatus);
+router.post('/fee-enforcement/trigger-check', PaymentController.triggerFeeEnforcement);
 router.get('/details/:id', PaymentController.getPaymentDetails);
 router.get('/', PaymentController.getPayments);
 router.patch('/:id/status', PaymentController.updatePaymentStatus);
