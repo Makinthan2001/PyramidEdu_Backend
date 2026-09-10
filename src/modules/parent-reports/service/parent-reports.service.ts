@@ -71,7 +71,7 @@ export class ParentReportsService {
           continue;
         }
 
-        // Fetch attendance for this month
+        // 1. Fetch attendance for this month
         const attendances = await prisma.attendance.findMany({
           where: {
             studentId,
@@ -86,10 +86,13 @@ export class ParentReportsService {
         const presentSessions = attendances.filter(
           (a) => a.isPresent || a.attendanceStatus === 'PRESENT' || a.attendanceStatus === 'LATE'
         ).length;
-        const attendancePercentage = totalSessions > 0 ? (presentSessions / totalSessions) * 100 : 100.0;
+        // If monthly attendance records exist, calculate real rate; otherwise fallback to student's overall attendancePercentage
+        const attendancePercentage = totalSessions > 0 
+          ? (presentSessions / totalSessions) * 100 
+          : Number(student.attendancePercentage || 0);
 
-        // Fetch academic results for this month
-        const resultsData = await prisma.result.findMany({
+        // 2. Fetch Online Exam Results & Submissions for this month
+        const onlineResults = await prisma.result.findMany({
           where: {
             studentId,
             recordedAt: {
@@ -97,27 +100,109 @@ export class ParentReportsService {
               lte: endDate,
             },
           },
+          include: {
+            exam: true,
+          },
         });
 
-        const quizMarks = resultsData.filter((r) => r.quizId !== null).map((r) => Number(r.marks));
-        const examMarks = resultsData.filter((r) => r.examId !== null).map((r) => Number(r.marks));
+        // 3. Fetch Manual Offline Exam Marks for this month
+        const manualMarks = await prisma.manualExamMark.findMany({
+          where: {
+            studentId,
+            manualExam: {
+              examDate: {
+                gte: startDate,
+                lte: endDate,
+              },
+            },
+          },
+          include: {
+            manualExam: true,
+          },
+        });
 
-        // Fetch assignment submissions (removed table)
-        const assignmentSubmissions: any[] = [];
-        const assignmentMarks: number[] = [];
+        // 4. Fetch Daily Practice MCQ Quiz Results for this month
+        const dailyQuizResults = await prisma.dailyQuizResult.findMany({
+          where: {
+            studentId,
+            startedAt: {
+              gte: startDate,
+              lte: endDate,
+            },
+          },
+        });
 
-        // Calculate averages (default to 75 if no submissions exist for that month)
-        const quizAverage = quizMarks.length > 0 ? quizMarks.reduce((a, b) => a + b, 0) / quizMarks.length : 75.0;
-        const examAverage = examMarks.length > 0 ? examMarks.reduce((a, b) => a + b, 0) / examMarks.length : 75.0;
-        const assignmentAverage = assignmentMarks.length > 0 ? assignmentMarks.reduce((a, b) => a + b, 0) / assignmentMarks.length : 75.0;
+        // Calculate Normalized Exam Marks (0-100 scale)
+        const examPercentages: number[] = [];
 
-        // Calculate overall weighted score
-        // Formula: (attendance × 0.30) + (quiz × 0.20) + (assignment × 0.20) + (exam × 0.30)
-        const weightedScore =
-          attendancePercentage * 0.3 +
-          quizAverage * 0.2 +
-          assignmentAverage * 0.2 +
-          examAverage * 0.3;
+        // Add online exam scores
+        onlineResults.forEach((r) => {
+          const mark = Number(r.marks || 0);
+          if (r.exam && r.exam.totalMarks > 0) {
+            examPercentages.push(Math.min(100, Math.max(0, (mark / r.exam.totalMarks) * 100)));
+          } else {
+            examPercentages.push(Math.min(100, Math.max(0, mark)));
+          }
+        });
+
+        // Add manual exam scores
+        manualMarks.forEach((m) => {
+          if (m.isAbsent) {
+            examPercentages.push(0);
+          } else if (m.marksObtained !== null && m.marksObtained !== undefined) {
+            const obtained = Number(m.marksObtained);
+            const total = m.manualExam?.totalMarks || 100;
+            examPercentages.push(Math.min(100, Math.max(0, (obtained / total) * 100)));
+          }
+        });
+
+        // Calculate Normalized Quiz Marks (0-100 scale)
+        const quizPercentages: number[] = [];
+        dailyQuizResults.forEach((q) => {
+          if (q.percentage !== null && q.percentage !== undefined) {
+            quizPercentages.push(Number(q.percentage));
+          } else if (q.totalQuestions > 0) {
+            quizPercentages.push((q.correctAnswers / q.totalQuestions) * 100);
+          }
+        });
+
+        // Compute genuine averages (null if no submissions/exams took place)
+        const hasExams = examPercentages.length > 0;
+        const hasQuizzes = quizPercentages.length > 0;
+
+        const examAverage = hasExams
+          ? examPercentages.reduce((a, b) => a + b, 0) / examPercentages.length
+          : null;
+        const quizAverage = hasQuizzes
+          ? quizPercentages.reduce((a, b) => a + b, 0) / quizPercentages.length
+          : null;
+
+        // Fetch latest performance prediction if available for baseline
+        const latestPrediction = await prisma.performancePrediction.findFirst({
+          where: { studentId },
+          orderBy: { generatedAt: 'desc' },
+        });
+
+        // Dynamically calculate weighted overall score based on available data
+        let weightedScore = 0;
+        if (hasExams && hasQuizzes) {
+          // Attendance 30%, Exams 45%, Quizzes 25%
+          weightedScore = attendancePercentage * 0.3 + (examAverage || 0) * 0.45 + (quizAverage || 0) * 0.25;
+        } else if (hasExams) {
+          // Attendance 35%, Exams 65%
+          weightedScore = attendancePercentage * 0.35 + (examAverage || 0) * 0.65;
+        } else if (hasQuizzes) {
+          // Attendance 40%, Quizzes 60%
+          weightedScore = attendancePercentage * 0.4 + (quizAverage || 0) * 0.6;
+        } else if (latestPrediction?.finalScore) {
+          // Fallback to recent predicted performance weighted with attendance
+          weightedScore = attendancePercentage * 0.3 + Number(latestPrediction.finalScore) * 0.7;
+        } else {
+          weightedScore = attendancePercentage;
+        }
+
+        // Clamp weightedScore between 0 and 100
+        weightedScore = Math.min(100, Math.max(0, Number(weightedScore.toFixed(1))));
 
         // Detect Trend
         const lastReports = await prisma.parentReport.findMany({
@@ -136,16 +221,19 @@ export class ParentReportsService {
           }
         }
 
+        // Format summary values for display
+        const displayExamAvg = examAverage !== null ? `${examAverage.toFixed(0)}%` : 'N/A';
+        const displayQuizAvg = quizAverage !== null ? `${quizAverage.toFixed(0)}%` : 'N/A';
+
         // Call Gemini service for recommendation
         let recommendation = '';
         try {
           const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
           const prompt = `You are a professional educational counselor at PyramidEdu. Generate a personalized academic recommendation for the parents of ${student.user.fullName}.
 Monthly Academic Metrics:
-- Attendance: ${attendancePercentage.toFixed(1)}%
-- Quiz Average: ${quizAverage.toFixed(1)}%
-- Assignment Average: ${assignmentAverage.toFixed(1)}%
-- Exam Average: ${examAverage.toFixed(1)}%
+- Attendance: ${attendancePercentage.toFixed(1)}% (${totalSessions} recorded sessions)
+- Exam Performance: ${displayExamAvg} (${examPercentages.length} exams completed)
+- Quiz Practice: ${displayQuizAvg} (${quizPercentages.length} quizzes completed)
 - Overall Weighted Score: ${weightedScore.toFixed(1)}%
 - Performance Trend: ${trend}
 
@@ -159,7 +247,7 @@ Provide 2-3 encouraging, realistic, and actionable sentences (no markdown, plain
         }
 
         // Save report in database
-        const attendanceSummary = `Attendance: ${attendancePercentage.toFixed(0)}%, Quiz: ${quizAverage.toFixed(0)}%, Assignment: ${assignmentAverage.toFixed(0)}%, Exam: ${examAverage.toFixed(0)}%`;
+        const attendanceSummary = `Attendance: ${attendancePercentage.toFixed(0)}%, Quiz: ${displayQuizAvg}, Exam: ${displayExamAvg}`;
         const report = await prisma.parentReport.create({
           data: {
             studentId,
@@ -170,11 +258,7 @@ Provide 2-3 encouraging, realistic, and actionable sentences (no markdown, plain
             aiRecommendation: recommendation,
             isActive: true,
             isSent: false,
-            // Store generation metadata in trendAnalysis or description if available,
-            // but we can also store the 'generatedBy' info in trendAnalysis: 'TREND | GENERATED_BY' or just keep it simple.
-            // Let's store "AUTOMATIC" or "MANUAL" in paymentDate or another unused field, or simply prefix trend analysis:
-            // "STABLE (AUTOMATIC)"
-            paymentDate: generatedBy === 'AUTOMATIC' ? new Date(0) : null, // Mark automatic reports using epoch date
+            paymentDate: generatedBy === 'AUTOMATIC' ? new Date(0) : null,
             generatedAt: new Date(year, month, 0, 12, 0, 0),
           },
         });
@@ -211,12 +295,20 @@ Provide 2-3 encouraging, realistic, and actionable sentences (no markdown, plain
                     <p style="font-size: 20px; font-weight: 700; color: #059669; margin: 5px 0 0 0;">${weightedScore.toFixed(1)}%</p>
                   </div>
                   <div style="padding: 10px; border-right: 1px solid #edf2f7; border-top: 1px solid #edf2f7;">
+                    <span style="font-size: 12px; font-weight: 700; color: #a0aec0; text-transform: uppercase;">Exam Average</span>
+                    <p style="font-size: 18px; font-weight: 700; color: #2d3748; margin: 5px 0 0 0;">${displayExamAvg}</p>
+                  </div>
+                  <div style="padding: 10px; border-top: 1px solid #edf2f7;">
+                    <span style="font-size: 12px; font-weight: 700; color: #a0aec0; text-transform: uppercase;">Quiz Practice</span>
+                    <p style="font-size: 18px; font-weight: 700; color: #2d3748; margin: 5px 0 0 0;">${displayQuizAvg}</p>
+                  </div>
+                  <div style="padding: 10px; border-right: 1px solid #edf2f7; border-top: 1px solid #edf2f7;">
                     <span style="font-size: 12px; font-weight: 700; color: #a0aec0; text-transform: uppercase;">Trend Status</span>
                     <p style="font-size: 15px; font-weight: 700; color: ${trend === 'IMPROVING' ? '#059669' : trend === 'DECLINING' ? '#e53e3e' : '#3182ce'}; margin: 5px 0 0 0;">${trend}</p>
                   </div>
                   <div style="padding: 10px; border-top: 1px solid #edf2f7;">
                     <span style="font-size: 12px; font-weight: 700; color: #a0aec0; text-transform: uppercase;">Performance Status</span>
-                    <p style="font-size: 15px; font-weight: 700; color: #2d3748; margin: 5px 0 0 0;">${weightedScore >= 75 ? 'Excellent' : weightedScore >= 60 ? 'Good' : 'Average'}</p>
+                    <p style="font-size: 15px; font-weight: 700; color: #2d3748; margin: 5px 0 0 0;">${weightedScore >= 75 ? 'Excellent' : weightedScore >= 60 ? 'Good' : weightedScore >= 45 ? 'Average' : 'At Risk'}</p>
                   </div>
                 </div>
 
@@ -332,5 +424,51 @@ Provide 2-3 encouraging, realistic, and actionable sentences (no markdown, plain
       generatedAt: report.generatedAt,
       generatedBy: report.paymentDate && report.paymentDate.getTime() === 0 ? 'AUTOMATIC' : 'MANUAL'
     }));
+  }
+
+  /**
+   * Deletes all parent reports for a specific month and year
+   */
+  static async deleteReportsByPeriod(month: number, year: number) {
+    if (month < 1 || month > 12) {
+      throw new AppError('Invalid month. Must be between 1 and 12.', 400);
+    }
+
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const deleteResult = await prisma.parentReport.deleteMany({
+      where: {
+        generatedAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+    });
+
+    return {
+      deletedCount: deleteResult.count,
+      month,
+      year,
+    };
+  }
+
+  /**
+   * Deletes a single parent report by its ID
+   */
+  static async deleteReportById(reportId: string) {
+    const report = await prisma.parentReport.findUnique({
+      where: { id: reportId },
+    });
+
+    if (!report) {
+      throw new AppError('Parent report not found.', 404);
+    }
+
+    await prisma.parentReport.delete({
+      where: { id: reportId },
+    });
+
+    return { success: true, id: reportId };
   }
 }

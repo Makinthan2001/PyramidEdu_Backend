@@ -38,6 +38,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const app_1 = __importDefault(require("./app"));
 const notification_cron_service_1 = require("./modules/mobile/notification/notification-cron.service");
+require("./cron/parentReportsCron");
+require("./cron/performanceCron");
 const PORT = Number(process.env.PORT) || 5000;
 const server = app_1.default.listen(PORT, () => {
     console.log(`Server running on port ${PORT} (env=${process.env.NODE_ENV || 'development'})`);
