@@ -19,6 +19,7 @@ exports.logoutUser = logoutUser;
 exports.getCurrentUser = getCurrentUser;
 exports.changePassword = changePassword;
 exports.forgotPassword = forgotPassword;
+exports.verifyOtp = verifyOtp;
 exports.resetPassword = resetPassword;
 const client_1 = require("@prisma/client");
 const prisma_config_1 = __importDefault(require("../../../config/prisma.config"));
@@ -26,6 +27,7 @@ const notification_service_1 = require("../../notification/service/notification.
 const password_util_1 = require("../../../utils/password.util");
 const jwt_util_1 = require("../../../utils/jwt.util");
 const AppError_1 = require("../../../utils/AppError");
+const email_util_1 = require("../../../utils/email.util");
 const userProfileInclude = {
     student: true,
     teacher: true,
@@ -285,11 +287,51 @@ function forgotPassword(dto) {
         if (!user || !user.isActive) {
             return null;
         }
-        const resetToken = (0, jwt_util_1.generateResetToken)(user.id);
+        // Generate a random 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        // Create an OTP verification token (JWT containing email + otp)
+        const verificationToken = (0, jwt_util_1.generateOtpToken)(email, otp);
+        // Send the reset email
+        const emailContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+      <h2 style="color: #10B981; text-align: center;">Reset Your Password</h2>
+      <p>Hello,</p>
+      <p>We received a request to reset your password for your PyramidEdu account. Please use the following One-Time Password (OTP) to reset your password:</p>
+      <div style="background-color: #f3f4f6; padding: 15px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #1f2937; border-radius: 4px; margin: 20px 0;">
+        ${otp}
+      </div>
+      <p>This OTP is valid for 5 minutes. If you did not request this, please ignore this email.</p>
+      <p>Regards,<br/>PyramidEdu Team</p>
+    </div>
+  `;
+        yield (0, email_util_1.sendEmail)(email, 'PyramidEdu - Password Reset OTP', emailContent);
+        const result = { verificationToken };
         if (process.env.NODE_ENV !== 'production') {
-            return resetToken;
+            result.devOtp = otp;
         }
-        return null;
+        return result;
+    });
+}
+function verifyOtp(dto) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { email, otp, verificationToken } = dto;
+        // 1. Verify the verificationToken and extract data
+        const payload = (0, jwt_util_1.verifyOtpToken)(verificationToken);
+        // 2. Validate it matches current request and input OTP
+        if (payload.email.toLowerCase() !== email.toLowerCase()) {
+            throw new AppError_1.AppError('Invalid email for this OTP session.', 400);
+        }
+        if (payload.otp !== otp) {
+            throw new AppError_1.AppError('Incorrect OTP. Please check your email and try again.', 400);
+        }
+        // 3. Find the user
+        const user = yield prisma_config_1.default.user.findUnique({ where: { email: email.toLowerCase() } });
+        if (!user || !user.isActive) {
+            throw new AppError_1.AppError('User not found or account is inactive.', 400);
+        }
+        // 4. Generate a standard password reset token (valid for 15m)
+        const resetToken = (0, jwt_util_1.generateResetToken)(user.id);
+        return resetToken;
     });
 }
 function resetPassword(dto) {

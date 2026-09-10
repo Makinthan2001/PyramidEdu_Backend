@@ -86,4 +86,42 @@ export class ParentReportsController {
       next(error);
     }
   }
+
+  static async deleteByPeriod(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { month, year } = req.query;
+      if (!month || !year) {
+        throw new AppError('Month and year query parameters are required.', 400);
+      }
+
+      const result = await ParentReportsService.deleteReportsByPeriod(Number(month), Number(year));
+
+      res.status(200).json({
+        success: true,
+        message: `Successfully deleted ${result.deletedCount} reports for ${month}/${year}.`,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteById(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { reportId } = req.params;
+      if (!reportId) {
+        throw new AppError('Report ID is required.', 400);
+      }
+
+      const result = await ParentReportsService.deleteReportById(reportId as string);
+
+      res.status(200).json({
+        success: true,
+        message: 'Report deleted successfully.',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

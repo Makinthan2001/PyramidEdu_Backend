@@ -137,3 +137,104 @@ export const getSession = async (
     next(error);
   }
 };
+
+/**
+ * Clear all messages in the active conversation (or archive conversation)
+ */
+export const clearConversation = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw new AppError('Authentication required.', 401);
+    }
+
+    const { conversationId } = req.body || {};
+
+    if (conversationId) {
+      // Delete all messages belonging to this conversation
+      await prisma.chatMessage.deleteMany({
+        where: { conversationId, conversation: { userId } }
+      });
+      // Mark conversation as soft-deleted or clean
+      await prisma.chatConversation.updateMany({
+        where: { id: conversationId, userId },
+        data: { deletedAt: new Date(), isActive: false }
+      });
+    } else {
+      // Clear all active conversations for this user
+      const activeConversations = await prisma.chatConversation.findMany({
+        where: { userId, isActive: true, deletedAt: null },
+        select: { id: true }
+      });
+
+      const ids = activeConversations.map(c => c.id);
+      if (ids.length > 0) {
+        await prisma.chatMessage.deleteMany({
+          where: { conversationId: { in: ids } }
+        });
+        await prisma.chatConversation.updateMany({
+          where: { id: { in: ids } },
+          data: { deletedAt: new Date(), isActive: false }
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Chat history cleared successfully.'
+    });
+  } catch (error) {
+    console.error("Clear Conversation Error:", error);
+    next(error);
+  }
+};
+
+/**
+ * Delete a specific message by its ID
+ */
+export const deleteMessage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw new AppError('Authentication required.', 401);
+    }
+
+    const messageId = req.params.messageId as string;
+    if (!messageId) {
+      throw new AppError('Message ID is required.', 400);
+    }
+
+    // Verify message belongs to a conversation owned by the current user
+    const message = await prisma.chatMessage.findFirst({
+      where: {
+        id: messageId,
+        conversation: { userId }
+      }
+    });
+
+    if (!message) {
+      throw new AppError('Message not found or unauthorized.', 404);
+    }
+
+    await prisma.chatMessage.delete({
+      where: { id: messageId }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Message deleted successfully.'
+    });
+  } catch (error) {
+    console.error("Delete Message Error:", error);
+    next(error);
+  }
+};
+

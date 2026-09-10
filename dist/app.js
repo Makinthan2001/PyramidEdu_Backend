@@ -32,6 +32,13 @@ const support_staff_1 = __importDefault(require("./modules/support-staff"));
 const chat_1 = require("./modules/chat");
 const announcements_1 = __importDefault(require("./modules/announcements"));
 const notification_1 = __importDefault(require("./modules/notification"));
+const parent_reports_1 = __importDefault(require("./modules/parent-reports"));
+const analytics_reports_1 = __importDefault(require("./modules/analytics-reports"));
+const performance_1 = __importDefault(require("./modules/performance"));
+const marks_1 = __importDefault(require("./modules/marks"));
+const practice_mcq_1 = __importDefault(require("./modules/practice-mcq"));
+const payments_1 = __importDefault(require("./modules/payments"));
+const salary_1 = require("./modules/salary");
 (0, validateEnv_1.validateEnv)();
 (0, cloudinary_util_1.configureCloudinary)();
 const app = (0, express_1.default)();
@@ -53,7 +60,13 @@ const corsOptions = {
 app.use((0, cors_1.default)(corsOptions));
 app.options(/.*/, (0, cors_1.default)(corsOptions));
 app.use((0, cookie_parser_1.default)());
-app.use(express_1.default.json());
+app.use(express_1.default.json({
+    verify: (req, res, buf) => {
+        if (req.originalUrl && req.originalUrl.includes('stripe-webhook')) {
+            req.rawBody = buf;
+        }
+    }
+}));
 app.use((0, morgan_1.default)(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // Rate limiting for auth routes
 const authRateLimiter = (0, express_rate_limit_1.default)({
@@ -108,6 +121,20 @@ app.use('/api/v1/chat', chat_1.chatRouter);
 app.use('/api/v1/announcements', announcements_1.default);
 // Notifications routes
 app.use('/api/v1/notifications', notification_1.default);
+// Reports routes
+app.use('/api/v1/parent-reports', parent_reports_1.default);
+// Analytics routes
+app.use('/api/v1/analytics', analytics_reports_1.default);
+// Performance routes
+app.use('/api/v1/performance', performance_1.default);
+// Marks routes
+app.use('/api/v1/marks', marks_1.default);
+// Practice MCQ routes
+app.use('/api/v1/practice-mcq', practice_mcq_1.default);
+// Payments routes
+app.use('/api/v1/payments', payments_1.default);
+// Salary routes
+app.use('/api/v1/salary', salary_1.salaryRoutes);
 // centralized error handler - must be last
 app.use(errorHandler_1.default);
 exports.default = app;
