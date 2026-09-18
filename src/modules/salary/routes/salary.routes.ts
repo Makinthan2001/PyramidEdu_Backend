@@ -18,13 +18,6 @@ router.post('/payrolls/generate', SalaryController.generateMonthlyPayroll);
 router.patch('/records/:id/process', SalaryController.processPayment);
 router.patch('/employees/:employeeId/basic-salary', SalaryController.updateBasicSalary);
 
-router.get('/allowances', SalaryController.getAllowances);
-router.post('/allowances', SalaryController.createAllowance);
-router.delete('/allowances/:id', SalaryController.deleteAllowance);
-
-router.get('/deductions', SalaryController.getDeductions);
-router.post('/deductions', SalaryController.createDeduction);
-router.delete('/deductions/:id', SalaryController.deleteDeduction);
 
 router.get('/records/:id/payslip', SalaryController.getPayslipDetails);
 
