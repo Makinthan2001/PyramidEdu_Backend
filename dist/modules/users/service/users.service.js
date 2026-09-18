@@ -18,6 +18,7 @@ const prisma_config_1 = __importDefault(require("../../../config/prisma.config")
 const notification_service_1 = require("../../notification/service/notification.service");
 const password_util_1 = require("../../../utils/password.util");
 const AppError_1 = require("../../../utils/AppError");
+const email_util_1 = require("../../../utils/email.util");
 const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
 const cloudinary_util_1 = require("../../../utils/cloudinary.util");
@@ -40,6 +41,17 @@ const userListSelect = {
             gender: true,
             batch: true,
             approvalStatus: true,
+            dateOfBirth: true,
+            school: true,
+            parent: {
+                select: {
+                    id: true,
+                    parentName: true,
+                    phone: true,
+                    occupation: true,
+                    email: true,
+                }
+            }
         },
     },
     teacher: {
@@ -82,6 +94,25 @@ function formatUserListItem(user) {
         updatedAt: user.updatedAt,
     };
     if (user.student) {
+        response.student = {
+            id: user.student.id,
+            indexNumber: user.student.indexNumber,
+            phone: user.student.phone || user.phone,
+            address: user.student.address,
+            nic: user.student.nic,
+            gender: user.student.gender,
+            batch: user.student.batch,
+            approvalStatus: user.student.approvalStatus,
+            dateOfBirth: user.student.dateOfBirth ? new Date(user.student.dateOfBirth).toISOString().split('T')[0] : null,
+            school: user.student.school,
+            parent: user.student.parent ? {
+                id: user.student.parent.id,
+                parentName: user.student.parent.parentName,
+                phone: user.student.parent.phone,
+                occupation: user.student.parent.occupation,
+                email: user.student.parent.email,
+            } : null,
+        };
         response.indexNumber = user.student.indexNumber;
         response.phone = user.student.phone || user.phone;
         response.address = user.student.address;
@@ -89,6 +120,17 @@ function formatUserListItem(user) {
         response.gender = user.student.gender;
         response.batch = user.student.batch;
         response.approvalStatus = user.student.approvalStatus;
+        response.isApproved = user.student.approvalStatus === 'APPROVED';
+        response.dateOfBirth = user.student.dateOfBirth ? new Date(user.student.dateOfBirth).toISOString().split('T')[0] : null;
+        response.school = user.student.school;
+        response.parent = user.student.parent ? {
+            id: user.student.parent.id,
+            parentName: user.student.parent.parentName,
+            phone: user.student.parent.phone,
+            occupation: user.student.parent.occupation,
+            email: user.student.parent.email,
+        } : null;
+        response.parentEmail = user.student.parent ? user.student.parent.email : null;
     }
     if (user.teacher) {
         response.teacherProfileId = user.teacher.id;
@@ -139,12 +181,29 @@ class UsersService {
             if (params.status) {
                 where.isActive = params.status === 'ACTIVE';
             }
-            // Search by email or fullName
-            if (params.search) {
-                where.OR = [
-                    { email: { contains: params.search, mode: 'insensitive' } },
-                    { fullName: { contains: params.search, mode: 'insensitive' } },
+            // Search by email, fullName, phone, indexNumber, or role name
+            if (params.search && params.search.trim()) {
+                const term = params.search.trim();
+                const lower = term.toLowerCase();
+                const orConditions = [
+                    { email: { contains: term, mode: 'insensitive' } },
+                    { fullName: { contains: term, mode: 'insensitive' } },
+                    { phone: { contains: term, mode: 'insensitive' } },
+                    { student: { indexNumber: { contains: term, mode: 'insensitive' } } },
                 ];
+                if ('student'.includes(lower) || 'students'.includes(lower)) {
+                    orConditions.push({ role: client_1.Role.STUDENT });
+                }
+                if ('teacher'.includes(lower) || 'teachers'.includes(lower)) {
+                    orConditions.push({ role: client_1.Role.TEACHER });
+                }
+                if ('manager'.includes(lower) || 'managers'.includes(lower)) {
+                    orConditions.push({ role: client_1.Role.MANAGER });
+                }
+                if ('admin'.includes(lower) || 'admins'.includes(lower)) {
+                    orConditions.push({ role: client_1.Role.ADMIN });
+                }
+                where.OR = orConditions;
             }
             const [users, total] = yield Promise.all([
                 prisma_config_1.default.user.findMany({
@@ -281,8 +340,10 @@ class UsersService {
                 forcePwdChange: true,
             };
             let user;
+            let studentResult;
             try {
                 yield prisma_config_1.default.$transaction((tx) => __awaiter(this, void 0, void 0, function* () {
+                    var _a;
                     user = yield tx.user.create({
                         data: userData,
                         select: {
@@ -320,19 +381,87 @@ class UsersService {
                             });
                             break;
                         case client_1.Role.STUDENT:
-                            yield tx.student.create({
+                            // 1. Create Parent if parentName is provided
+                            let parentId = undefined;
+                            if (dto.parentName) {
+                                const parent = yield tx.parent.create({
+                                    data: {
+                                        parentName: dto.parentName,
+                                        relation: dto.parentRelation,
+                                        email: dto.parentEmail || null,
+                                        phone: dto.parentPhone || null,
+                                    },
+                                });
+                                parentId = parent.id;
+                            }
+                            // 2. Generate indexNumber
+                            const batchPrefix = `STD${dto.alExamBatch}`;
+                            const latestStudent = yield tx.student.findFirst({
+                                where: { indexNumber: { startsWith: batchPrefix } },
+                                orderBy: { indexNumber: 'desc' },
+                            });
+                            let nextRunningNum = 1;
+                            if (latestStudent && latestStudent.indexNumber) {
+                                const lastNumStr = latestStudent.indexNumber.slice(-4);
+                                const lastNum = parseInt(lastNumStr, 10);
+                                if (!isNaN(lastNum)) {
+                                    nextRunningNum = lastNum + 1;
+                                }
+                            }
+                            const newIndexNumber = `${batchPrefix}${nextRunningNum.toString().padStart(4, '0')}`;
+                            // 3. Generate QR code token
+                            const qrToken = `QR-${newIndexNumber}-${Math.random().toString(36).substring(2, 10)}`;
+                            // 4. Calculate fee amount
+                            const subjects = yield tx.subject.findMany({
+                                where: { id: { in: dto.selectedCourseIds } },
+                                select: { feeAmount: true }
+                            });
+                            const totalFeeAmount = subjects.reduce((sum, s) => sum + Number(s.feeAmount), 0);
+                            // 5. Create student (manually created student accounts are APPROVED)
+                            const student = yield tx.student.create({
                                 data: {
                                     userId: user.id,
-                                    indexNumber: dto.indexNumber || null,
+                                    parentId,
+                                    streamId: dto.selectedStreamId,
+                                    indexNumber: newIndexNumber,
+                                    nic: dto.nic || null,
+                                    qrCode: qrToken,
                                     dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
                                     phone: dto.phone || dto.phoneNumber || null,
                                     address: dto.address || null,
-                                    gender: dto.gender || null,
-                                    batch: dto.batch || null,
-                                    nic: dto.nic || dto.nicNumber || null,
-                                    approvalStatus: dto.approvalStatus || 'PENDING',
+                                    gender: dto.gender,
+                                    school: dto.school || null,
+                                    batch: dto.alExamBatch,
+                                    batchId: dto.batchId || null,
+                                    approvalStatus: 'APPROVED',
+                                    paymentStatus: dto.paymentStatus || 'PENDING',
+                                    totalFeeAmount: totalFeeAmount,
+                                    feeEffectiveDate: new Date(),
+                                    lastFeeUpdateDate: new Date(),
                                 },
                             });
+                            studentResult = student;
+                            // 6. Create corresponding QRCode record
+                            yield tx.qRCode.create({
+                                data: {
+                                    studentId: student.id,
+                                    qrToken: qrToken,
+                                }
+                            });
+                            // 7. Create enrollments
+                            if (dto.selectedCourseIds && Array.isArray(dto.selectedCourseIds)) {
+                                for (const subjectId of dto.selectedCourseIds) {
+                                    const teacherId = (_a = dto.selectedTeacherIds) === null || _a === void 0 ? void 0 : _a[subjectId];
+                                    yield tx.enrollment.create({
+                                        data: {
+                                            studentId: student.id,
+                                            subjectId,
+                                            teacherId: teacherId || null,
+                                            enrollmentStatus: 'ACTIVE',
+                                        },
+                                    });
+                                }
+                            }
                             break;
                         case client_1.Role.ADMIN:
                             yield tx.admin.create({
@@ -386,7 +515,32 @@ class UsersService {
             catch (notificationError) {
                 console.error('Failed to send registration notifications to admins:', notificationError);
             }
-            return { user, temporaryPassword: providedPassword };
+            // Post-creation email sending for STUDENT, TEACHER, MANAGER
+            if (role === client_1.Role.STUDENT || role === client_1.Role.TEACHER || role === client_1.Role.MANAGER) {
+                const roleLabel = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase().replace('_', ' ');
+                const emailContent = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <h2 style="color: #059669;">Welcome to PyramidEdu!</h2>
+          <p>Dear ${userData.fullName},</p>
+          <p>Your ${roleLabel} account has been manually created by an administrator.</p>
+          <p>Here are your temporary login credentials:</p>
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 10px 0;"><strong>Email/Username:</strong> ${userData.email}</p>
+            <p style="margin: 0;"><strong>Temporary Password:</strong> <code style="font-size: 1.1em; color: #dc2626; background: #fee2e2; padding: 2px 6px; border-radius: 4px;">${providedPassword}</code></p>
+          </div>
+          <p style="color: #475569; font-size: 0.9em; margin-bottom: 20px;">
+            <strong>Important:</strong> You are required to change your password immediately upon your first login.
+          </p>
+        </div>
+      `;
+                try {
+                    yield (0, email_util_1.sendEmail)(userData.email, 'PyramidEdu - Account Created & Temporary Password', emailContent);
+                }
+                catch (err) {
+                    console.error(`Failed to send email to ${roleLabel}:`, err);
+                }
+            }
+            return { user, student: studentResult, temporaryPassword: providedPassword };
         });
     }
     /**
@@ -474,6 +628,7 @@ class UsersService {
      */
     static updateUser(userId, dto) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             const user = yield prisma_config_1.default.user.findUnique({
                 where: { id: userId },
                 include: {
@@ -569,7 +724,41 @@ class UsersService {
                         if (dto.nicNumber !== undefined)
                             studentUpdateData.nic = dto.nicNumber;
                         if (dto.roleType !== undefined)
-                            studentUpdateData.batch = dto.roleType; // map roleType to batch if it represents the class batch
+                            studentUpdateData.batch = dto.roleType;
+                        if (dto.school !== undefined)
+                            studentUpdateData.school = dto.school;
+                        if (dto.dateOfBirth !== undefined) {
+                            studentUpdateData.dateOfBirth = dto.dateOfBirth ? new Date(dto.dateOfBirth) : null;
+                        }
+                        // Parent info update
+                        if (dto.parentName !== undefined || dto.parentPhone !== undefined || dto.parentOccupation !== undefined || dto.parentEmail !== undefined) {
+                            const parentUpdateData = {};
+                            if (dto.parentName !== undefined)
+                                parentUpdateData.parentName = dto.parentName;
+                            if (dto.parentPhone !== undefined)
+                                parentUpdateData.phone = dto.parentPhone;
+                            if (dto.parentOccupation !== undefined)
+                                parentUpdateData.occupation = dto.parentOccupation;
+                            if (dto.parentEmail !== undefined)
+                                parentUpdateData.email = dto.parentEmail;
+                            if ((_a = user.student) === null || _a === void 0 ? void 0 : _a.parentId) {
+                                yield prisma_config_1.default.parent.update({
+                                    where: { id: user.student.parentId },
+                                    data: parentUpdateData,
+                                });
+                            }
+                            else {
+                                const newParent = yield prisma_config_1.default.parent.create({
+                                    data: {
+                                        parentName: dto.parentName || 'Parent',
+                                        phone: dto.parentPhone || '',
+                                        occupation: dto.parentOccupation || '',
+                                        email: dto.parentEmail || '',
+                                    }
+                                });
+                                studentUpdateData.parentId = newParent.id;
+                            }
+                        }
                         if (Object.keys(studentUpdateData).length > 0) {
                             yield prisma_config_1.default.student.update({
                                 where: { userId },
@@ -586,7 +775,12 @@ class UsersService {
             const updatedUserWithData = yield prisma_config_1.default.user.findUnique({
                 where: { id: userId },
                 include: {
-                    student: true,
+                    student: {
+                        include: {
+                            parent: true,
+                            stream: true,
+                        },
+                    },
                     teacher: true,
                     manager: true,
                     admin: true,
@@ -633,14 +827,13 @@ class UsersService {
             if (!user.isActive) {
                 throw new AppError_1.AppError('User is already deactivated.', 400);
             }
-            const deactivatedUser = yield prisma_config_1.default.user.update({
+            yield prisma_config_1.default.user.update({
                 where: { id: userId },
                 data: { isActive: false },
-                select: {
-                    id: true,
-                    email: true,
-                    isActive: true,
-                },
+            });
+            const deactivatedUserWithData = yield prisma_config_1.default.user.findUnique({
+                where: { id: userId },
+                select: userListSelect,
             });
             yield prisma_config_1.default.auditLog.create({
                 data: {
@@ -650,7 +843,23 @@ class UsersService {
                     description: `User ${user.email} deactivated`,
                 },
             });
-            return deactivatedUser;
+            try {
+                yield (0, email_util_1.sendEmail)(user.email, 'Account Deactivated - PyramidEdu', `
+        <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
+          <h2 style="color: #d32f2f; margin-top: 0;">Account Deactivated</h2>
+          <p>Dear User,</p>
+          <p>We wanted to inform you that your PyramidEdu account associated with this email address has been <strong>deactivated</strong> by the administration.</p>
+          <p>Consequently, you will not be able to log into the platform at this time. If you believe this is a mistake or have any questions regarding this action, please contact our support team.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #777;">This is an automated notification. Please do not reply directly to this email.</p>
+          <p>Best regards,<br>PyramidEdu Administration</p>
+        </div>
+        `);
+            }
+            catch (err) {
+                console.error('Failed to send deactivation email:', err);
+            }
+            return formatUserListItem(deactivatedUserWithData);
         });
     }
     /**
@@ -665,14 +874,13 @@ class UsersService {
             if (user.isActive) {
                 throw new AppError_1.AppError('User is already active.', 400);
             }
-            const activatedUser = yield prisma_config_1.default.user.update({
+            yield prisma_config_1.default.user.update({
                 where: { id: userId },
                 data: { isActive: true },
-                select: {
-                    id: true,
-                    email: true,
-                    isActive: true,
-                },
+            });
+            const activatedUserWithData = yield prisma_config_1.default.user.findUnique({
+                where: { id: userId },
+                select: userListSelect,
             });
             yield prisma_config_1.default.auditLog.create({
                 data: {
@@ -682,7 +890,23 @@ class UsersService {
                     description: `User ${user.email} activated`,
                 },
             });
-            return activatedUser;
+            try {
+                yield (0, email_util_1.sendEmail)(user.email, 'Account Activated - PyramidEdu', `
+        <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
+          <h2 style="color: #2e7d32; margin-top: 0;">Account Activated</h2>
+          <p>Dear User,</p>
+          <p>We are pleased to inform you that your PyramidEdu account associated with this email address has been successfully <strong>activated</strong>.</p>
+          <p>You can now log in to the platform and access your dashboard as usual.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #777;">This is an automated notification. Please do not reply directly to this email.</p>
+          <p>Best regards,<br>PyramidEdu Administration</p>
+        </div>
+        `);
+            }
+            catch (err) {
+                console.error('Failed to send activation email:', err);
+            }
+            return formatUserListItem(activatedUserWithData);
         });
     }
     /**

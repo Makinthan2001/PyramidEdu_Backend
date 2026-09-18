@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.changePasswordSchema = exports.resetPasswordSchema = exports.forgotPasswordSchema = exports.loginSchema = void 0;
+exports.verifyOtpSchema = exports.changePasswordSchema = exports.resetPasswordSchema = exports.forgotPasswordSchema = exports.loginSchema = void 0;
 var login_dto_1 = require("./login.dto");
 Object.defineProperty(exports, "loginSchema", { enumerable: true, get: function () { return login_dto_1.loginSchema; } });
 var forgot_password_dto_1 = require("./forgot-password.dto");
@@ -9,3 +9,5 @@ var reset_password_dto_1 = require("./reset-password.dto");
 Object.defineProperty(exports, "resetPasswordSchema", { enumerable: true, get: function () { return reset_password_dto_1.resetPasswordSchema; } });
 var change_password_dto_1 = require("./change-password.dto");
 Object.defineProperty(exports, "changePasswordSchema", { enumerable: true, get: function () { return change_password_dto_1.changePasswordSchema; } });
+var verify_otp_dto_1 = require("./verify-otp.dto");
+Object.defineProperty(exports, "verifyOtpSchema", { enumerable: true, get: function () { return verify_otp_dto_1.verifyOtpSchema; } });

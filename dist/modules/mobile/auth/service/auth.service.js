@@ -24,10 +24,20 @@ const auth_repository_1 = __importDefault(require("../repository/auth.repository
 const MOBILE_ACCESS_EXPIRES = process.env.JWT_MOBILE_ACCESS_EXPIRES_IN || process.env.JWT_ACCESS_EXPIRES_IN || '10m';
 const MOBILE_REFRESH_EXPIRES = process.env.JWT_MOBILE_REFRESH_EXPIRES_IN || '30d';
 function toStudentSession(user) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v;
     if (!user.student) {
         throw new AppError_1.AppError('Student profile not found.', 404);
     }
+    const enrollments = user.student.enrollments || [];
+    const subjects = enrollments
+        .map((e) => { var _a; return (_a = e.subject) === null || _a === void 0 ? void 0 : _a.subjectName; })
+        .filter(Boolean)
+        .join(', ');
+    const teachers = enrollments
+        .map((e) => { var _a, _b; return (_b = (_a = e.teacher) === null || _a === void 0 ? void 0 : _a.user) === null || _b === void 0 ? void 0 : _b.fullName; })
+        .filter(Boolean)
+        .filter((val, index, self) => self.indexOf(val) === index)
+        .join(', ');
     return {
         id: user.id,
         email: user.email,
@@ -54,6 +64,13 @@ function toStudentSession(user) {
             approvalStatus: user.student.approvalStatus,
             paymentStatus: user.student.paymentStatus,
             totalFeeAmount: Number(user.student.totalFeeAmount),
+            parentName: (_m = (_l = user.student.parent) === null || _l === void 0 ? void 0 : _l.parentName) !== null && _m !== void 0 ? _m : null,
+            parentPhone: (_p = (_o = user.student.parent) === null || _o === void 0 ? void 0 : _o.phone) !== null && _p !== void 0 ? _p : null,
+            parentOccupation: (_r = (_q = user.student.parent) === null || _q === void 0 ? void 0 : _q.occupation) !== null && _r !== void 0 ? _r : null,
+            parentEmail: (_t = (_s = user.student.parent) === null || _s === void 0 ? void 0 : _s.email) !== null && _t !== void 0 ? _t : null,
+            streamName: (_v = (_u = user.student.stream) === null || _u === void 0 ? void 0 : _u.streamName) !== null && _v !== void 0 ? _v : null,
+            subjects: subjects || 'Not Enrolled',
+            teachers: teachers || 'None Assigned',
         },
     };
 }

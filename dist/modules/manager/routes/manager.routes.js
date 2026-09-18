@@ -12,7 +12,11 @@ router.get('/registered-students/:id', manager_controller_1.ManagerController.ge
 router.patch('/registered-students/:id/payment-status', manager_controller_1.ManagerController.updatePaymentStatus);
 router.patch('/registered-students/:id/approval-status', manager_controller_1.ManagerController.updateApprovalStatus);
 router.get('/students', manager_controller_1.ManagerController.getApprovedStudents);
+router.get('/fees', manager_controller_1.ManagerController.getFeeManagementData);
+router.get('/fees/:id/history', manager_controller_1.ManagerController.getStudentPaymentHistory);
 router.patch('/students/:id/toggle-status', manager_controller_1.ManagerController.toggleStudentStatus);
+router.patch('/students/:id/monthly-fee-status', manager_controller_1.ManagerController.updateMonthlyFeeStatus);
 router.put('/students/:id', manager_controller_1.ManagerController.updateStudent);
 router.post('/students/:id/re-enroll', manager_controller_1.ManagerController.reEnrollStudent);
+router.get('/dashboard', manager_controller_1.ManagerController.getDashboardData);
 exports.default = router;

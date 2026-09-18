@@ -138,4 +138,32 @@ export class PaymentController {
       next(error);
     }
   }
+
+  static async getFeeRestrictionStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const studentId = req.params.studentId as string;
+      const { FeePolicyService } = await import('../service/fee-policy.service');
+      const data = await FeePolicyService.getStudentUnpaidFeeDetails(studentId);
+      res.status(200).json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async triggerFeeEnforcement(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { FeePolicyService } = await import('../service/fee-policy.service');
+      const results = await FeePolicyService.enforceAllStudentsFeePolicy();
+      res.status(200).json({
+        success: true,
+        message: `Fee policy enforced across active students. Restricted student count: ${results.length}`,
+        data: results,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

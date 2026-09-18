@@ -115,7 +115,7 @@ export async function routeQuery(
     const prompt = `${ROUTER_SYSTEM_PROMPT}\n\nUser Query: "${question}"`;
     const result = await withRetry(() => model.generateContent(prompt));
     const responseText = result.response.text();
-    
+
     let routeData: RouterResponse;
     try {
       routeData = JSON.parse(responseText);
@@ -145,7 +145,7 @@ async function executeTool(
 
   switch (tool) {
     case 'getAttendance': {
-      let studentIdsInput = parameters.studentId 
+      let studentIdsInput = parameters.studentId
         ? (Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId]).filter(Boolean)
         : [];
 
@@ -195,7 +195,7 @@ async function executeTool(
     }
 
     case 'getMarks': {
-      let studentIdsInput = parameters.studentId 
+      let studentIdsInput = parameters.studentId
         ? (Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId]).filter(Boolean)
         : [];
 
@@ -246,7 +246,7 @@ async function executeTool(
     }
 
     case 'getFeeStatus': {
-      let studentIdsInput = parameters.studentId 
+      let studentIdsInput = parameters.studentId
         ? (Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId]).filter(Boolean)
         : [];
 
@@ -300,7 +300,7 @@ async function executeTool(
       const subjectParam = parameters.subject || '';
       const topicParam = parameters.topic || '';
       const searchStr = `${subjectParam} ${topicParam}`.trim();
-      
+
       if (!searchStr) {
         return "Please specify a subject or topic to search for study materials.";
       }

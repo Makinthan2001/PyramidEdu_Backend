@@ -16,6 +16,7 @@ function authenticateMobileStudent(req, _res, next) {
             throw new AppError_1.AppError('Access restricted to student accounts.', 403);
         }
         req.user = payload;
+        req.userId = payload.sub;
         next();
     }
     catch (error) {

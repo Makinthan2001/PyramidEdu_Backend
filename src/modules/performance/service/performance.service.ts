@@ -174,12 +174,13 @@ export class PerformanceService {
         batchId: true,
         rewardPoints: true,
         dailyStreak: true,
+        freeCardType: true,
         batchRecord: { select: { batchName: true } },
         user: { select: { fullName: true } }
       }
     });
 
-    const studentsWithScores = await Promise.all(students.map(async (student) => {
+    const studentsWithScores = await Promise.all(students.map(async (student: any) => {
       const latestPrediction = await prisma.performancePrediction.findFirst({
         where: { studentId: student.id },
         orderBy: { createdAt: 'desc' },
@@ -189,7 +190,7 @@ export class PerformanceService {
       return {
         id: student.id,
         indexNumber: student.indexNumber,
-        fullName: student.user.fullName,
+        fullName: student.user?.fullName || 'Student',
         performanceStatus: student.performanceStatus,
         batchId: student.batchId,
         batchName: student.batchRecord?.batchName || 'No Batch',
@@ -197,6 +198,7 @@ export class PerformanceService {
         trendStatus: latestPrediction?.trendStatus || null,
         rewardPoints: student.rewardPoints,
         dailyStreak: student.dailyStreak,
+        freeCardType: student.freeCardType || 'NONE',
       };
     }));
 

@@ -127,6 +127,7 @@ model Student {
   updatedAt              DateTime                  @updatedAt @map("updated_at")
   approvalStatus         ApprovalStatus            @default(PENDING) @map("approval_status")
   paymentStatus          RegistrationPaymentStatus @default(PENDING) @map("payment_status")
+  freeCardType           FreeCardType              @default(NONE) @map("free_card_type")
   totalFeeAmount         Decimal                   @default(0) @map("total_fee_amount") @db.Decimal(12, 2)
   school                 String?
   feeEffectiveDate       DateTime?                 @map("fee_effective_date")
@@ -932,6 +933,12 @@ enum TrendStatus {
   IMPROVING
   STABLE
   DECLINING
+}
+
+enum FreeCardType {
+  NONE
+  HALF_CARD
+  FREE_CARD
 }
 
 enum NotificationType {

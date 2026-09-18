@@ -60,10 +60,40 @@ class ManagerService {
     /**
      * Get all approved students for Student Management
      */
-    static getApprovedStudents() {
+    static getApprovedStudents(filters) {
         return __awaiter(this, void 0, void 0, function* () {
+            const where = { approvalStatus: 'APPROVED' };
+            if (filters) {
+                const userConditions = {};
+                if (filters.search) {
+                    userConditions.OR = [
+                        { fullName: { contains: filters.search, mode: 'insensitive' } },
+                        { email: { contains: filters.search, mode: 'insensitive' } },
+                    ];
+                }
+                if (filters.status) {
+                    userConditions.isActive = filters.status === 'ACTIVE';
+                }
+                if (Object.keys(userConditions).length > 0) {
+                    where.user = userConditions;
+                }
+                if (filters.indexNumber) {
+                    where.indexNumber = { contains: filters.indexNumber, mode: 'insensitive' };
+                }
+                if (filters.batchId) {
+                    where.batchId = filters.batchId;
+                }
+                if (filters.subjectId) {
+                    where.enrollments = {
+                        some: {
+                            subjectId: filters.subjectId,
+                            enrollmentStatus: 'ACTIVE',
+                        },
+                    };
+                }
+            }
             const students = yield prisma_config_1.default.student.findMany({
-                where: { approvalStatus: 'APPROVED' },
+                where,
                 orderBy: { createdAt: 'desc' },
                 include: {
                     user: {
@@ -84,9 +114,19 @@ class ManagerService {
                     },
                 },
             });
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
             return students.map((student) => {
                 var _a;
-                return ({
+                let monthlyFeeStatus = 'UNPAID';
+                if (student.fees.length > 0) {
+                    const latestFee = student.fees[0];
+                    const feeDate = new Date(latestFee.monthYear);
+                    if (feeDate.getMonth() === currentMonth && feeDate.getFullYear() === currentYear) {
+                        monthlyFeeStatus = latestFee.status;
+                    }
+                }
+                return {
                     id: student.id,
                     studentName: student.user.fullName,
                     indexNumber: student.indexNumber,
@@ -94,8 +134,8 @@ class ManagerService {
                     stream: ((_a = student.stream) === null || _a === void 0 ? void 0 : _a.streamName) || 'N/A',
                     qrCode: student.qrCode,
                     isActive: student.user.isActive,
-                    monthlyFeeStatus: student.fees.length > 0 ? student.fees[0].status : 'UNPAID',
-                });
+                    monthlyFeeStatus,
+                };
             });
         });
     }
@@ -148,6 +188,37 @@ class ManagerService {
             }
             console.log(`[getRegisteredStudentById] Returning ${student.enrollments.length} ACTIVE enrollments for student ${id}`);
             return student;
+        });
+    }
+    /**
+     * Update monthly fee status of a student
+     */
+    static updateMonthlyFeeStatus(id, status) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const student = yield prisma_config_1.default.student.findUnique({ where: { id } });
+            if (!student)
+                throw new AppError_1.AppError('Student not found.', 404);
+            const now = new Date();
+            const monthYear = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+            yield prisma_config_1.default.fee.upsert({
+                where: {
+                    studentId_monthYear: {
+                        studentId: id,
+                        monthYear: monthYear,
+                    },
+                },
+                update: {
+                    status: status,
+                    paid: status === 'PAID' ? student.totalFeeAmount : 0,
+                },
+                create: {
+                    studentId: id,
+                    monthYear: monthYear,
+                    status: status,
+                    total: student.totalFeeAmount,
+                    paid: status === 'PAID' ? student.totalFeeAmount : 0,
+                },
+            });
         });
     }
     /**
@@ -276,6 +347,122 @@ class ManagerService {
             return updatedStudent;
         });
     }
+    static getFeeManagementData(filters) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { search, indexNumber, status, method } = filters;
+            // We'll base the 'current month' logic similarly to StudentManagement
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+            const students = yield prisma_config_1.default.student.findMany({
+                where: Object.assign(Object.assign({ approvalStatus: 'APPROVED', deletedAt: null }, (search && {
+                    OR: [
+                        { user: { fullName: { contains: search, mode: 'insensitive' } } },
+                        { indexNumber: { contains: search, mode: 'insensitive' } },
+                    ],
+                })), (indexNumber && { indexNumber: { contains: indexNumber, mode: 'insensitive' } })),
+                include: {
+                    user: true,
+                    fees: {
+                        orderBy: { monthYear: 'desc' },
+                        take: 1,
+                        include: {
+                            payments: {
+                                orderBy: { paymentDate: 'desc' },
+                                take: 1,
+                            },
+                        },
+                    },
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            let result = students.map((student) => {
+                let monthlyFeeStatus = 'UNPAID';
+                let paymentMethod = 'N/A';
+                if (student.fees.length > 0) {
+                    const latestFee = student.fees[0];
+                    const feeDate = new Date(latestFee.monthYear);
+                    if (feeDate.getMonth() === currentMonth && feeDate.getFullYear() === currentYear) {
+                        monthlyFeeStatus = latestFee.status;
+                        if (latestFee.payments && latestFee.payments.length > 0) {
+                            paymentMethod = latestFee.payments[0].paymentMethod;
+                        }
+                        else if (monthlyFeeStatus === 'PAID') {
+                            paymentMethod = 'CASH'; // Toggled by manager acts as cash counter
+                        }
+                    }
+                }
+                return {
+                    id: student.id,
+                    studentName: student.user.fullName,
+                    indexNumber: student.indexNumber,
+                    totalFees: Number(student.totalFeeAmount) || 0,
+                    monthlyFeeStatus,
+                    paymentMethod,
+                };
+            });
+            if (status && status !== 'ALL') {
+                result = result.filter((s) => s.monthlyFeeStatus === status);
+            }
+            if (method && method !== 'ALL') {
+                result = result.filter((s) => method === 'ONLINE' ? s.paymentMethod === 'CARD' :
+                    method === 'CASH' ? s.paymentMethod !== 'CARD' && s.paymentMethod !== 'N/A' :
+                        true);
+            }
+            return result;
+        });
+    }
+    static getStudentPaymentHistory(id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const student = yield prisma_config_1.default.student.findUnique({
+                where: { id },
+                include: {
+                    user: true,
+                    fees: {
+                        orderBy: { monthYear: 'desc' },
+                        include: {
+                            payments: {
+                                orderBy: { paymentDate: 'desc' },
+                            },
+                        },
+                    },
+                },
+            });
+            if (!student) {
+                throw new AppError_1.AppError('Student not found.', 404);
+            }
+            const history = [];
+            student.fees.forEach((fee) => {
+                fee.payments.forEach((payment) => {
+                    history.push({
+                        paymentDate: payment.paymentDate,
+                        monthYear: fee.monthYear,
+                        amount: Number(payment.amount),
+                        method: payment.paymentMethod,
+                        status: payment.paymentStatus,
+                        transactionId: payment.id,
+                        receiptNumber: payment.invoiceNumber,
+                    });
+                });
+                if (fee.status === 'PAID' && fee.payments.length === 0) {
+                    history.push({
+                        paymentDate: fee.updatedAt,
+                        monthYear: fee.monthYear,
+                        amount: Number(fee.paid),
+                        method: 'CASH',
+                        status: 'COMPLETED',
+                        transactionId: 'CASH-' + fee.id.substring(0, 8),
+                        receiptNumber: null,
+                    });
+                }
+            });
+            return {
+                studentName: student.user.fullName,
+                indexNumber: student.indexNumber,
+                history,
+            };
+        });
+    }
     /**
      * Toggle student's active status
      */
@@ -313,18 +500,33 @@ class ManagerService {
                     });
                 }
                 // 2. Update Parent
-                if (data.parentName || data.parentPhone || data.parentOccupation) {
+                if (data.parentName || data.parentPhone || data.parentOccupation || data.parentRelation || data.parentEmail) {
                     if (student.parentId) {
                         yield tx.parent.update({
                             where: { id: student.parentId },
-                            data: Object.assign(Object.assign(Object.assign({}, (data.parentName && { parentName: data.parentName })), (data.parentPhone && { phone: data.parentPhone })), (data.parentOccupation && { occupation: data.parentOccupation })),
+                            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (data.parentName && { parentName: data.parentName })), (data.parentPhone && { phone: data.parentPhone })), (data.parentOccupation && { occupation: data.parentOccupation })), (data.parentRelation && { relation: data.parentRelation })), (data.parentEmail && { email: data.parentEmail })),
+                        });
+                    }
+                    else {
+                        const newParent = yield tx.parent.create({
+                            data: {
+                                parentName: data.parentName || 'Parent',
+                                phone: data.parentPhone || null,
+                                occupation: data.parentOccupation || null,
+                                relation: data.parentRelation || null,
+                                email: data.parentEmail || null,
+                            },
+                        });
+                        yield tx.student.update({
+                            where: { id },
+                            data: { parentId: newParent.id },
                         });
                     }
                 }
                 // 3. Update Student (Common details)
                 yield tx.student.update({
                     where: { id },
-                    data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (data.school !== undefined && { school: data.school })), (data.address && { address: data.address })), (data.dateOfBirth && { dateOfBirth: new Date(data.dateOfBirth) })), (data.gender && { gender: data.gender })), (data.streamId && { streamId: data.streamId })),
+                    data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (data.school !== undefined && { school: data.school })), (data.address && { address: data.address })), (data.dateOfBirth && { dateOfBirth: new Date(data.dateOfBirth) })), (data.gender && { gender: data.gender })), (data.streamId && { streamId: data.streamId })), (data.nic !== undefined && { nic: data.nic })),
                 });
                 // 4. Update Enrollments (Subjects & Teachers)
                 if (data.subjects && Array.isArray(data.subjects)) {
@@ -476,6 +678,38 @@ class ManagerService {
                         lastFeeUpdateDate: effectiveDate,
                     },
                 });
+                // Update Fee record for the current month if it exists
+                const feeYear = effectiveDate.getFullYear();
+                const feeMonth = effectiveDate.getMonth();
+                const monthYearStart = new Date(Date.UTC(feeYear, feeMonth, 1));
+                const existingFee = yield tx.fee.findUnique({
+                    where: {
+                        studentId_monthYear: {
+                            studentId: id,
+                            monthYear: monthYearStart,
+                        },
+                    },
+                });
+                if (existingFee) {
+                    const paidAmount = Number(existingFee.paid);
+                    let newStatus = existingFee.status;
+                    if (paidAmount >= newMonthlyFee) {
+                        newStatus = 'PAID';
+                    }
+                    else if (paidAmount > 0) {
+                        newStatus = 'PARTIAL';
+                    }
+                    else {
+                        newStatus = 'UNPAID';
+                    }
+                    yield tx.fee.update({
+                        where: { id: existingFee.id },
+                        data: {
+                            total: newMonthlyFee,
+                            status: newStatus,
+                        },
+                    });
+                }
                 // 5. Create History Record
                 yield tx.enrollmentHistory.create({
                     data: {
