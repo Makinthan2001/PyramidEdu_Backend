@@ -69,6 +69,7 @@ export class MobileFeeService {
     return {
       totalFeeAmount: Number(student.totalFeeAmount) || 0,
       paymentStatus: currentFeeStatus,
+      freeCardType: student.freeCardType || 'NONE',
       history,
     };
   }
@@ -86,6 +87,10 @@ export class MobileFeeService {
 
     if (!student) {
       throw new AppError('Student not found', 404);
+    }
+
+    if (student.freeCardType === 'FREE_CARD') {
+      throw new AppError('Fee is waived under 100% Free Card policy. No payment required.', 400);
     }
 
     const now = new Date();
@@ -197,6 +202,10 @@ export class MobileFeeService {
 
     if (!student) {
       throw new AppError('Student not found', 404);
+    }
+
+    if (student.freeCardType === 'FREE_CARD') {
+      throw new AppError('Fee is waived under 100% Free Card policy. No payment required.', 400);
     }
 
     const now = new Date();

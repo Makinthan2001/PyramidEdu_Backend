@@ -672,6 +672,7 @@ export class PaymentService {
         indexNumber: s.indexNumber || '—',
         email: s.user.email,
         batchName: s.batchRecord?.batchName || s.batch || 'Unassigned',
+        freeCardType: s.freeCardType || 'NONE',
         totalFee,
         totalPaid,
         remainingBalance,
@@ -782,6 +783,7 @@ export class PaymentService {
         phone: student.phone || student.user.phone || '—',
         batch: student.batchRecord?.batchName || student.batch || 'Unassigned',
         stream: student.stream?.streamName || '—',
+        freeCardType: student.freeCardType || 'NONE',
         profileImage: student.user.profileImage,
       },
       feeInfo: {
