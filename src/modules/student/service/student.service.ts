@@ -5,6 +5,7 @@ import { hashPassword } from '../../../utils/password.util';
 import { Role, UserStatus, type Prisma } from '@prisma/client';
 import type { InitiateRegistrationDto, VerifyOtpDto } from '../dto';
 import { sendEmail } from '../../../utils/email.util';
+import { calculateDiscountedFee } from '../../../utils/fee-calculator.util';
 
 export class StudentService {
   static async initiateRegistration(dto: InitiateRegistrationDto) {
@@ -209,6 +210,7 @@ export class StudentService {
         select: { feeAmount: true }
       });
       const totalFeeAmount = subjects.reduce((sum, s) => sum + Number(s.feeAmount), 0);
+      const discountedFeeAmount = calculateDiscountedFee(totalFeeAmount, (regData as any).freeCardType);
 
       // Create Student with approvalStatus = PENDING
       const student = await tx.student.create({
@@ -228,7 +230,8 @@ export class StudentService {
           batchId: regData.batchId || null,
           approvalStatus: 'PENDING',
           paymentStatus: 'PENDING',
-          totalFeeAmount: totalFeeAmount,
+          freeCardType: ((regData as any).freeCardType as any) || 'NONE',
+          totalFeeAmount: discountedFeeAmount,
           feeEffectiveDate: new Date(),
           lastFeeUpdateDate: new Date(),
         },

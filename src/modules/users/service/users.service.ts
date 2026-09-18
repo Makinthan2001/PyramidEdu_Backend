@@ -8,6 +8,7 @@ import type { UpdateUserDto } from '../dto';
 import fs from 'fs/promises';
 import path from 'path';
 import { deleteCloudinaryImage } from '../../../utils/cloudinary.util';
+import { calculateDiscountedFee } from '../../../utils/fee-calculator.util';
 
 export interface UsersQueryParams {
   page?: number;
@@ -445,6 +446,7 @@ export class UsersService {
               select: { feeAmount: true }
             });
             const totalFeeAmount = subjects.reduce((sum, s) => sum + Number(s.feeAmount), 0);
+            const discountedFeeAmount = calculateDiscountedFee(totalFeeAmount, (dto as any).freeCardType);
 
             // 5. Create student (manually created student accounts are APPROVED)
             const student = await tx.student.create({
@@ -464,7 +466,8 @@ export class UsersService {
                 batchId: dto.batchId || null,
                 approvalStatus: 'APPROVED',
                 paymentStatus: dto.paymentStatus || 'PENDING',
-                totalFeeAmount: totalFeeAmount,
+                freeCardType: ((dto as any).freeCardType as any) || 'NONE',
+                totalFeeAmount: discountedFeeAmount,
                 feeEffectiveDate: new Date(),
                 lastFeeUpdateDate: new Date(),
               },
