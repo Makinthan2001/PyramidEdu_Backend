@@ -438,7 +438,7 @@ export class ManagerService {
   }
 
   static async getStudentPaymentHistory(id: string) {
-    const student = await prisma.student.findUnique({
+    let student = await prisma.student.findUnique({
       where: { id },
       include: {
         user: true,
@@ -452,6 +452,24 @@ export class ManagerService {
         },
       },
     });
+
+    // If not found by student.id, try looking up by student.userId
+    if (!student) {
+      student = await prisma.student.findUnique({
+        where: { userId: id },
+        include: {
+          user: true,
+          fees: {
+            orderBy: { monthYear: 'desc' },
+            include: {
+              payments: {
+                orderBy: { paymentDate: 'desc' },
+              },
+            },
+          },
+        },
+      });
+    }
 
     if (!student) {
       throw new AppError('Student not found.', 404);
