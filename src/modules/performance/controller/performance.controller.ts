@@ -29,7 +29,8 @@ export const calculateForStudent = async (req: Request, res: Response): Promise<
 export const calculateForAll = async (req: Request, res: Response): Promise<void> => {
   try {
     const { studentIds } = req.body;
-    const result = await performanceService.calculatePerformanceForAll(studentIds);
+    const user = (req as any).user;
+    const result = await performanceService.calculatePerformanceForAll(studentIds, user);
     res.json({
       success: true,
       data: result,

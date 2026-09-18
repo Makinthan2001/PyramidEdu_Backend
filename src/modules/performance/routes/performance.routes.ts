@@ -10,7 +10,7 @@ const router = Router();
 router.post(
   '/student/:id/calculate',
   authenticate,
-  authorize(Role.MANAGER, Role.TEACHER),
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
   calculateForStudent
 );
 
@@ -18,7 +18,7 @@ router.post(
 router.post(
   '/calculate-all',
   authenticate,
-  authorize(Role.MANAGER),
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
   calculateForAll
 );
 
@@ -26,7 +26,7 @@ router.post(
 router.get(
   '/student/:id/history',
   authenticate,
-  authorize(Role.MANAGER, Role.TEACHER, Role.STUDENT),
+  authorize(Role.MANAGER, Role.TEACHER, Role.STUDENT, Role.ADMIN),
   getStudentHistory
 );
 

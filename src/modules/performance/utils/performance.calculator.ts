@@ -201,7 +201,7 @@ export function calculatePerformanceResult(data: {
   // --- Recommendations ---
   const rawRecommendations: string[] = [];
 
-  if (!isProvisional && attendanceScore < RECOMMENDATION_THRESHOLDS.LOW_ATTENDANCE) {
+  if (attendanceScore < RECOMMENDATION_THRESHOLDS.LOW_ATTENDANCE) {
     rawRecommendations.push('Improve Class Attendance');
   }
   if (mcqMetrics.average !== null && mcqMetrics.average < RECOMMENDATION_THRESHOLDS.WEAK_SUBJECT_SCORE) {
