@@ -16,10 +16,8 @@ export interface EmployeeSalaryFilters {
   sortOrder?: 'asc' | 'desc';
 }
 
-// Memory store for processed payment status overrides & custom rules
+// Memory store for processed payment status overrides
 const processedRecordMap = new Map<string, { status: string; paidAmount: number; paymentDate: Date; referenceNumber: string }>();
-let customAllowances: any[] = [];
-let customDeductions: any[] = [];
 
 export class SalaryService {
   /**
@@ -86,16 +84,6 @@ export class SalaryService {
     const totalMonthlySalaryExpense = totalTeacherSalaries + totalManagerSalaries + totalSupportStaffSalaries;
     const numberActiveEmployees = teachers.length + managers.length + supportStaff.length;
 
-    let totalAllowances = 0;
-    customAllowances.forEach((a) => {
-      if (a.isActive) totalAllowances += Number(a.amount || 0);
-    });
-
-    let totalDeductions = 0;
-    customDeductions.forEach((d) => {
-      if (d.isActive) totalDeductions += Number(d.amount || 0);
-    });
-
     return {
       totalMonthlySalaryExpense: Number(totalMonthlySalaryExpense.toFixed(2)),
       totalSalariesPaid: Number(totalSalariesPaid.toFixed(2)),
@@ -104,8 +92,6 @@ export class SalaryService {
       totalTeacherSalaries: Number(totalTeacherSalaries.toFixed(2)),
       totalManagerSalaries: Number(totalManagerSalaries.toFixed(2)),
       totalSupportStaffSalaries: Number(totalSupportStaffSalaries.toFixed(2)),
-      totalAllowances: Number(totalAllowances.toFixed(2)),
-      totalDeductions: Number(totalDeductions.toFixed(2)),
       currentMonthPayroll: Number(totalMonthlySalaryExpense.toFixed(2)),
       previousMonthPayroll: Number((totalMonthlySalaryExpense * 0.95).toFixed(2)),
       todaySalaryPayments: Number(totalSalariesPaid.toFixed(2)),
@@ -129,8 +115,6 @@ export class SalaryService {
     ]);
 
     const monthlySalaryExpenseTrend = [];
-    const monthlyAllowanceTrend = [];
-    const monthlyDeductionTrend = [];
     const netSalaryTrend = [];
 
     for (let i = 5; i >= 0; i--) {
@@ -155,8 +139,6 @@ export class SalaryService {
       const monthExp = monthTeacherSal + monthMgrSal + monthSupportSal;
 
       monthlySalaryExpenseTrend.push({ month: label, expense: Number(monthExp.toFixed(2)) });
-      monthlyAllowanceTrend.push({ month: label, amount: overview.totalAllowances });
-      monthlyDeductionTrend.push({ month: label, amount: overview.totalDeductions });
       netSalaryTrend.push({ month: label, netSalary: Number(monthExp.toFixed(2)) });
     }
 
@@ -200,8 +182,6 @@ export class SalaryService {
       salaryExpenseByRole,
       paidVsPendingDistribution,
       salaryExpenseByDepartment,
-      monthlyAllowanceTrend,
-      monthlyDeductionTrend,
       netSalaryTrend,
       payrollCompletionProgress,
       salaryPaymentMethodDistribution,
@@ -238,10 +218,8 @@ export class SalaryService {
     // Map Teachers
     teachers.forEach((t) => {
       const basic = Number(t.salary || 0);
-      const allow = 0;
-      const deduct = 0;
-      const gross = basic + allow;
-      const net = Math.max(0, gross - deduct);
+      const gross = basic;
+      const net = basic;
       const subjects = t.subjectAllocations.map((a) => a.subject.subjectName).join(', ') || 'General';
 
       const processed = processedRecordMap.get(t.id);
@@ -261,8 +239,6 @@ export class SalaryService {
         position: 'Teacher',
         staffCode: `TCH-${t.id.slice(0, 6).toUpperCase()}`,
         basicSalary: basic,
-        allowances: allow,
-        deductions: deduct,
         grossSalary: Number(gross.toFixed(2)),
         netSalary: Number(net.toFixed(2)),
         paidAmount: paidAmt,
@@ -281,10 +257,8 @@ export class SalaryService {
     // Map Managers
     managers.forEach((m) => {
       const basic = Number(m.salary || 0);
-      const allow = 0;
-      const deduct = 0;
-      const gross = basic + allow;
-      const net = Math.max(0, gross - deduct);
+      const gross = basic;
+      const net = basic;
 
       const processed = processedRecordMap.get(m.id);
       const status = processed ? processed.status : 'PENDING';
@@ -303,8 +277,6 @@ export class SalaryService {
         position: 'Institute Manager',
         staffCode: `MGR-${m.id.slice(0, 6).toUpperCase()}`,
         basicSalary: basic,
-        allowances: allow,
-        deductions: deduct,
         grossSalary: Number(gross.toFixed(2)),
         netSalary: Number(net.toFixed(2)),
         paidAmount: paidAmt,
@@ -322,10 +294,8 @@ export class SalaryService {
     // Map Support Staff
     supportStaff.forEach((s) => {
       const basic = Number(s.salary || 0);
-      const allow = 0;
-      const deduct = 0;
-      const gross = basic + allow;
-      const net = Math.max(0, gross - deduct);
+      const gross = basic;
+      const net = basic;
 
       const processed = processedRecordMap.get(s.id);
       const status = processed ? processed.status : 'PENDING';
@@ -344,8 +314,6 @@ export class SalaryService {
         position: s.position || 'Support Member',
         staffCode: s.staffCode || `STF-${s.id.slice(0, 6).toUpperCase()}`,
         basicSalary: basic,
-        allowances: allow,
-        deductions: deduct,
         grossSalary: Number(gross.toFixed(2)),
         netSalary: Number(net.toFixed(2)),
         paidAmount: paidAmt,
@@ -468,8 +436,6 @@ export class SalaryService {
       payrollMonth: salaryMonth || new Date().toISOString(),
       totalEmployees: overview.numberActiveEmployees,
       totalGrossSalary: overview.totalMonthlySalaryExpense,
-      totalAllowances: overview.totalAllowances,
-      totalDeductions: overview.totalDeductions,
       totalNetSalary: overview.totalMonthlySalaryExpense,
       status: 'GENERATED',
       generatedAt: new Date(),
@@ -550,11 +516,6 @@ export class SalaryService {
     const status = processed ? processed.status : 'PENDING';
     const paidAmt = processed ? processed.paidAmount : 0;
 
-    const allow = 0;
-    const deduct = 0;
-    const gross = basic;
-    const net = basic;
-
     return {
       instituteName: 'PyramidEdu Institute',
       payslipId: `PS-${employeeId.slice(0, 8).toUpperCase()}`,
@@ -564,67 +525,15 @@ export class SalaryService {
       department: dept,
       salaryMonth: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
       basicSalary: basic,
-      totalAllowances: allow,
-      totalDeductions: deduct,
-      grossSalary: Number(gross.toFixed(2)),
-      netSalary: Number(net.toFixed(2)),
+      grossSalary: Number(basic.toFixed(2)),
+      netSalary: Number(basic.toFixed(2)),
       paidAmount: paidAmt,
-      remainingAmount: Math.max(0, net - paidAmt),
+      remainingAmount: Math.max(0, basic - paidAmt),
       paymentStatus: status,
       paymentMethod: 'BANK_TRANSFER',
       paymentDate: processed ? processed.paymentDate.toISOString() : new Date().toISOString(),
       referenceNumber: processed ? processed.referenceNumber : `PAY-${employeeId.slice(0, 8).toUpperCase()}`,
-      allowanceBreakdown: [],
-      deductionBreakdown: [],
       generatedDate: new Date().toISOString(),
     };
-  }
-
-  static async getAllowances() {
-    return customAllowances;
-  }
-
-  static async createAllowance(data: any) {
-    const item = {
-      id: Date.now().toString(),
-      title: data.title || 'Allowance',
-      type: data.type || 'FIXED',
-      amount: Number(data.amount || 0),
-      percentage: data.percentage ? Number(data.percentage) : null,
-      isRecurring: true,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-    customAllowances.push(item);
-    return item;
-  }
-
-  static async deleteAllowance(id: string) {
-    customAllowances = customAllowances.filter((a) => a.id !== id);
-    return { id, deleted: true };
-  }
-
-  static async getDeductions() {
-    return customDeductions;
-  }
-
-  static async createDeduction(data: any) {
-    const item = {
-      id: Date.now().toString(),
-      title: data.title || 'Deduction',
-      type: data.type || 'FIXED',
-      amount: Number(data.amount || 0),
-      percentage: data.percentage ? Number(data.percentage) : null,
-      isRecurring: true,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-    customDeductions.push(item);
-    return item;
-  }
-
-  static async deleteDeduction(id: string) {
-    customDeductions = customDeductions.filter((d) => d.id !== id);
-    return { id, deleted: true };
   }
 }
