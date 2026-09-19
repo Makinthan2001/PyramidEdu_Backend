@@ -1,9 +1,9 @@
 import prisma from '../../../config/prisma.config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { sendEmail } from '../../../utils/email.util';
 import { AppError } from '../../../utils/AppError';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
 
 interface GenerationResult {
   studentId: string;
@@ -225,10 +225,9 @@ export class ParentReportsService {
         const displayExamAvg = examAverage !== null ? `${examAverage.toFixed(0)}%` : 'N/A';
         const displayQuizAvg = quizAverage !== null ? `${quizAverage.toFixed(0)}%` : 'N/A';
 
-        // Call Gemini service for recommendation
+        // Call OpenAI service for recommendation
         let recommendation = '';
         try {
-          const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
           const prompt = `You are a professional educational counselor at PyramidEdu. Generate a personalized academic recommendation for the parents of ${student.user.fullName}.
 Monthly Academic Metrics:
 - Attendance: ${attendancePercentage.toFixed(1)}% (${totalSessions} recorded sessions)
@@ -239,10 +238,17 @@ Monthly Academic Metrics:
 
 Provide 2-3 encouraging, realistic, and actionable sentences (no markdown, plain text only) advising parents how they can support their child's education based on these metrics. Speak about the child respectfully.`;
 
-          const aiResponse = await model.generateContent(prompt);
-          recommendation = aiResponse.response.text().trim();
+          const aiResponse = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: 'You are a professional educational counselor. Provide concise, encouraging recommendations in plain text only.' },
+              { role: 'user', content: prompt },
+            ],
+            max_tokens: 256,
+          });
+          recommendation = aiResponse.choices[0]?.message?.content?.trim() || '';
         } catch (aiErr) {
-          console.error(`Gemini recommendation generation failed for student ${studentId}:`, aiErr);
+          console.error(`OpenAI recommendation generation failed for student ${studentId}:`, aiErr);
           recommendation = `${student.user.fullName} is showing a ${trend.toLowerCase()} trend. Please ensure regular attendance and timely completion of coursework to maintain academic growth.`;
         }
 
