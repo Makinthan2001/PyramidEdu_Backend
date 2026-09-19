@@ -15,8 +15,8 @@ SUPPORTED TOOLS (ONLY USE THESE)
 ========================
 
 1. getPerformance
-Purpose: Fetch student academic performance calculations, predicted scores, performance levels (e.g. Excellent, Good, Average, Needs Improvement, At Risk), trends, score breakdowns, and study recommendations.
-Input: studentId (optional: string OR array of strings)
+Purpose: Fetch student academic performance calculations, predicted scores, performance levels (e.g. Excellent, Good, Average, Needs Improvement, At Risk), trends, score breakdowns, study recommendations, or inquiries asking for a student's overall performance, standing, or details (e.g. "can you give about Makinthan", "tell me about Makinthan", "how is Makinthan doing", "Makinthan performance and details", "details about Sivatheevan").
+Input: studentId (optional: string OR array of strings — can be student ID, index number, or student name)
 
 2. getAtRiskStudents
 Purpose: Identify and list at-risk, struggling, or failing students who need academic intervention, have low attendance (<75%), or missed exams.
@@ -41,7 +41,7 @@ Input: type (optional: "online" | "manual" | "all")
 7. getStudyMaterials / getTeacherMaterials
 Purpose: Fetch study notes, PDFs, and learning materials.
 - For STUDENTS: Fetch study materials and documents uploaded by teachers for the student's enrolled subjects or batch.
-- For TEACHERS: Fetch materials the teacher has uploaded, including review statuses and download links.
+- For TEACHERS: Fetch materials the teacher has uploaded, including review statuses and download links. (ONLY use when specifically asking for uploaded documents, notes, or PDFs, NOT for student inquiries).
 Input: subject (optional: string)
 
 8. getAttendance
@@ -79,10 +79,10 @@ Input: studentName (optional: string), studentId (optional: string)
 ========================
 INTENT CLASSIFICATION RULES
 ========================
-- Performance calculations, prediction, final score, trend, study recommendations for students → getPerformance
+- Performance calculations, prediction, final score, trend, study recommendations, or inquiring about a specific student (e.g. "can you give about Makinthan", "tell me about Makinthan", "how is Makinthan doing", "Makinthan performance and details", "details about Sivatheevan") → MUST route to getPerformance (with studentId set to the student's name, index, or ID). NEVER route to getTeacherMaterials unless the user explicitly mentions study notes or uploaded files!
 - Generate AI recommendation, personalized study recommendation, study advice for student, create study plan for student → generateAiRecommendation
 - Student asks for study materials, notes, PDFs, can I access my study materials, materials teacher uploaded for me, study documents → getStudyMaterials
-- Teacher asks for materials they uploaded, my uploads, my uploaded documents, upload status → getTeacherMaterials
+- Teacher asks for materials they uploaded, my uploads, my uploaded documents, upload status (ONLY when specifically asking for study notes, PDFs, or uploaded documents) → getTeacherMaterials
 - At-risk students, struggling students, students needing help, failing students, attendance warnings → getAtRiskStudents
 - Class summary, list my students, student roster, who is in my class, how many students do I have, batch student list → getClassSummary
 - Class average, class performance analytics, score distribution, batch comparison, overall class stats → getClassAnalytics
@@ -300,11 +300,104 @@ async function getTeacherDataContext(userId?: string): Promise<TeacherDataContex
         orderBy: { attendanceDate: 'desc' },
         take: 5,
       },
+      results: {
+        include: { exam: true, quiz: true },
+        orderBy: { recordedAt: 'desc' },
+        take: 5,
+      },
+      fees: {
+        orderBy: { monthYear: 'desc' },
+        take: 3,
+      },
     },
   });
 
   const studentIds = students.map(s => s.id);
   return { teacher, studentIds, students, batchIds, subjectIds };
+}
+
+async function resolveStudentRecords(
+  inputIdsOrNames: (string | undefined)[],
+  teacherCtx?: { studentIds: string[]; students: any[] }
+): Promise<any[]> {
+  if (!inputIdsOrNames || inputIdsOrNames.length === 0) return [];
+
+  const foundStudents: any[] = [];
+  const foundIds = new Set<string>();
+
+  for (const raw of inputIdsOrNames) {
+    if (!raw) continue;
+    const term = String(raw).trim();
+    if (!term) continue;
+    const termLower = term.toLowerCase();
+
+    // 1. Match from teacher's enrolled students first (accurate & context-aware)
+    if (teacherCtx && teacherCtx.students && teacherCtx.students.length > 0) {
+      const matches = teacherCtx.students.filter((s: any) => {
+        const idMatch = s.id.toLowerCase() === termLower;
+        const idxMatch = (s.indexNumber || '').toLowerCase() === termLower;
+        const fullName = (s.user?.fullName || '').toLowerCase();
+        const nameMatch = fullName.includes(termLower) || termLower.includes(fullName);
+        const nameParts = fullName.split(/\s+/);
+        const partMatch = nameParts.some((part: string) => part.length >= 3 && (termLower.includes(part) || part.includes(termLower)));
+        return idMatch || idxMatch || nameMatch || partMatch;
+      });
+
+      if (matches.length > 0) {
+        matches.forEach((m: any) => {
+          if (!foundIds.has(m.id)) {
+            foundIds.add(m.id);
+            foundStudents.push(m);
+          }
+        });
+        continue;
+      }
+    }
+
+    // 2. Query Prisma database by UUID, indexNumber, or fullName
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(term);
+    const dbMatches = await prisma.student.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          ...(isUuid ? [{ id: term }] : []),
+          { indexNumber: { equals: term, mode: 'insensitive' } },
+          { user: { fullName: { contains: term, mode: 'insensitive' } } },
+        ],
+      },
+      include: {
+        user: true,
+        batchRecord: true,
+        performancePredictions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        attendances: {
+          orderBy: { attendanceDate: 'desc' },
+          take: 5,
+        },
+        results: {
+          include: { exam: true, quiz: true },
+          orderBy: { recordedAt: 'desc' },
+          take: 5,
+        },
+        fees: {
+          orderBy: { monthYear: 'desc' },
+          take: 3,
+        },
+      },
+      take: 5,
+    });
+
+    dbMatches.forEach((m: any) => {
+      if (!foundIds.has(m.id)) {
+        foundIds.add(m.id);
+        foundStudents.push(m);
+      }
+    });
+  }
+
+  return foundStudents;
 }
 
 async function executeTool(
@@ -317,56 +410,68 @@ async function executeTool(
 
   switch (tool) {
     case 'getPerformance': {
-      let studentIdsInput = parameters.studentId
-        ? (Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId]).filter(Boolean)
-        : [];
+      const teacherCtx = filters.userId ? await getTeacherDataContext(filters.userId) : undefined;
+      const rawStudentInputs: string[] = [];
 
-      // If no student IDs provided, detect user context
-      if (studentIdsInput.length === 0 && filters.userId) {
-        // 1. Check if user is a Teacher
-        const teacherCtx = await getTeacherDataContext(filters.userId);
-        if (teacherCtx.teacher) {
-          studentIdsInput = teacherCtx.studentIds;
-        } else {
-          // 2. Check if user is a Student
-          const student = await prisma.student.findUnique({ where: { userId: filters.userId } });
-          if (student) {
-            studentIdsInput = [student.id];
-          } else {
-            // 3. Check if user is a Manager/Admin
-            const user = await prisma.user.findUnique({ where: { id: filters.userId } });
-            if (user && (user.role === 'MANAGER' || user.role === 'ADMIN')) {
-              const allStudents = await prisma.student.findMany({
-                take: 10,
-                select: { id: true }
-              });
-              studentIdsInput = allStudents.map(s => s.id);
-            }
+      if (parameters.studentId) {
+        if (Array.isArray(parameters.studentId)) rawStudentInputs.push(...parameters.studentId);
+        else rawStudentInputs.push(parameters.studentId);
+      }
+      if (parameters.studentName) {
+        if (Array.isArray(parameters.studentName)) rawStudentInputs.push(...parameters.studentName);
+        else rawStudentInputs.push(parameters.studentName);
+      }
+
+      // Check if user mentioned a student name directly in the question
+      if (rawStudentInputs.length === 0 && teacherCtx && teacherCtx.students.length > 0) {
+        const qLower = userQuestion.toLowerCase();
+        for (const s of teacherCtx.students) {
+          const fn = (s.user?.fullName || '').toLowerCase();
+          const firstWord = fn.split(' ')[0];
+          const lastWord = fn.split(' ').slice(-1)[0];
+          if ((firstWord && firstWord.length >= 3 && qLower.includes(firstWord)) ||
+              (lastWord && lastWord.length >= 3 && qLower.includes(lastWord)) ||
+              (s.indexNumber && qLower.includes(s.indexNumber.toLowerCase()))) {
+            rawStudentInputs.push(s.id);
           }
         }
       }
 
-      if (studentIdsInput.length === 0) {
-        return "I need a student ID or index number to check performance calculations, or you must be logged in as a teacher or student.";
-      }
-
-      const students = await prisma.student.findMany({
-        where: {
-          OR: [
-            { indexNumber: { in: studentIdsInput } },
-            { id: { in: studentIdsInput } }
-          ]
-        },
-        include: {
-          user: true,
-          batchRecord: true,
-          performancePredictions: {
-            orderBy: { createdAt: 'desc' },
-            take: 1
+      let students: any[] = [];
+      if (rawStudentInputs.length > 0) {
+        students = await resolveStudentRecords(rawStudentInputs, teacherCtx);
+      } else if (filters.userId) {
+        if (teacherCtx && teacherCtx.teacher) {
+          students = teacherCtx.students;
+        } else {
+          const student = await prisma.student.findUnique({
+            where: { userId: filters.userId },
+            include: {
+              user: true,
+              batchRecord: true,
+              performancePredictions: {
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+              },
+            },
+          });
+          if (student) {
+            students = [student];
+          } else {
+            const user = await prisma.user.findUnique({ where: { id: filters.userId } });
+            if (user && (user.role === 'MANAGER' || user.role === 'ADMIN')) {
+              students = await prisma.student.findMany({
+                take: 10,
+                include: {
+                  user: true,
+                  batchRecord: true,
+                  performancePredictions: { orderBy: { createdAt: 'desc' }, take: 1 },
+                },
+              });
+            }
           }
-        },
-        take: 10
-      });
+        }
+      }
 
       if (students.length === 0) {
         return `No performance calculation records found for the requested student(s).`;
@@ -479,45 +584,52 @@ async function executeTool(
     }
 
     case 'getAttendance': {
-      let studentIdsInput = parameters.studentId
-        ? (Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId]).filter(Boolean)
-        : [];
+      const teacherCtx = filters.userId ? await getTeacherDataContext(filters.userId) : undefined;
+      const rawStudentInputs: string[] = [];
 
-      if (studentIdsInput.length === 0 && filters.userId) {
-        const student = await prisma.student.findUnique({ where: { userId: filters.userId } });
-        if (student) {
-          studentIdsInput = [student.id];
-        } else {
-          const teacherCtx = await getTeacherDataContext(filters.userId);
-          if (teacherCtx.teacher) {
-            studentIdsInput = teacherCtx.studentIds;
+      if (parameters.studentId) {
+        if (Array.isArray(parameters.studentId)) rawStudentInputs.push(...parameters.studentId);
+        else rawStudentInputs.push(parameters.studentId);
+      }
+      if (parameters.studentName) {
+        if (Array.isArray(parameters.studentName)) rawStudentInputs.push(...parameters.studentName);
+        else rawStudentInputs.push(parameters.studentName);
+      }
+
+      if (rawStudentInputs.length === 0 && teacherCtx && teacherCtx.students.length > 0) {
+        const qLower = userQuestion.toLowerCase();
+        for (const s of teacherCtx.students) {
+          const fn = (s.user?.fullName || '').toLowerCase();
+          const firstWord = fn.split(' ')[0];
+          const lastWord = fn.split(' ').slice(-1)[0];
+          if ((firstWord && firstWord.length >= 3 && qLower.includes(firstWord)) ||
+              (lastWord && lastWord.length >= 3 && qLower.includes(lastWord)) ||
+              (s.indexNumber && qLower.includes(s.indexNumber.toLowerCase()))) {
+            rawStudentInputs.push(s.id);
           }
         }
       }
 
-      if (studentIdsInput.length === 0) {
-        return "I need a student ID to check attendance, or you must be logged in as a student or teacher.";
+      let students: any[] = [];
+      if (rawStudentInputs.length > 0) {
+        students = await resolveStudentRecords(rawStudentInputs, teacherCtx);
+      } else if (filters.userId) {
+        if (teacherCtx && teacherCtx.teacher) {
+          students = teacherCtx.students;
+        } else {
+          const student = await prisma.student.findUnique({
+            where: { userId: filters.userId },
+            include: {
+              user: true,
+              attendances: { orderBy: { attendanceDate: 'desc' }, take: 5 },
+            },
+          });
+          if (student) students = [student];
+        }
       }
 
-      const students = await prisma.student.findMany({
-        where: {
-          OR: [
-            { indexNumber: { in: studentIdsInput } },
-            { id: { in: studentIdsInput } }
-          ]
-        },
-        include: {
-          user: true,
-          attendances: {
-            orderBy: { attendanceDate: 'desc' },
-            take: 5
-          }
-        },
-        take: 10
-      });
-
       if (students.length === 0) {
-        return `No attendance records found for student(s): ${studentIdsInput.join(', ')}.`;
+        return `No attendance records found for student(s): ${rawStudentInputs.join(', ') || 'selected'}.`;
       }
 
       let response = `📅 **Attendance Records** (${students.length} student${students.length > 1 ? 's' : ''})\n\n`;
@@ -531,11 +643,11 @@ async function executeTool(
         response += `👤 **${name}** · \`${index}\`\n`;
         response += `Overall Attendance: ${attBadge} **${overallAtt}%**\n\n`;
 
-        if (student.attendances.length === 0) {
+        if (!student.attendances || student.attendances.length === 0) {
           response += `• _No recent session records logged._\n\n`;
         } else {
           response += `**Recent Sessions:**\n`;
-          student.attendances.forEach(att => {
+          student.attendances.forEach((att: any) => {
             const dateStr = new Date(att.attendanceDate).toLocaleDateString(undefined, {
               day: 'numeric',
               month: 'short',
@@ -551,46 +663,56 @@ async function executeTool(
     }
 
     case 'getMarks': {
-      let studentIdsInput = parameters.studentId
-        ? (Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId]).filter(Boolean)
-        : [];
+      const teacherCtx = filters.userId ? await getTeacherDataContext(filters.userId) : undefined;
+      const rawStudentInputs: string[] = [];
 
-      if (studentIdsInput.length === 0 && filters.userId) {
-        const student = await prisma.student.findUnique({ where: { userId: filters.userId } });
-        if (student) {
-          studentIdsInput = [student.id];
-        } else {
-          const teacherCtx = await getTeacherDataContext(filters.userId);
-          if (teacherCtx.teacher) {
-            studentIdsInput = teacherCtx.studentIds;
+      if (parameters.studentId) {
+        if (Array.isArray(parameters.studentId)) rawStudentInputs.push(...parameters.studentId);
+        else rawStudentInputs.push(parameters.studentId);
+      }
+      if (parameters.studentName) {
+        if (Array.isArray(parameters.studentName)) rawStudentInputs.push(...parameters.studentName);
+        else rawStudentInputs.push(parameters.studentName);
+      }
+
+      if (rawStudentInputs.length === 0 && teacherCtx && teacherCtx.students.length > 0) {
+        const qLower = userQuestion.toLowerCase();
+        for (const s of teacherCtx.students) {
+          const fn = (s.user?.fullName || '').toLowerCase();
+          const firstWord = fn.split(' ')[0];
+          const lastWord = fn.split(' ').slice(-1)[0];
+          if ((firstWord && firstWord.length >= 3 && qLower.includes(firstWord)) ||
+              (lastWord && lastWord.length >= 3 && qLower.includes(lastWord)) ||
+              (s.indexNumber && qLower.includes(s.indexNumber.toLowerCase()))) {
+            rawStudentInputs.push(s.id);
           }
         }
       }
 
-      if (studentIdsInput.length === 0) {
-        return "I need a student ID to check marks, or you must be logged in as a student or teacher.";
+      let students: any[] = [];
+      if (rawStudentInputs.length > 0) {
+        students = await resolveStudentRecords(rawStudentInputs, teacherCtx);
+      } else if (filters.userId) {
+        if (teacherCtx && teacherCtx.teacher) {
+          students = teacherCtx.students;
+        } else {
+          const student = await prisma.student.findUnique({
+            where: { userId: filters.userId },
+            include: {
+              user: true,
+              results: {
+                include: { exam: true, quiz: true },
+                orderBy: { recordedAt: 'desc' },
+                take: 5
+              }
+            },
+          });
+          if (student) students = [student];
+        }
       }
 
-      const students = await prisma.student.findMany({
-        where: {
-          OR: [
-            { indexNumber: { in: studentIdsInput } },
-            { id: { in: studentIdsInput } }
-          ]
-        },
-        include: {
-          user: true,
-          results: {
-            include: { exam: true, quiz: true },
-            orderBy: { recordedAt: 'desc' },
-            take: 5
-          }
-        },
-        take: 10
-      });
-
       if (students.length === 0) {
-        return `No marks found for student(s): ${studentIdsInput.join(', ')}.`;
+        return `No marks found for student(s): ${rawStudentInputs.join(', ') || 'selected'}.`;
       }
 
       let response = `📝 **Exam & Assessment Results** (${students.length} student${students.length > 1 ? 's' : ''})\n\n`;
@@ -601,11 +723,11 @@ async function executeTool(
         if (idx > 0) response += `---\n\n`;
         response += `👤 **${name}** · \`${index}\`\n\n`;
 
-        if (student.results.length === 0) {
+        if (!student.results || student.results.length === 0) {
           response += `• _No recent marks recorded._\n\n`;
         } else {
           response += `**Recent Marks:**\n`;
-          student.results.forEach(res => {
+          student.results.forEach((res: any) => {
             const assessmentName = res.exam?.examTitle || res.quiz?.quizTitle || 'Assessment';
             const markNum = Number(res.marks);
             const badge = markNum >= 75 ? '🟢' : markNum >= 60 ? '🔵' : markNum >= 45 ? '🟡' : '🔴';
@@ -620,38 +742,56 @@ async function executeTool(
     }
 
     case 'getFeeStatus': {
-      let studentIdsInput = parameters.studentId
-        ? (Array.isArray(parameters.studentId) ? parameters.studentId : [parameters.studentId]).filter(Boolean)
-        : [];
+      const teacherCtx = filters.userId ? await getTeacherDataContext(filters.userId) : undefined;
+      const rawStudentInputs: string[] = [];
 
-      if (studentIdsInput.length === 0 && filters.userId) {
-        const student = await prisma.student.findUnique({ where: { userId: filters.userId } });
-        if (student) studentIdsInput = [student.id];
+      if (parameters.studentId) {
+        if (Array.isArray(parameters.studentId)) rawStudentInputs.push(...parameters.studentId);
+        else rawStudentInputs.push(parameters.studentId);
+      }
+      if (parameters.studentName) {
+        if (Array.isArray(parameters.studentName)) rawStudentInputs.push(...parameters.studentName);
+        else rawStudentInputs.push(parameters.studentName);
       }
 
-      if (studentIdsInput.length === 0) {
-        return "I need a student ID to check fee status, or you must be logged in as a student.";
-      }
-
-      const students = await prisma.student.findMany({
-        where: {
-          OR: [
-            { indexNumber: { in: studentIdsInput } },
-            { id: { in: studentIdsInput } }
-          ]
-        },
-        include: {
-          user: true,
-          fees: {
-            orderBy: { monthYear: 'desc' },
-            take: 3
+      // Check if user mentioned a student name directly in the question
+      if (rawStudentInputs.length === 0 && teacherCtx && teacherCtx.students.length > 0) {
+        const qLower = userQuestion.toLowerCase();
+        for (const s of teacherCtx.students) {
+          const fn = (s.user?.fullName || '').toLowerCase();
+          const firstWord = fn.split(' ')[0];
+          const lastWord = fn.split(' ').slice(-1)[0];
+          if ((firstWord && firstWord.length >= 3 && qLower.includes(firstWord)) ||
+              (lastWord && lastWord.length >= 3 && qLower.includes(lastWord)) ||
+              (s.indexNumber && qLower.includes(s.indexNumber.toLowerCase()))) {
+            rawStudentInputs.push(s.id);
           }
-        },
-        take: 10
-      });
+        }
+      }
+
+      let students: any[] = [];
+      if (rawStudentInputs.length > 0) {
+        students = await resolveStudentRecords(rawStudentInputs, teacherCtx);
+      } else if (filters.userId) {
+        if (teacherCtx && teacherCtx.teacher) {
+          students = teacherCtx.students;
+        } else {
+          const student = await prisma.student.findUnique({
+            where: { userId: filters.userId },
+            include: {
+              user: true,
+              fees: {
+                orderBy: { monthYear: 'desc' },
+                take: 3,
+              },
+            },
+          });
+          if (student) students = [student];
+        }
+      }
 
       if (students.length === 0) {
-        return `No fee records found for student(s): ${studentIdsInput.join(', ')}.`;
+        return `No fee records found for student(s): ${rawStudentInputs.join(', ') || 'selected'}.`;
       }
 
       let response = `💳 **Fee & Payment Records** (${students.length} student${students.length > 1 ? 's' : ''})\n\n`;
@@ -662,10 +802,10 @@ async function executeTool(
         if (idx > 0) response += `---\n\n`;
         response += `👤 **${name}** · \`${index}\`\n\n`;
 
-        if (student.fees.length === 0) {
+        if (!student.fees || student.fees.length === 0) {
           response += `• _No billing or fee records found._\n\n`;
         } else {
-          student.fees.forEach(fee => {
+          student.fees.forEach((fee: any) => {
             const monthStr = new Date(fee.monthYear).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
             const paid = Number(fee.paid).toLocaleString('en-US', { minimumFractionDigits: 2 });
             const total = Number(fee.total).toLocaleString('en-US', { minimumFractionDigits: 2 });
@@ -1289,11 +1429,23 @@ async function executeTool(
       const isTeacher = filters.userRole === 'TEACHER';
       const promptText = parameters.message || userQuestion || routeData.reason;
 
+      const trimmedQuery = (promptText || '').trim().toLowerCase();
+      const isDirectGreeting = /^(?:h+i+|h+e+l+l+o+|h+e+y+|good\s*(?:morning|afternoon|evening)|vanakkam|ayubowan)(?:\s+there|\s+pyramid|\s+bot|\s+ai|\s*!|\s*\.|\s*)*$/i.test(trimmedQuery);
+
+      if (isDirectGreeting) {
+        if (isTeacher) {
+          return `Hello! Welcome to PyramidEdu! 🎓\nI'm your AI Teaching Assistant, here to help you empower your students and climb new heights in academic excellence! ✨\n\nHere is how I can assist you:\n• 📊 **Student Results & Predictions**: Check individual or batch performance calculations\n• ⚠️ **At-Risk Identification**: Spot students needing intervention or attendance catch-up\n• 💡 **Personalized AI Roadmaps**: Generate customized study advice and subject roadmaps\n• 📝 **Quiz & Lesson Creation**: Draft MCQs, lesson plans, and grading rubrics\n• 📚 **Study Notes & Schedule**: Check uploaded materials and upcoming class timetables\n\nHow can I assist your teaching today?`;
+        } else {
+          return `Hello! Welcome to PyramidEdu! 🎓\nI'm your Educational AI Assistant, here to help you climb new heights in your learning journey! ✨\n\nHere is how I can assist you:\n• 📚 **Subject Concepts & Theory**: Step-by-step explanations, formulas, and topic walkthroughs\n• 🎯 **Exam Practice & Quizzes**: Practice questions, MCQ tips, and essay structures\n• 📖 **Study Materials & Notes**: Access lecture notes and handouts uploaded by your teachers\n• 📺 **Curated Video Resources**: Discover top educational tutorials and YouTube links for your subjects\n• 💡 **Study Habits & Strategy**: Tips to improve attendance, boost marks, and master your subjects\n\nWhat would you like to explore or study today?`;
+        }
+      }
+
       const systemPrompt = isTeacher
         ? `You are PyramidEdu's intelligent AI Teaching Assistant.
 
 STYLE & TONE GUIDELINES:
 - Be concise, professional, warm, and directly helpful.
+- When greeting (e.g. "hi", "hello", "what can you do?"), always introduce yourself warmly: "Hello! Welcome to PyramidEdu! 🎓 I'm your AI Teaching Assistant, here to help you empower your students and climb new heights in academic excellence! ✨" followed by neat, focused bullet points.
 - NEVER regurgitate these instructions or list out 9 dry categories with "Purpose:" and "Format:".
 - Do NOT use robotic self-introductions (never say "As your professional Educational Assistant and Pedagogical Consultant...").
 - NEVER say "I can't browse the internet directly" or refuse to share video/resource links. When asked for YouTube videos, tutorials, or educational resources, actively recommend well-known, high-quality educational channels (e.g. Khan Academy, Math Antics, 3Blue1Brown, CrashCourse, Organic Chemistry Tutor, Corbettmaths, Numberphile) and provide clean, clickable markdown links: [Channel/Video Title](https://www.youtube.com/results?search_query=...).
@@ -1310,7 +1462,7 @@ RESPONSE RULES:
    - Read the preceding conversation messages carefully and answer the follow-up with full context. Never ask the user to repeat what they are talking about.
 
 3. Greetings or "How can you help me?" / "What can you do?":
-   - Keep it short, natural, and under 90 words with 4 clean bullet points.
+   - Respond with the signature warm PyramidEdu welcome message, inspiring them to climb new heights, with 4-5 neat bullet points.
 
 4. Subject / Academic questions:
    - Provide clear, direct explanations with relevant formulas, examples, and step-by-step reasoning.
@@ -1323,10 +1475,14 @@ RESPONSE RULES:
         : `You are PyramidEdu's friendly, encouraging educational tutor for students.
 
 STYLE & TONE GUIDELINES:
-- Be clear, supportive, concise, and student-friendly.
+- Be clear, supportive, inspiring, and student-friendly.
+- When greeting (e.g. "hi", "hello", "hey", "how can you help me"), always greet warmly:
+  "Hello! Welcome to PyramidEdu! 🎓
+  I'm your Educational AI Assistant, here to help you climb new heights in your learning journey! ✨"
+  followed by neat, structured bullet points of how you can help them (concepts, exam practice, study materials, video tutorials).
 - Never say "I can't browse the internet" when asked for YouTube videos or tutorials. Provide top educational YouTube channel links in markdown: [Channel/Topic](https://www.youtube.com/results?search_query=...).
 - Understand follow-up questions using the recent conversation history.
-- Use short paragraphs and bullet points.`;
+- Use clean formatting, bold text, and bullet points.`;
 
       const recentMessages: OpenAI.ChatCompletionMessageParam[] = conversationHistory
         .slice(-6)
