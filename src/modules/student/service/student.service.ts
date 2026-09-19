@@ -8,6 +8,27 @@ import { sendEmail } from '../../../utils/email.util';
 import { calculateDiscountedFee } from '../../../utils/fee-calculator.util';
 
 export class StudentService {
+  static async checkAvailability(query: { nic?: string; email?: string }) {
+    let nicAvailable = true;
+    let emailAvailable = true;
+
+    if (query.nic && query.nic.trim()) {
+      const existingStudent = await prisma.student.findUnique({
+        where: { nic: query.nic.trim() },
+      });
+      nicAvailable = !existingStudent;
+    }
+
+    if (query.email && query.email.trim()) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: query.email.trim().toLowerCase() },
+      });
+      emailAvailable = !existingUser;
+    }
+
+    return { nicAvailable, emailAvailable };
+  }
+
   static async initiateRegistration(dto: InitiateRegistrationDto) {
     const existingUser = await prisma.user.findUnique({
       where: { email: dto.email },

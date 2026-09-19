@@ -34,7 +34,9 @@ export const initiateRegistrationSchema = z.object({
   
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  nic: z.string().optional(),
+  nic: z.string().refine((val) => !val || /^[0-9]{9}[VvXx]$/.test(val.trim()) || /^[0-9]{12}$/.test(val.trim()), {
+    message: 'Invalid Sri Lankan NIC format. Must be 9 digits + V/X (e.g., 991234567V) or 12 digits (e.g., 200412345678)',
+  }).optional().or(z.literal('')),
   
   parentName: z.string().min(1, 'Parent name is required'),
   parentRelation: z.string().min(1, 'Parent relation is required'),

@@ -2,6 +2,23 @@ import { Request, Response, NextFunction } from 'express';
 import { StudentService } from '../service/student.service';
 import type { InitiateRegistrationDto, VerifyOtpDto, ResendOtpDto } from '../dto';
 
+export async function checkAvailability(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { nic, email } = req.query;
+    const result = await StudentService.checkAvailability({
+      nic: typeof nic === 'string' ? nic : undefined,
+      email: typeof email === 'string' ? email : undefined,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function initiateRegistration(req: Request, res: Response, next: NextFunction) {
   try {
     const dto = req.body as InitiateRegistrationDto;
