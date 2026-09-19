@@ -212,4 +212,16 @@ export const generateAiRecommendation = async (req: Request, res: Response): Pro
   }
 };
 
-
+export const generateAiRecommendationForAll = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const studentIds = req.body?.studentIds as string[] | undefined;
+    const result = await studentRecommendationService.generateAllStudentsAiRecommendations(studentIds);
+    res.json({
+      success: true,
+      data: result,
+      message: `Generated AI recommendations for ${result.succeeded} of ${result.total} students.`,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
