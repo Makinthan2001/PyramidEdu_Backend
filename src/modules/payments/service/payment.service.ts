@@ -26,10 +26,144 @@ export interface StudentSummaryFilters {
 }
 
 export class PaymentService {
+  private static lastFeeSyncTimestamp: number = 0;
+
+  /**
+   * Automatically synchronizes and generates monthly fee records for all active enrolled students
+   * Ensures that past and current months have accurate Fee records (UNPAID / OVERDUE / PAID).
+   */
+  static async ensureMonthlyFeesGenerated(force: boolean = false): Promise<void> {
+    const nowMs = Date.now();
+    // Cache for 1 minute to avoid redundant database round-trips on rapid API requests
+    if (!force && nowMs - this.lastFeeSyncTimestamp < 60 * 1000) {
+      return;
+    }
+    this.lastFeeSyncTimestamp = nowMs;
+
+    try {
+      const students = await prisma.student.findMany({
+        where: { deletedAt: null },
+        include: {
+          enrollments: {
+            where: { enrollmentStatus: 'ACTIVE' },
+            include: { subject: { select: { feeAmount: true } } },
+          },
+          fees: {
+            where: { deletedAt: null },
+            orderBy: { monthYear: 'asc' },
+          },
+        },
+      });
+
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth(); // 0-indexed
+
+      for (const student of students) {
+        if (student.freeCardType === 'FREE_CARD') {
+          continue;
+        }
+
+        // Calculate monthly fee from active enrollments or student totalFeeAmount
+        let monthlyFee = 0;
+        if (student.enrollments.length > 0) {
+          monthlyFee = student.enrollments.reduce((sum, e) => sum + Number(e.subject.feeAmount || 0), 0);
+        } else {
+          monthlyFee = Number(student.totalFeeAmount || 0);
+        }
+
+        if (monthlyFee <= 0) {
+          continue;
+        }
+
+        // Determine starting month for student's billing timeline
+        let startYear = currentYear;
+        let startMonth = currentMonth;
+
+        if (student.fees.length > 0) {
+          const earliestFee = new Date(student.fees[0].monthYear);
+          startYear = earliestFee.getUTCFullYear();
+          startMonth = earliestFee.getUTCMonth();
+        } else if (student.enrolledAt) {
+          const enrolledDate = new Date(student.enrolledAt);
+          startYear = enrolledDate.getUTCFullYear();
+          startMonth = enrolledDate.getUTCMonth();
+        } else {
+          const createdDate = new Date(student.createdAt);
+          startYear = createdDate.getUTCFullYear();
+          startMonth = createdDate.getUTCMonth();
+        }
+
+        // Limit earliest month to June 2026 (start of academic session)
+        if (startYear < 2026 || (startYear === 2026 && startMonth < 5)) {
+          startYear = 2026;
+          startMonth = 5; // June (0-indexed)
+        }
+
+        let iterYear = startYear;
+        let iterMonth = startMonth;
+
+        while (iterYear < currentYear || (iterYear === currentYear && iterMonth <= currentMonth)) {
+          const existingFee = student.fees.find((f) => {
+            const d = new Date(f.monthYear);
+            return (
+              (d.getUTCFullYear() === iterYear && d.getUTCMonth() === iterMonth) ||
+              (d.getFullYear() === iterYear && d.getMonth() === iterMonth)
+            );
+          });
+
+          // Due date is the 10th of that month at 23:59:59 UTC
+          const dueDate = new Date(Date.UTC(iterYear, iterMonth, 10, 23, 59, 59));
+          const isOverdue = now > dueDate;
+          const firstDayOfMonth = new Date(Date.UTC(iterYear, iterMonth, 1, 0, 0, 0));
+
+          if (!existingFee) {
+            try {
+              await prisma.fee.create({
+                data: {
+                  studentId: student.id,
+                  total: monthlyFee,
+                  paid: 0,
+                  status: isOverdue ? FeeStatus.OVERDUE : FeeStatus.UNPAID,
+                  monthYear: firstDayOfMonth,
+                  dueDate: dueDate,
+                },
+              });
+            } catch (err: any) {
+              // Ignore duplicate constraint race condition
+            }
+          } else {
+            // Update to OVERDUE if unpaid and due date has passed
+            if (
+              existingFee.status === FeeStatus.UNPAID &&
+              Number(existingFee.paid) === 0 &&
+              isOverdue
+            ) {
+              await prisma.fee.update({
+                where: { id: existingFee.id },
+                data: { status: FeeStatus.OVERDUE, dueDate: existingFee.dueDate || dueDate },
+              });
+            }
+          }
+
+          iterMonth++;
+          if (iterMonth > 11) {
+            iterMonth = 0;
+            iterYear++;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[PaymentService] Error in ensureMonthlyFeesGenerated:', error);
+    }
+  }
+
   /**
    * Get overall Dashboard Overview metrics for Payments
    */
   static async getDashboardOverview() {
+    await this.ensureMonthlyFeesGenerated();
+
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -157,6 +291,8 @@ export class PaymentService {
    * Get analytics datasets for charts
    */
   static async getAnalytics(filters: PaymentFilters) {
+    await this.ensureMonthlyFeesGenerated();
+
     const now = new Date();
     
     // 1. Monthly Revenue Trend (Last 6 months)
@@ -485,6 +621,8 @@ export class PaymentService {
    * Get dedicated Fee Overview statistics, recent payments, upcoming dues, overdue students
    */
   static async getFeeOverview() {
+    await this.ensureMonthlyFeesGenerated();
+
     const fees = await prisma.fee.findMany({
       where: { deletedAt: null },
       include: {
@@ -580,18 +718,36 @@ export class PaymentService {
         student: { include: { user: true, batchRecord: true } },
       },
       orderBy: { monthYear: 'asc' },
-      take: 10,
     });
 
-    const overdueStudents = overdueFeesRaw.map((f) => ({
-      studentId: f.studentId,
-      studentName: f.student.user.fullName,
-      indexNumber: f.student.indexNumber || '—',
-      batch: f.student.batchRecord?.batchName || f.student.batch || 'Unassigned',
-      amountDue: Number(f.total) - Number(f.paid),
-      monthYear: f.monthYear,
-      dueDate: f.dueDate || f.monthYear,
-    }));
+    // Group overdue fees by student
+    const overdueMap: Record<string, any> = {};
+    overdueFeesRaw.forEach((f) => {
+      const sId = f.studentId;
+      const rem = Number(f.total) - Number(f.paid);
+      const batchName = f.student.batchRecord?.batchName || (f.student as any).batch || 'Unassigned';
+      if (!overdueMap[sId]) {
+        overdueMap[sId] = {
+          studentId: sId,
+          studentName: f.student.user.fullName,
+          indexNumber: f.student.indexNumber || '—',
+          batch: batchName,
+          batchName: batchName,
+          amountDue: rem,
+          totalOverdueAmount: rem,
+          overdueMonthsCount: 1,
+          monthYear: f.monthYear,
+          dueDate: f.dueDate || f.monthYear,
+          oldestDueDate: f.dueDate || f.monthYear,
+        };
+      } else {
+        overdueMap[sId].overdueMonthsCount++;
+        overdueMap[sId].amountDue += rem;
+        overdueMap[sId].totalOverdueAmount += rem;
+      }
+    });
+
+    const overdueStudents = Object.values(overdueMap);
 
     return {
       totalFeesGenerated: Number(totalFeesGenerated.toFixed(2)),
@@ -612,6 +768,8 @@ export class PaymentService {
    * Get Student Payment Summaries table
    */
   static async getStudentSummaries(filters: StudentSummaryFilters) {
+    await this.ensureMonthlyFeesGenerated();
+
     const page = Math.max(1, Number(filters.page || 1));
     const limit = Math.max(1, Number(filters.limit || 10));
     const skip = (page - 1) * limit;
@@ -626,6 +784,24 @@ export class PaymentService {
       studentWhere.enrollments = {
         some: { subjectId: filters.subjectId },
       };
+    }
+
+    if (filters.status && filters.status !== 'ALL') {
+      if (filters.status === 'PAID') {
+        studentWhere.fees = {
+          none: {
+            status: { in: [FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.OVERDUE] },
+            deletedAt: null,
+          },
+        };
+      } else {
+        studentWhere.fees = {
+          some: {
+            status: filters.status as FeeStatus,
+            deletedAt: null,
+          },
+        };
+      }
     }
 
     if (filters.search && filters.search.trim()) {
@@ -644,6 +820,7 @@ export class PaymentService {
           user: true,
           batchRecord: true,
           fees: {
+            where: { deletedAt: null },
             orderBy: { monthYear: 'desc' },
           },
           payments: {
@@ -658,12 +835,25 @@ export class PaymentService {
     ]);
 
     const items = students.map((s) => {
+      const unpaidFees = s.fees.filter((f) => f.status !== 'PAID');
+      const totalOutstanding = unpaidFees.reduce(
+        (acc, f) => acc + (Number(f.total) - Number(f.paid)),
+        0
+      );
+      const unpaidMonthsCount = unpaidFees.length;
+
       const latestFee = s.fees[0];
-      const totalFee = latestFee ? Number(latestFee.total) : Number(s.totalFeeAmount || 0);
-      const totalPaid = latestFee ? Number(latestFee.paid) : (s.paymentStatus === 'PAID' ? totalFee : 0);
-      const remainingBalance = Math.max(0, totalFee - totalPaid);
-      const paymentStatus = latestFee ? latestFee.status : (remainingBalance === 0 ? 'PAID' : 'UNPAID');
+      const monthlyFeeAmount = Number(s.totalFeeAmount || 0);
+      const totalFee = latestFee ? Number(latestFee.total) : monthlyFeeAmount;
+      const totalPaid = latestFee ? Number(latestFee.paid) : 0;
       const lastPayment = s.payments[0];
+
+      let paymentStatus: string = 'PAID';
+      if (s.freeCardType === 'FREE_CARD') {
+        paymentStatus = 'PAID';
+      } else if (unpaidMonthsCount > 0) {
+        paymentStatus = s.fees.some((f) => f.status === 'OVERDUE') ? 'OVERDUE' : 'UNPAID';
+      }
 
       return {
         studentId: s.id,
@@ -675,7 +865,8 @@ export class PaymentService {
         freeCardType: s.freeCardType || 'NONE',
         totalFee,
         totalPaid,
-        remainingBalance,
+        remainingBalance: totalOutstanding,
+        unpaidMonthsCount,
         paymentStatus,
         lastPaymentDate: lastPayment ? lastPayment.paymentDate : null,
         dueDate: latestFee?.dueDate || latestFee?.monthYear || null,
@@ -773,6 +964,11 @@ export class PaymentService {
 
     const latestFee = student.fees[0];
     const latestPayment = student.payments[0];
+    const unpaidFees = student.fees.filter((f) => f.status !== 'PAID');
+    const totalStudentOutstanding = unpaidFees.reduce(
+      (acc, f) => acc + (Number(f.total) - Number(f.paid)),
+      0
+    );
 
     return {
       studentInfo: {
@@ -791,8 +987,8 @@ export class PaymentService {
         monthYear: latestFee?.monthYear || new Date(),
         totalAmount: latestFee ? Number(latestFee.total) : Number(student.totalFeeAmount || 0),
         paidAmount: latestFee ? Number(latestFee.paid) : (student.paymentStatus === 'PAID' ? Number(student.totalFeeAmount || 0) : 0),
-        outstanding: latestFee ? Math.max(0, Number(latestFee.total) - Number(latestFee.paid)) : Number(student.totalFeeAmount || 0),
-        status: latestFee?.status || 'UNPAID',
+        outstanding: totalStudentOutstanding > 0 ? totalStudentOutstanding : (latestFee ? Math.max(0, Number(latestFee.total) - Number(latestFee.paid)) : 0),
+        status: latestFee?.status || (totalStudentOutstanding > 0 ? 'OVERDUE' : 'PAID'),
         dueDate: latestFee?.dueDate || null,
       },
       paymentInfo: {

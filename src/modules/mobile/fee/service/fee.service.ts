@@ -12,10 +12,14 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 const frontend_url = process.env.FRONTEND_URL || "http://localhost:8081";
 export class MobileFeeService {
   static async getFeeHistory(userId: string) {
+    const { PaymentService } = await import('../../../payments/service/payment.service');
+    await PaymentService.ensureMonthlyFeesGenerated();
+
     const student = await prisma.student.findUnique({
       where: { userId },
       include: {
         fees: {
+          where: { deletedAt: null },
           orderBy: { monthYear: 'desc' },
           include: {
             payments: {
@@ -30,17 +34,26 @@ export class MobileFeeService {
       throw new AppError('Student not found', 404);
     }
 
-    // Determine current month's fee status
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    let currentFeeStatus = 'UNPAID';
+    const isFreeCard = (student as any).freeCardType === 'FREE_CARD';
 
-    if (student.fees.length > 0) {
-      const latestFee = student.fees[0];
-      const feeDate = new Date(latestFee.monthYear);
-      if (feeDate.getMonth() === currentMonth && feeDate.getFullYear() === currentYear) {
-        currentFeeStatus = latestFee.status;
-      }
+    // Find all unpaid / partial / overdue fees
+    const unpaidFees = student.fees.filter((fee) => {
+      const isUnpaidStatus = fee.status === 'UNPAID' || fee.status === 'OVERDUE';
+      const isPartial = fee.status === 'PARTIAL' && Number(fee.total) - Number(fee.paid) > 0;
+      return isUnpaidStatus || isPartial;
+    });
+
+    const totalOutstanding = isFreeCard
+      ? 0
+      : unpaidFees.reduce((sum, fee) => sum + Math.max(0, Number(fee.total) - Number(fee.paid)), 0);
+
+    let paymentStatus = 'PAID';
+    if (!isFreeCard && totalOutstanding > 0) {
+      const now = new Date();
+      const hasOverdue = unpaidFees.some(
+        (f) => f.status === 'OVERDUE' || (f.dueDate && now > new Date(f.dueDate))
+      );
+      paymentStatus = hasOverdue ? 'OVERDUE' : 'PENDING';
     }
 
     const history: any[] = [];
@@ -67,9 +80,12 @@ export class MobileFeeService {
     });
 
     return {
-      totalFeeAmount: Number(student.totalFeeAmount) || 0,
-      paymentStatus: currentFeeStatus,
+      totalFeeAmount: totalOutstanding,
+      totalOutstanding,
+      monthlyFeeAmount: Number(student.totalFeeAmount) || 0,
+      paymentStatus,
       freeCardType: student.freeCardType || 'NONE',
+      unpaidMonthsCount: unpaidFees.length,
       history,
     };
   }
@@ -79,8 +95,8 @@ export class MobileFeeService {
       where: { userId },
       include: {
         fees: {
-          orderBy: { monthYear: 'desc' },
-          take: 1,
+          where: { deletedAt: null },
+          orderBy: { monthYear: 'asc' },
         },
       },
     });
@@ -94,10 +110,13 @@ export class MobileFeeService {
     }
 
     const now = new Date();
-    // Use current month or the latest fee's month if it's the current month
-    let targetFee = student.fees[0];
+    // Prioritize oldest unpaid monthly fee
+    const unpaidFees = student.fees.filter(
+      (f) => f.status !== 'PAID' && Number(f.total) - Number(f.paid) > 0
+    );
+    let targetFee = unpaidFees.length > 0 ? unpaidFees[0] : student.fees[student.fees.length - 1];
 
-    // Create new Fee record if it doesn't exist for this month
+    // Create new Fee record if none exists for this month
     if (!targetFee || targetFee.monthYear.getMonth() !== now.getMonth() || targetFee.monthYear.getFullYear() !== now.getFullYear()) {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       targetFee = await prisma.fee.create({
@@ -184,18 +203,13 @@ export class MobileFeeService {
     return payment;
   }
 
-
-
-
-
-
   static async processPaymentStripe(userId: string, amount: number, method: string, backendUrl: string, redirectUrl?: string) {
     const student = await prisma.student.findUnique({
       where: { userId },
       include: {
         fees: {
-          orderBy: { monthYear: 'desc' },
-          take: 1,
+          where: { deletedAt: null },
+          orderBy: { monthYear: 'asc' },
         },
       },
     });
@@ -209,10 +223,13 @@ export class MobileFeeService {
     }
 
     const now = new Date();
-    // Use current month or the latest fee's month if it's the current month
-    let targetFee = student.fees[0];
+    // Prioritize oldest unpaid fee
+    const unpaidFees = student.fees.filter(
+      (f) => f.status !== 'PAID' && Number(f.total) - Number(f.paid) > 0
+    );
+    let targetFee = unpaidFees.length > 0 ? unpaidFees[0] : student.fees[student.fees.length - 1];
 
-    // Create new Fee record if it doesn't exist for this month
+    // Create new Fee record if none exists for this month
     if (!targetFee || targetFee.monthYear.getMonth() !== now.getMonth() || targetFee.monthYear.getFullYear() !== now.getFullYear()) {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
       targetFee = await prisma.fee.create({

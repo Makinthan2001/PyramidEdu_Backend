@@ -1,6 +1,7 @@
 import app from './app';
 import { notificationService } from './modules/notification/service/notification.service';
 import { notificationCronService } from './modules/mobile/notification/notification-cron.service';
+import { PaymentService } from './modules/payments/service/payment.service';
 import './cron/parentReportsCron';
 import './cron/performanceCron';
 
@@ -12,6 +13,11 @@ const server = app.listen(PORT, () => {
   
   // Initialize Cron Jobs
   notificationCronService; // The constructor calls init()
+
+  // Ensure monthly fees are synced for all active students
+  PaymentService.ensureMonthlyFeesGenerated(true).catch((err) => {
+    console.error('Failed to sync monthly fees on startup:', err);
+  });
 });
 
 const shutdown = (reason: string) => {

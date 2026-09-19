@@ -1,5 +1,6 @@
 import prisma from '../../../config/prisma.config';
 import { AppError } from '../../../utils/AppError';
+import { PaymentService } from '../../payments/service/payment.service';
 
 export interface AnalyticsFilter {
   subjectId?: string;
@@ -603,6 +604,8 @@ export class AnalyticsReportsService {
    * GET Payments analytics, income timelines, outstanding balances
    */
   static async getPaymentAnalytics(filter: AnalyticsFilter) {
+    await PaymentService.ensureMonthlyFeesGenerated();
+
     const { start, end } = this.buildDateRange(filter);
 
     // Group payment collection amounts by month
@@ -636,7 +639,7 @@ export class AnalyticsReportsService {
         student: { include: { user: true } },
       },
       orderBy: { dueDate: 'asc' },
-      take: 10,
+      take: 50,
     });
 
     const outstandingInvoices = unpaidFees.map((f) => {
