@@ -65,13 +65,26 @@ export const askQuestion = async (
       }
     });
 
-    const filters: { subjectId?: string; batchId?: string; userId?: string } = {};
+    const filters: { subjectId?: string; batchId?: string; userId?: string; userRole?: string } = {};
     if (subjectId) filters.subjectId = subjectId;
     if (batchId) filters.batchId = batchId;
     if (userId) filters.userId = userId;
+    if (req.user?.role) filters.userRole = req.user.role;
 
-    // 3 & 4. Send message to AI Router pipeline & Receive response
-    const answer = await routeQuery(question, filters);
+    // 3. Fetch previous conversation messages for multi-turn context (excluding current)
+    const previousMessages = await prisma.chatMessage.findMany({
+      where: {
+        conversationId: activeConversationId,
+        id: { not: userMsg.id },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 6,
+      select: { role: true, content: true },
+    });
+    previousMessages.reverse();
+
+    // 4. Send message to AI Router pipeline with conversation history
+    const answer = await routeQuery(question, filters, previousMessages);
 
     // 6. Insert AI response into database
     const aiMsg = await prisma.chatMessage.create({

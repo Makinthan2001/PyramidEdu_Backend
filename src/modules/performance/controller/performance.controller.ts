@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { PerformanceService } from '../service/performance.service';
+import { studentRecommendationService } from '../service/student-recommendation.service';
 import prisma from '../../../config/prisma.config';
 import { calculateDiscountedFee } from '../../../utils/fee-calculator.util';
 
@@ -29,7 +30,8 @@ export const calculateForStudent = async (req: Request, res: Response): Promise<
 export const calculateForAll = async (req: Request, res: Response): Promise<void> => {
   try {
     const { studentIds } = req.body;
-    const result = await performanceService.calculatePerformanceForAll(studentIds);
+    const user = (req as any).user;
+    const result = await performanceService.calculatePerformanceForAll(studentIds, user);
     res.json({
       success: true,
       data: result,
@@ -187,4 +189,27 @@ export const updateFreeCard = async (req: Request, res: Response): Promise<void>
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const generateAiRecommendation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const studentId = (req.body?.studentId || req.params.id || req.query?.studentId) as string;
+    if (!studentId) {
+      res.status(400).json({ success: false, message: 'Student ID or index number is required.' });
+      return;
+    }
+    const result = await studentRecommendationService.generateStudentAiRecommendation(studentId);
+    res.json({
+      success: true,
+      data: result,
+      message: 'Personalized AI study recommendation generated successfully.',
+    });
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ success: false, message: error.message });
+    } else {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+};
+
 

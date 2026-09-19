@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { calculateForStudent, calculateForAll, getStudentHistory, getStudentsList, updateFreeCard } from '../controller/performance.controller';
+import { calculateForStudent, calculateForAll, getStudentHistory, getStudentsList, updateFreeCard, generateAiRecommendation } from '../controller/performance.controller';
 import { authenticate } from '../../../middleware/authenticate';
 import { authorize } from '../../../middleware/authorize';
 import { Role } from '@prisma/client';
@@ -10,15 +10,30 @@ const router = Router();
 router.post(
   '/student/:id/calculate',
   authenticate,
-  authorize(Role.MANAGER, Role.TEACHER),
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
   calculateForStudent
+);
+
+// Generate AI personalized recommendation for a student
+router.post(
+  '/ai-recommendation',
+  authenticate,
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
+  generateAiRecommendation
+);
+
+router.post(
+  '/student/:id/ai-recommendation',
+  authenticate,
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
+  generateAiRecommendation
 );
 
 // Calculate for all students
 router.post(
   '/calculate-all',
   authenticate,
-  authorize(Role.MANAGER),
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
   calculateForAll
 );
 
@@ -26,7 +41,7 @@ router.post(
 router.get(
   '/student/:id/history',
   authenticate,
-  authorize(Role.MANAGER, Role.TEACHER, Role.STUDENT),
+  authorize(Role.MANAGER, Role.TEACHER, Role.STUDENT, Role.ADMIN),
   getStudentHistory
 );
 

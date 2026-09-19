@@ -106,17 +106,34 @@ export class PerformanceService {
     });
   }
 
-  async calculatePerformanceForAll(studentIds?: string[]) {
+  async calculatePerformanceForAll(studentIds?: string[], user?: any) {
+    let targetStudentIds = studentIds;
+
+    if (user?.role === 'TEACHER') {
+      const teacher = await prisma.teacher.findUnique({ where: { userId: user.sub } });
+      if (!teacher) throw new Error('Teacher record not found for this user.');
+
+      const enrollments = await prisma.enrollment.findMany({
+        where: { teacherId: teacher.id, enrollmentStatus: 'ACTIVE' },
+        select: { studentId: true }
+      });
+      const teacherStudentIds = enrollments.map(e => e.studentId);
+
+      if (targetStudentIds && targetStudentIds.length > 0) {
+        targetStudentIds = targetStudentIds.filter(id => teacherStudentIds.includes(id));
+      } else {
+        targetStudentIds = teacherStudentIds;
+      }
+    }
+
     const students = await prisma.student.findMany({
-      where: studentIds ? { id: { in: studentIds } } : undefined,
+      where: targetStudentIds ? { id: { in: targetStudentIds } } : undefined,
       select: { id: true },
     });
 
     const results = [];
     for (const student of students) {
       try {
-        // user is not passed here because this is an internal manager/admin process
-        // to bypass the check, we can pass a dummy manager user or just let it pass
         const result = await this.calculatePerformanceForStudent(student.id, { role: 'MANAGER' });
         results.push({ studentId: student.id, status: 'success', predictionId: result.id });
       } catch (error: any) {
@@ -146,6 +163,15 @@ export class PerformanceService {
 
     return await prisma.performancePrediction.findMany({
       where: { studentId },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: { fullName: true, email: true }
+            }
+          }
+        }
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
