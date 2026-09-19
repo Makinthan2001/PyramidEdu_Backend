@@ -219,12 +219,60 @@ Important:
 
     return {
       studentId,
-      studentName: student.user.fullName,
+      studentName: student.user?.fullName || 'Student',
       aiRecommendation,
       recommendations: updatedRecommendations,
       prediction: updatedPrediction,
     };
   }
+
+  /**
+   * Generates AI recommendations in controlled parallel batches for multiple or all students.
+   */
+  async generateAllStudentsAiRecommendations(studentIds?: string[]) {
+    let targetIds: string[] = [];
+    if (studentIds && studentIds.length > 0) {
+      targetIds = studentIds;
+    } else {
+      const students = await prisma.student.findMany({
+        where: { deletedAt: null },
+        select: { id: true },
+      });
+      targetIds = students.map((s) => s.id);
+    }
+
+    if (targetIds.length === 0) {
+      return { total: 0, succeeded: 0, failed: 0, results: [], errors: [] };
+    }
+
+    const results: any[] = [];
+    const errors: { studentId: string; error: string }[] = [];
+
+    // Process in batches of 4 to manage OpenAI rate limits and concurrency
+    const BATCH_SIZE = 4;
+    for (let i = 0; i < targetIds.length; i += BATCH_SIZE) {
+      const chunk = targetIds.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        chunk.map(async (id) => {
+          try {
+            const res = await this.generateStudentAiRecommendation(id);
+            results.push({ studentId: id, studentName: res.studentName, success: true });
+          } catch (err: any) {
+            errors.push({ studentId: id, error: err.message });
+          }
+        })
+      );
+    }
+
+    return {
+      total: targetIds.length,
+      succeeded: results.length,
+      failed: errors.length,
+      results,
+      errors,
+    };
+  }
 }
 
 export const studentRecommendationService = new StudentRecommendationService();
+

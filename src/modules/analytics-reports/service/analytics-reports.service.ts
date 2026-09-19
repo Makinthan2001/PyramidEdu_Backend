@@ -172,21 +172,21 @@ export class AnalyticsReportsService {
     ]);
 
     const recentStudents = recentStudentsRaw.map((s) => ({
-      name: s.user.fullName,
-      email: s.user.email,
+      name: s.user?.fullName || 'Unknown Student',
+      email: s.user?.email || '—',
       indexNumber: s.indexNumber || '—',
       createdAt: s.createdAt,
     }));
 
     const recentTeachers = recentTeachersRaw.map((t) => ({
-      name: t.user.fullName,
-      email: t.user.email,
+      name: t.user?.fullName || 'Unknown Teacher',
+      email: t.user?.email || '—',
       createdAt: t.createdAt,
     }));
 
     const recentManagers = recentManagersRaw.map((m) => ({
-      name: m.user.fullName,
-      email: m.user.email,
+      name: m.user?.fullName || 'Unknown Manager',
+      email: m.user?.email || '—',
       createdAt: m.createdAt,
     }));
 
@@ -299,7 +299,7 @@ export class AnalyticsReportsService {
         });
         return {
           id: student?.id || item.studentId,
-          name: student?.user.fullName || 'Unknown Student',
+          name: student?.user?.fullName || 'Unknown Student',
           indexNumber: student?.indexNumber || '—',
           avgScore: Number(item._avg.marks || 0).toFixed(1),
         };
@@ -322,7 +322,7 @@ export class AnalyticsReportsService {
         });
         return {
           id: student?.id || item.studentId,
-          name: student?.user.fullName || 'Unknown Student',
+          name: student?.user?.fullName || 'Unknown Student',
           indexNumber: student?.indexNumber || '—',
           avgScore: Number(item._avg.marks || 0).toFixed(1),
         };
@@ -374,9 +374,9 @@ export class AnalyticsReportsService {
 
         return {
           id: t.id,
-          name: t.user.fullName,
-          email: t.user.email,
-          phone: t.phone || t.user.phone || '—',
+          name: t.user?.fullName || 'Unknown Teacher',
+          email: t.user?.email || '—',
+          phone: t.phone || t.user?.phone || '—',
           subjects: t.subjectAllocations.map((sa) => sa.subject.subjectName).join(', ') || 'None',
           studentCount: enrollmentCount,
           materialsCount: t.studyMaterials.length,
@@ -489,7 +489,7 @@ export class AnalyticsReportsService {
         if (rate < 75.0) {
           lowAttendanceList.push({
             id: student.id,
-            name: student.user.fullName,
+            name: student.user?.fullName || 'Unknown Student',
             indexNumber: student.indexNumber || '—',
             attendanceRate: Number(rate.toFixed(1)),
           });
@@ -583,8 +583,8 @@ export class AnalyticsReportsService {
     const studentAlerts = riskPredictions.map((rp) => ({
       id: rp.id,
       studentId: rp.studentId,
-      name: rp.student.user.fullName,
-      indexNumber: rp.student.indexNumber || '—',
+      name: rp.student?.user?.fullName || 'Unknown Student',
+      indexNumber: rp.student?.indexNumber || '—',
       finalScore: Number(rp.finalScore).toFixed(1),
       performanceLevel: rp.performanceLevel,
       trendStatus: rp.trendStatus,
@@ -646,8 +646,8 @@ export class AnalyticsReportsService {
       const remaining = Number(f.total) - Number(f.paid);
       return {
         id: f.id,
-        studentName: f.student.user.fullName,
-        indexNumber: f.student.indexNumber || '—',
+        studentName: f.student?.user?.fullName || 'Unknown Student',
+        indexNumber: f.student?.indexNumber || '—',
         amountDue: remaining,
         dueDate: f.dueDate,
         status: f.status,
