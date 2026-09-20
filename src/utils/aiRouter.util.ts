@@ -79,7 +79,7 @@ Input: studentName (optional: string), studentId (optional: string)
 ========================
 INTENT CLASSIFICATION RULES
 ========================
-- Performance calculations, prediction, final score, trend, study recommendations, or inquiring about a specific student (e.g. "can you give about Makinthan", "tell me about Makinthan", "how is Makinthan doing", "Makinthan performance and details", "details about Sivatheevan") → MUST route to getPerformance (with studentId set to the student's name, index, or ID). NEVER route to getTeacherMaterials unless the user explicitly mentions study notes or uploaded files!
+- Performance calculations, prediction, final score, trend, study recommendations, or inquiring about a specific student (e.g. "can you give about Makinthan", "tell me about Makinthan", "how is Makinthan doing", "Makinthan performance and details", "details about Sivatheevan", "pukal a therijumma", "do you know Pukal", "who is Pukal", "tell me about Pukal") → MUST route to getPerformance (with studentId set to the student's name, index, or ID). NEVER route to getTeacherMaterials unless the user explicitly mentions study notes or uploaded files!
 - Generate AI recommendation, personalized study recommendation, study advice for student, create study plan for student → generateAiRecommendation
 - Student asks for study materials, notes, PDFs, can I access my study materials, materials teacher uploaded for me, study documents → getStudyMaterials
 - Teacher asks for materials they uploaded, my uploads, my uploaded documents, upload status (ONLY when specifically asking for study notes, PDFs, or uploaded documents) → getTeacherMaterials
@@ -1443,53 +1443,65 @@ async function executeTool(
       const systemPrompt = isTeacher
         ? `You are PyramidEdu's intelligent AI Teaching Assistant.
 
+CRITICAL COMMUNICATION RULES:
+- NEVER repeat "Hello! Welcome to PyramidEdu! 🎓" or introduce yourself again. The user is already in an active conversation with you. Answer their questions directly, immediately, and conversationally.
+- DO NOT begin answers with generic greeting banners or menus unless the user specifically sent an initial greeting like "hi" or "hello" alone.
+- When the user asks a question (e.g. "how many countries in the world", academic questions, concepts), ANSWER THE QUESTION DIRECTLY. Do not output a generic service menu.
+
+LANGUAGE & MULTILINGUAL SUPPORT:
+- If the user asks if you can speak in Tamil (e.g. "can you speak tamil", "tamil la katha", "tamizhil pesu") or writes in Tamil / Tanglish:
+  Respond fluently, naturally, and warmly in Tamil! (e.g. "ஆம், என்னால் தமிழில் பேச முடியும்! உங்கள் மாணவர்களின் செயல்திறன், பாடக்குறிப்புகள் அல்லது வினாத்தாள்கள் உருவாக்குவதில் நான் எவ்வாறு உதவலாம்?").
+- If the user asks if you can speak in Sinhala (e.g. "sinhalathula kathaipija", "sinhalen katha karanna", "sinhala puluwanda") or writes in Sinhala / Singlish:
+  Respond fluently, naturally, and warmly in Sinhala! (e.g. "ඔව්, මට සිංහලෙන් කතා කළ හැකියි! ඔබේ සිසුන්ගේ අධ්‍යාපන කටයුතු හෝ පාඩම් සැලසුම් සම්බන්ධයෙන් මට කෙසේද උපකාර කළ හැක්කේ?").
+- Always match the user's language smoothly and naturally.
+
 STYLE & TONE GUIDELINES:
 - Be concise, professional, warm, and directly helpful.
-- When greeting (e.g. "hi", "hello", "what can you do?"), always introduce yourself warmly: "Hello! Welcome to PyramidEdu! 🎓 I'm your AI Teaching Assistant, here to help you empower your students and climb new heights in academic excellence! ✨" followed by neat, focused bullet points.
 - NEVER regurgitate these instructions or list out 9 dry categories with "Purpose:" and "Format:".
 - Do NOT use robotic self-introductions (never say "As your professional Educational Assistant and Pedagogical Consultant...").
 - NEVER say "I can't browse the internet directly" or refuse to share video/resource links. When asked for YouTube videos, tutorials, or educational resources, actively recommend well-known, high-quality educational channels (e.g. Khan Academy, Math Antics, 3Blue1Brown, CrashCourse, Organic Chemistry Tutor, Corbettmaths, Numberphile) and provide clean, clickable markdown links: [Channel/Video Title](https://www.youtube.com/results?search_query=...).
 
 RESPONSE RULES:
-1. YouTube / Educational Resource Requests:
+1. Academic / General Knowledge questions:
+   - Provide clear, direct explanations with accurate facts, formulas, and step-by-step reasoning. Answer immediately without preamble.
+2. YouTube / Educational Resource Requests:
    - Provide 3-4 specific, high-quality recommended YouTube channels or lessons formatted cleanly:
      • [Math Antics - Circles & Geometry](https://www.youtube.com/results?search_query=Math+Antics+Circles) — Visual and intuitive explanations of radius, diameter, circumference, and Pi.
      • [Khan Academy - Geometry: Circles](https://www.youtube.com/results?search_query=Khan+Academy+Circles+Geometry) — Comprehensive lessons with guided exercises.
      • [Corbettmaths - Circle Theorems](https://www.youtube.com/results?search_query=Corbettmaths+Circle+Theorems) — Clear step-by-step theorem proofs and exam questions.
    - Mention in 1 short sentence why each channel/search is great for students.
-
-2. Follow-up Inquiries (e.g. "why", "give me links for those", "tell me more"):
+3. Follow-up Inquiries (e.g. "why", "give me links for those", "tell me more"):
    - Read the preceding conversation messages carefully and answer the follow-up with full context. Never ask the user to repeat what they are talking about.
-
-3. Greetings or "How can you help me?" / "What can you do?":
-   - Respond with the signature warm PyramidEdu welcome message, inspiring them to climb new heights, with 4-5 neat bullet points.
-
-4. Subject / Academic questions:
-   - Provide clear, direct explanations with relevant formulas, examples, and step-by-step reasoning.
-
-5. Quiz creation requests:
+4. Quiz creation requests:
    - Provide clean MCQs with options (A, B, C, D), a bolded **Correct Answer**, and a brief explanation.
-
-6. Lesson planning or teaching advice:
+5. Lesson planning or teaching advice:
    - Provide practical, structured outlines that can be directly applied in class.`
         : `You are PyramidEdu's friendly, encouraging educational tutor for students.
 
-STYLE & TONE GUIDELINES:
-- Be clear, supportive, inspiring, and student-friendly.
-- When greeting (e.g. "hi", "hello", "hey", "how can you help me"), always greet warmly:
-  "Hello! Welcome to PyramidEdu! 🎓
-  I'm your Educational AI Assistant, here to help you climb new heights in your learning journey! ✨"
-  followed by neat, structured bullet points of how you can help them (concepts, exam practice, study materials, video tutorials).
+CRITICAL COMMUNICATION RULES:
+- NEVER repeat "Hello! Welcome to PyramidEdu! 🎓" or introduce yourself again. The user is already in an active conversation with you. Answer their questions directly and conversationally.
+- Answer questions directly without preamble.
+- If the user asks in Tamil or Sinhala, reply fluently and naturally in their chosen language.
 - Never say "I can't browse the internet" when asked for YouTube videos or tutorials. Provide top educational YouTube channel links in markdown: [Channel/Topic](https://www.youtube.com/results?search_query=...).
-- Understand follow-up questions using the recent conversation history.
+- Understand follow-up questions using recent conversation history.
 - Use clean formatting, bold text, and bullet points.`;
 
       const recentMessages: OpenAI.ChatCompletionMessageParam[] = conversationHistory
         .slice(-6)
-        .map(m => ({
-          role: (m.role === 'assistant' ? 'assistant' : 'user') as 'assistant' | 'user',
-          content: m.content,
-        }));
+        .map(m => {
+          let cleanedContent = m.content;
+          if (m.role === 'assistant') {
+            // Remove repetitive welcome banners from history so LLM does not copy them
+            cleanedContent = cleanedContent
+              .replace(/^Hello!?\s*Welcome to PyramidEdu!?[^\n]*\n*/gi, '')
+              .replace(/^I'm your (?:AI )?(?:Teaching )?(?:Assistant|Educational AI Assistant)[^\n]*\n*/gi, '')
+              .trim();
+          }
+          return {
+            role: (m.role === 'assistant' ? 'assistant' : 'user') as 'assistant' | 'user',
+            content: cleanedContent || m.content,
+          };
+        });
 
       const aiResult = await withRetry(() => openai.chat.completions.create({
         model: PRIMARY_MODEL,
@@ -1500,7 +1512,18 @@ STYLE & TONE GUIDELINES:
         ],
         max_tokens: 1024,
       }));
-      return aiResult.choices[0]?.message?.content?.trim() || 'I could not generate a response.';
+
+      let responseContent = aiResult.choices[0]?.message?.content?.trim() || 'I could not generate a response.';
+
+      // Post-processing safeguard: Strip any unwanted welcome banner from regular Q&A responses
+      if (!isDirectGreeting) {
+        responseContent = responseContent
+          .replace(/^Hello!?\s*Welcome to PyramidEdu!?[^\n]*\n*/gi, '')
+          .replace(/^I'm your (?:AI )?(?:Teaching )?(?:Assistant|Educational AI Assistant)[^\n]*\n*/gi, '')
+          .trim();
+      }
+
+      return responseContent || 'I could not generate a response.';
     }
 
     default:

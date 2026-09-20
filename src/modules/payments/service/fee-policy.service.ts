@@ -8,6 +8,9 @@ export class FeePolicyService {
    * Calculates the number of unpaid/overdue fee months for a student.
    */
   static async getStudentUnpaidFeeDetails(studentId: string) {
+    const { PaymentService } = await import('./payment.service');
+    await PaymentService.ensureMonthlyFeesGenerated();
+
     const student = await prisma.student.findUnique({
       where: { id: studentId },
       include: {
