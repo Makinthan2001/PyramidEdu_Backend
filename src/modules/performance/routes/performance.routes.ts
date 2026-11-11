@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { calculateForStudent, calculateForAll, getStudentHistory, getStudentsList } from '../controller/performance.controller';
+import { calculateForStudent, calculateForAll, getStudentHistory, getStudentsList, updateFreeCard, generateAiRecommendation, generateAiRecommendationForAll } from '../controller/performance.controller';
 import { authenticate } from '../../../middleware/authenticate';
 import { authorize } from '../../../middleware/authorize';
 import { Role } from '@prisma/client';
@@ -10,15 +10,38 @@ const router = Router();
 router.post(
   '/student/:id/calculate',
   authenticate,
-  authorize(Role.MANAGER, Role.TEACHER),
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
   calculateForStudent
+);
+
+// Generate AI personalized recommendation for all students
+router.post(
+  '/ai-recommendation/all',
+  authenticate,
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
+  generateAiRecommendationForAll
+);
+
+// Generate AI personalized recommendation for a student
+router.post(
+  '/ai-recommendation',
+  authenticate,
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
+  generateAiRecommendation
+);
+
+router.post(
+  '/student/:id/ai-recommendation',
+  authenticate,
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
+  generateAiRecommendation
 );
 
 // Calculate for all students
 router.post(
   '/calculate-all',
   authenticate,
-  authorize(Role.MANAGER),
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
   calculateForAll
 );
 
@@ -26,7 +49,7 @@ router.post(
 router.get(
   '/student/:id/history',
   authenticate,
-  authorize(Role.MANAGER, Role.TEACHER, Role.STUDENT),
+  authorize(Role.MANAGER, Role.TEACHER, Role.STUDENT, Role.ADMIN),
   getStudentHistory
 );
 
@@ -34,8 +57,16 @@ router.get(
 router.get(
   '/students',
   authenticate,
-  authorize(Role.MANAGER, Role.TEACHER),
+  authorize(Role.MANAGER, Role.TEACHER, Role.ADMIN),
   getStudentsList
+);
+
+// Update student Free Card status
+router.patch(
+  '/student/:id/free-card',
+  authenticate,
+  authorize(Role.MANAGER, Role.ADMIN),
+  updateFreeCard
 );
 
 export default router;

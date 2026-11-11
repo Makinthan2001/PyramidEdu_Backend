@@ -43,11 +43,12 @@ export async function createStudyMaterial(req: Request, res: Response, next: Nex
       for (const file of files) {
         const fileBuffer = fs.readFileSync(file.path);
 
-        // Generate a safe filename that includes the extension to ensure correct download behavior
+        // Generate a safe filename that preserves the extension for correct download/viewing
         const timestamp = Date.now();
         const originalName = file.originalname || 'document.pdf';
-        const nameWithoutExt = originalName.replace(/\.[^/.]+$/, '');
-        const safeFilename = `${timestamp}_${nameWithoutExt.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
+        const ext = path.extname(originalName) || '.pdf';
+        const nameWithoutExt = path.basename(originalName, ext);
+        const safeFilename = `${timestamp}_${nameWithoutExt.replace(/[^a-zA-Z0-9\-_]/g, '_')}${ext}`;
 
         // Upload directly to Cloudinary
         const uploadResult = await uploadToCloudinary(fileBuffer, {
@@ -186,30 +187,31 @@ export async function updateStudyMaterial(req: Request, res: Response, next: Nex
       teacherProfileId = user.teacher.id;
     }
 
-    const { title, text, batch, status } = req.body;
+    const { title, text, batch, status, existingFileUrls } = req.body;
 
     // Process files if any are uploaded
-    const fileUrls: string[] = [];
+    const newFileUrls: string[] = [];
     const files = req.files as Express.Multer.File[];
 
     if (files && files.length > 0) {
       for (const file of files) {
         const fileBuffer = fs.readFileSync(file.path);
 
-        // Generate a safe filename that includes the extension to ensure correct download behavior
+        // Generate a safe filename that preserves the extension for correct download/viewing
         const timestamp = Date.now();
         const originalName = file.originalname || 'document.pdf';
-        const nameWithoutExt = originalName.replace(/\.[^/.]+$/, '');
-        const safeFilename = `${timestamp}_${nameWithoutExt.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
+        const ext = path.extname(originalName) || '.pdf';
+        const nameWithoutExt = path.basename(originalName, ext);
+        const safeFilename = `${timestamp}_${nameWithoutExt.replace(/[^a-zA-Z0-9\-_]/g, '_')}${ext}`;
 
         // Upload directly to Cloudinary
         const uploadResult = await uploadToCloudinary(fileBuffer, {
           folder: process.env.CLOUDINARY_STUDY_MATERIAL_FOLDER || 'pyramidEdu/study_material',
-          resourceType: 'raw',
+          resourceType: 'auto',
           publicId: safeFilename,
         });
 
-        fileUrls.push(uploadResult.secure_url);
+        newFileUrls.push(uploadResult.secure_url);
 
         // We no longer delete the temporary local file here because
         // we need it for the RAG ingestion pipeline later.
@@ -217,7 +219,40 @@ export async function updateStudyMaterial(req: Request, res: Response, next: Nex
       }
     }
 
-    const result = await service.updateStudyMaterial(id, teacherProfileId, role, { title, text, batch, status, fileUrls });
+    let finalFileUrls: string[] | undefined = undefined;
+
+    if (existingFileUrls !== undefined) {
+      let retainedUrls: string[] = [];
+      if (Array.isArray(existingFileUrls)) {
+        retainedUrls = existingFileUrls;
+      } else if (typeof existingFileUrls === 'string') {
+        const trimmed = existingFileUrls.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed)) {
+              retainedUrls = parsed.filter((item: any) => typeof item === 'string');
+            }
+          } catch {
+            retainedUrls = [];
+          }
+        } else if (trimmed.length > 0) {
+          retainedUrls = [trimmed];
+        }
+      }
+      finalFileUrls = [...retainedUrls, ...newFileUrls];
+    } else if (newFileUrls.length > 0) {
+      const current = await prisma.studyMaterial.findUnique({ where: { id }, select: { fileUrls: true } });
+      finalFileUrls = [...(current?.fileUrls || []), ...newFileUrls];
+    }
+
+    const result = await service.updateStudyMaterial(id, teacherProfileId, role, {
+      title,
+      text,
+      batch,
+      status,
+      fileUrls: finalFileUrls,
+    });
 
     // Trigger RAG ingestion in the background asynchronously
     if (files && files.length > 0) {
@@ -231,8 +266,8 @@ export async function updateStudyMaterial(req: Request, res: Response, next: Nex
             if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
           });
         });
-    } else if (fileUrls.length > 0) {
-      processRAGIngestion(result.id, fileUrls).catch(err => console.error("RAG Ingestion failed:", err));
+    } else if (newFileUrls.length > 0) {
+      processRAGIngestion(result.id, newFileUrls).catch(err => console.error("RAG Ingestion failed:", err));
     }
 
     res.status(200).json({

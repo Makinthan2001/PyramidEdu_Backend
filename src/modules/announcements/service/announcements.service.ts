@@ -55,6 +55,91 @@ export class AnnouncementsService {
   }
 
   /**
+   * Helper to get user IDs of students belonging to a teacher
+   */
+  async getTeacherStudentUserIds(
+    teacherUserId: string,
+    batchIds?: string[],
+    subjectIds?: string[]
+  ): Promise<string[]> {
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId: teacherUserId },
+      include: {
+        subjectAllocations: {
+          where: { status: 'ACTIVE' },
+          include: { batches: true },
+        },
+      },
+    });
+
+    if (!teacher) return [];
+
+    const orConditions: any[] = [];
+
+    // 1. Direct assignment via active enrollment.teacherId
+    orConditions.push({
+      enrollments: {
+        some: {
+          teacherId: teacher.id,
+          enrollmentStatus: 'ACTIVE',
+          ...(subjectIds && subjectIds.length > 0 ? { subjectId: { in: subjectIds } } : {}),
+        },
+      },
+    });
+
+    // 2. Allocation relationship (teacher -> subject -> batch -> enrollment/student)
+    for (const alloc of teacher.subjectAllocations) {
+      if (subjectIds && subjectIds.length > 0 && !subjectIds.includes(alloc.subjectId)) {
+        continue;
+      }
+      const allocBatchIds = alloc.batches.map((b) => b.id);
+      const targetBatchIds =
+        batchIds && batchIds.length > 0
+          ? allocBatchIds.filter((id) => batchIds.includes(id))
+          : allocBatchIds;
+
+      if (targetBatchIds.length > 0) {
+        orConditions.push({
+          batchId: { in: targetBatchIds },
+          enrollments: {
+            some: {
+              subjectId: alloc.subjectId,
+              enrollmentStatus: 'ACTIVE',
+            },
+          },
+        });
+      }
+    }
+
+    // 3. Teacher primary subject
+    if (teacher.subjectId && (!subjectIds || subjectIds.length === 0 || subjectIds.includes(teacher.subjectId))) {
+      orConditions.push({
+        enrollments: {
+          some: {
+            subjectId: teacher.subjectId,
+            enrollmentStatus: 'ACTIVE',
+          },
+        },
+      });
+    }
+
+    if (orConditions.length === 0) return [];
+
+    const students = await prisma.student.findMany({
+      where: {
+        deletedAt: null,
+        approvalStatus: 'APPROVED',
+        user: { isActive: true },
+        ...(batchIds && batchIds.length > 0 ? { batchId: { in: batchIds } } : {}),
+        OR: orConditions,
+      },
+      select: { userId: true },
+    });
+
+    return students.map((s) => s.userId);
+  }
+
+  /**
    * Create an announcement
    */
   async createAnnouncement(userId: string, role: Role, dto: CreateAnnouncementDto) {
@@ -107,7 +192,7 @@ export class AnnouncementsService {
       data: {
         title: dto.title,
         content: dto.content,
-        target: dto.target || AnnouncementTarget.ALL,
+        target: role === Role.TEACHER ? AnnouncementTarget.STUDENT : (dto.target || AnnouncementTarget.ALL),
         publishDate,
         expiryDate,
         priority: dto.priority || 'MEDIUM',
@@ -287,17 +372,29 @@ export class AnnouncementsService {
 
       // Check target match
       let isRecipient = false;
-      if (announcement.target === AnnouncementTarget.ALL || announcement.target === AnnouncementTarget.STUDENT) {
+      const studentSubjectIds = student.enrollments
+        .filter(e => e.enrollmentStatus === 'ACTIVE')
+        .map(e => e.subjectId);
+
+      if (announcement.recipients.some(r => r.id === userId)) {
         isRecipient = true;
-      } else if (announcement.recipients.some(r => r.id === userId)) {
-        isRecipient = true;
-      } else if (announcement.batches.some(b => b.id === student.batchId)) {
-        isRecipient = true;
+      } else if (announcement.sender?.role === Role.TEACHER && announcement.senderId) {
+        // Must be one of the teacher's enrolled students
+        const teacherStudentUserIds = await this.getTeacherStudentUserIds(
+          announcement.senderId,
+          announcement.batches.map(b => b.id),
+          announcement.subjects.map(s => s.id)
+        );
+        if (teacherStudentUserIds.includes(userId)) {
+          isRecipient = true;
+        }
       } else {
-        const studentSubjectIds = student.enrollments
-          .filter(e => e.enrollmentStatus === 'ACTIVE')
-          .map(e => e.subjectId);
-        if (announcement.subjects.some(s => studentSubjectIds.includes(s.id))) {
+        // Admin or Manager announcement
+        if (announcement.target === AnnouncementTarget.ALL || announcement.target === AnnouncementTarget.STUDENT) {
+          isRecipient = true;
+        } else if (announcement.batches.some(b => b.id === student.batchId)) {
+          isRecipient = true;
+        } else if (announcement.subjects.some(s => studentSubjectIds.includes(s.id))) {
           isRecipient = true;
         }
       }
@@ -504,15 +601,96 @@ export class AnnouncementsService {
         .filter((e) => e.enrollmentStatus === 'ACTIVE')
         .map((e) => e.subjectId);
 
+      // 1. Direct enrollments with teacherId
+      const directTeacherIds = student.enrollments
+        .filter((e) => e.enrollmentStatus === 'ACTIVE' && e.teacherId)
+        .map((e) => e.teacherId as string);
+
+      // 2. Teachers allocated to student's batch & active subjects
+      const allocations = await prisma.subjectAllocation.findMany({
+        where: {
+          status: 'ACTIVE',
+          subjectId: { in: activeSubjectIds },
+          batches: { some: { id: student.batchId || '' } },
+        },
+        select: { teacherId: true },
+      });
+
+      // 3. Teachers with primary subject matching student active subjects
+      const primaryTeachers = await prisma.teacher.findMany({
+        where: {
+          deletedAt: null,
+          subjectId: { in: activeSubjectIds },
+        },
+        select: { id: true },
+      });
+
+      const allTeacherIds = Array.from(
+        new Set([
+          ...directTeacherIds,
+          ...allocations.map((a) => a.teacherId),
+          ...primaryTeachers.map((t) => t.id),
+        ])
+      );
+
+      const teachers = await prisma.teacher.findMany({
+        where: { id: { in: allTeacherIds }, deletedAt: null },
+        select: { userId: true },
+      });
+      const myTeacherUserIds = teachers.map((t) => t.userId);
+
       where.status = 'PUBLISHED';
       where.publishDate = { lte: new Date() };
       where.isActive = true;
       where.OR = [
-        { target: AnnouncementTarget.ALL },
-        { target: AnnouncementTarget.STUDENT },
+        // 1. Direct recipient of any announcement
         { recipients: { some: { id: currentUserId } } },
-        { batches: { some: { id: student.batchId || '' } } },
-        { subjects: { some: { id: { in: activeSubjectIds } } } },
+
+        // 2. Announcements from ADMIN or MANAGER (management / institutional)
+        {
+          sender: { role: { in: [Role.ADMIN, Role.MANAGER] } },
+          OR: [
+            { target: AnnouncementTarget.ALL },
+            { target: AnnouncementTarget.STUDENT },
+            { batches: { some: { id: student.batchId || '' } } },
+            { subjects: { some: { id: { in: activeSubjectIds } } } },
+          ],
+        },
+
+        // 3. System announcements (adminId present or senderId null)
+        {
+          senderId: null,
+          OR: [
+            { target: AnnouncementTarget.ALL },
+            { target: AnnouncementTarget.STUDENT },
+            { batches: { some: { id: student.batchId || '' } } },
+            { subjects: { some: { id: { in: activeSubjectIds } } } },
+          ],
+        },
+
+        // 4. Announcements from student's assigned TEACHERS only
+        ...(myTeacherUserIds.length > 0
+          ? [
+              {
+                senderId: { in: myTeacherUserIds },
+                sender: { role: Role.TEACHER },
+                AND: [
+                  {
+                    OR: [
+                      { batches: { none: {} } },
+                      { batches: { some: { id: student.batchId || '' } } },
+                    ],
+                  },
+                  {
+                    OR: [
+                      { subjects: { none: {} } },
+                      { subjects: { some: { id: { in: activeSubjectIds } } } },
+                    ],
+                  },
+                ],
+              },
+            ]
+          : []),
       ];
     }
 
@@ -565,6 +743,26 @@ export class AnnouncementsService {
     const subjectIds = announcement.subjects?.map((s: any) => s.id) || [];
     const recipientIds = announcement.recipients?.map((r: any) => r.id) || [];
 
+    // If sent by a TEACHER, calculate only this teacher's students
+    let isTeacherSender = announcement.sender?.role === Role.TEACHER;
+    if (!isTeacherSender && announcement.senderId && !announcement.sender) {
+      const senderUser = await prisma.user.findUnique({
+        where: { id: announcement.senderId },
+        select: { role: true },
+      });
+      isTeacherSender = senderUser?.role === Role.TEACHER;
+    }
+
+    if (isTeacherSender && announcement.senderId) {
+      const teacherStudentUserIds = await this.getTeacherStudentUserIds(
+        announcement.senderId,
+        batchIds.length > 0 ? batchIds : undefined,
+        subjectIds.length > 0 ? subjectIds : undefined
+      );
+      const uniqueIds = new Set([...recipientIds, ...teacherStudentUserIds]);
+      return uniqueIds.size;
+    }
+
     if (target === AnnouncementTarget.ALL) {
       return prisma.user.count({ where: { isActive: true } });
     }
@@ -610,7 +808,12 @@ export class AnnouncementsService {
   private async resolveRecipientUserIds(announcementId: string): Promise<string[]> {
     const announcement = await prisma.announcement.findUnique({
       where: { id: announcementId },
-      include: { batches: true, subjects: true, recipients: true },
+      include: {
+        batches: true,
+        subjects: true,
+        recipients: true,
+        sender: { select: { id: true, role: true } },
+      },
     });
 
     if (!announcement) return [];
@@ -619,6 +822,17 @@ export class AnnouncementsService {
     const batchIds = announcement.batches.map(b => b.id);
     const subjectIds = announcement.subjects.map(s => s.id);
     const userIds = new Set<string>(announcement.recipients.map(r => r.id));
+
+    // CRITICAL: If announcement was sent by a TEACHER, it must ONLY go to that teacher's students!
+    if (announcement.sender?.role === Role.TEACHER && announcement.senderId) {
+      const teacherStudentUserIds = await this.getTeacherStudentUserIds(
+        announcement.senderId,
+        batchIds.length > 0 ? batchIds : undefined,
+        subjectIds.length > 0 ? subjectIds : undefined
+      );
+      teacherStudentUserIds.forEach(uid => userIds.add(uid));
+      return Array.from(userIds);
+    }
 
     if (target === AnnouncementTarget.ALL) {
       const allUsers = await prisma.user.findMany({ where: { isActive: true }, select: { id: true } });

@@ -103,6 +103,16 @@ export class PracticeMcqService {
       throw new Error("You have already completed today's practice quiz. Please come back tomorrow.");
     }
 
+    // Fee policy guard (3-month unpaid fee restriction)
+    const { FeePolicyService } = await import('../../payments/service/fee-policy.service');
+    const feeStatus = await FeePolicyService.getStudentUnpaidFeeDetails(student.id);
+    if (feeStatus.isRestricted) {
+      await FeePolicyService.enforceThreeMonthPolicy(student.id);
+      throw new Error(
+        `Practice Quiz restricted due to ${feeStatus.unpaidCount} unpaid fee months. Please settle outstanding balance to continue.`
+      );
+    }
+
     const performance = student.performanceStatus || PerformanceLevel.AVERAGE;
 
     // Determine target counts

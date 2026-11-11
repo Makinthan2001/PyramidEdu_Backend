@@ -8,6 +8,7 @@ import type { UpdateUserDto } from '../dto';
 import fs from 'fs/promises';
 import path from 'path';
 import { deleteCloudinaryImage } from '../../../utils/cloudinary.util';
+import { calculateDiscountedFee } from '../../../utils/fee-calculator.util';
 
 export interface UsersQueryParams {
   page?: number;
@@ -445,6 +446,7 @@ export class UsersService {
               select: { feeAmount: true }
             });
             const totalFeeAmount = subjects.reduce((sum, s) => sum + Number(s.feeAmount), 0);
+            const discountedFeeAmount = calculateDiscountedFee(totalFeeAmount, (dto as any).freeCardType);
 
             // 5. Create student (manually created student accounts are APPROVED)
             const student = await tx.student.create({
@@ -464,7 +466,8 @@ export class UsersService {
                 batchId: dto.batchId || null,
                 approvalStatus: 'APPROVED',
                 paymentStatus: dto.paymentStatus || 'PENDING',
-                totalFeeAmount: totalFeeAmount,
+                freeCardType: ((dto as any).freeCardType as any) || 'NONE',
+                totalFeeAmount: discountedFeeAmount,
                 feeEffectiveDate: new Date(),
                 lastFeeUpdateDate: new Date(),
               },
@@ -637,6 +640,29 @@ export class UsersService {
         description: 'Admin reset user password',
       },
     });
+
+    // Send password reset email to user
+    try {
+      await sendEmail(
+        user.email,
+        'Your PyramidEdu Password Has Been Reset',
+        `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #10b981;">PyramidEdu - Password Reset</h2>
+          <p>Hello,</p>
+          <p>Your password has been reset by an administrator. Please use the temporary password below to log in:</p>
+          <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; margin: 16px 0; text-align: center;">
+            <span style="font-size: 20px; font-weight: bold; letter-spacing: 2px; color: #1f2937;">${temporaryPassword}</span>
+          </div>
+          <p><strong>Important:</strong> You will be required to change your password upon your next login.</p>
+          <p>If you did not expect this change, please contact your administrator immediately.</p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="font-size: 12px; color: #9ca3af;">This is an automated message from PyramidEdu. Please do not reply.</p>
+        </div>`
+      );
+    } catch (emailErr) {
+      console.error('Failed to send password reset email:', emailErr);
+      // Don't throw - password was already reset successfully
+    }
 
     return { user: updated, temporaryPassword };
   }

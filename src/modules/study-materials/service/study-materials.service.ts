@@ -144,11 +144,9 @@ export async function updateStudyMaterial(
       text: data.text,
       batch: data.batch,
       status: data.status,
-      ...(data.fileUrls && data.fileUrls.length > 0 && {
-        fileUrls: {
-          push: data.fileUrls
-        }
-      })
+      ...(data.fileUrls !== undefined && {
+        fileUrls: data.fileUrls,
+      }),
     },
   });
 }

@@ -14,6 +14,9 @@ function authenticate(req, _res, next) {
         if (!token && ((_a = req.cookies) === null || _a === void 0 ? void 0 : _a.accessToken)) {
             token = req.cookies.accessToken;
         }
+        if (!token && req.query.token) {
+            token = req.query.token;
+        }
         if (!token) {
             throw new AppError_1.AppError('Authentication required. Please log in.', 401);
         }

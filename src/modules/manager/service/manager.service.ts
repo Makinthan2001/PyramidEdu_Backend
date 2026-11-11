@@ -2,6 +2,7 @@ import prisma from '../../../config/prisma.config';
 import { AppError } from '../../../utils/AppError';
 import { ApprovalStatus, RegistrationPaymentStatus, Role } from '@prisma/client';
 import { notificationService } from '../../notification/service/notification.service';
+import { calculateDiscountedFee } from '../../../utils/fee-calculator.util';
 
 export class ManagerService {
   /**
@@ -202,7 +203,7 @@ export class ManagerService {
     const now = new Date();
     const monthYear = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
 
-    await prisma.fee.upsert({
+    const fee = await prisma.fee.upsert({
       where: {
         studentId_monthYear: {
           studentId: id,
@@ -221,6 +222,39 @@ export class ManagerService {
         paid: status === 'PAID' ? student.totalFeeAmount : 0,
       },
     });
+
+    if (status === 'PAID') {
+      const existingPayment = await prisma.payment.findFirst({
+        where: {
+          feeId: fee.id,
+          studentId: id,
+          paymentStatus: 'VERIFIED',
+        },
+      });
+
+      if (!existingPayment) {
+        await prisma.payment.create({
+          data: {
+            studentId: id,
+            feeId: fee.id,
+            amount: student.totalFeeAmount,
+            paymentMethod: 'CASH',
+            paymentStatus: 'VERIFIED',
+            paymentDate: new Date(),
+            verifiedBy: 'Manager',
+            verifiedAt: new Date(),
+          },
+        });
+      }
+    } else {
+      await prisma.payment.deleteMany({
+        where: {
+          feeId: fee.id,
+          studentId: id,
+          paymentStatus: 'VERIFIED',
+        },
+      });
+    }
   }
 
   /**
@@ -438,7 +472,7 @@ export class ManagerService {
   }
 
   static async getStudentPaymentHistory(id: string) {
-    const student = await prisma.student.findUnique({
+    let student = await prisma.student.findUnique({
       where: { id },
       include: {
         user: true,
@@ -452,6 +486,24 @@ export class ManagerService {
         },
       },
     });
+
+    // If not found by student.id, try looking up by student.userId
+    if (!student) {
+      student = await prisma.student.findUnique({
+        where: { userId: id },
+        include: {
+          user: true,
+          fees: {
+            orderBy: { monthYear: 'desc' },
+            include: {
+              payments: {
+                orderBy: { paymentDate: 'desc' },
+              },
+            },
+          },
+        },
+      });
+    }
 
     if (!student) {
       throw new AppError('Student not found.', 404);
@@ -602,11 +654,17 @@ export class ManagerService {
           });
         }
 
-        // Update total fee
+        // Update total fee factoring in free card discount
+        const currentStudent = await tx.student.findUnique({
+          where: { id },
+          select: { freeCardType: true },
+        });
+        const discountedTotalFee = calculateDiscountedFee(totalFee, currentStudent?.freeCardType);
+
         await tx.student.update({
           where: { id },
           data: {
-            totalFeeAmount: totalFee,
+            totalFeeAmount: discountedTotalFee,
             lastFeeUpdateDate: new Date(),
           },
         });
@@ -723,12 +781,14 @@ export class ManagerService {
         });
       }
 
-      // 4. Update Student record
+      // 4. Update Student record factoring in Free Card discount
+      const finalMonthlyFee = calculateDiscountedFee(newMonthlyFee, student.freeCardType);
+
       await tx.student.update({
         where: { id },
         data: {
           streamId: data.streamId,
-          totalFeeAmount: newMonthlyFee,
+          totalFeeAmount: finalMonthlyFee,
           lastFeeUpdateDate: effectiveDate,
         },
       });
@@ -748,23 +808,34 @@ export class ManagerService {
       });
 
       if (existingFee) {
-        const paidAmount = Number(existingFee.paid);
-        let newStatus = existingFee.status;
-        if (paidAmount >= newMonthlyFee) {
-          newStatus = 'PAID';
-        } else if (paidAmount > 0) {
-          newStatus = 'PARTIAL';
+        if (student.freeCardType === 'FREE_CARD') {
+          await tx.fee.update({
+            where: { id: existingFee.id },
+            data: {
+              total: 0,
+              paid: 0,
+              status: 'PAID',
+            },
+          });
         } else {
-          newStatus = 'UNPAID';
-        }
+          const paidAmount = Number(existingFee.paid);
+          let newStatus = existingFee.status;
+          if (paidAmount >= finalMonthlyFee) {
+            newStatus = 'PAID';
+          } else if (paidAmount > 0) {
+            newStatus = 'PARTIAL';
+          } else {
+            newStatus = 'UNPAID';
+          }
 
-        await tx.fee.update({
-          where: { id: existingFee.id },
-          data: {
-            total: newMonthlyFee,
-            status: newStatus,
-          },
-        });
+          await tx.fee.update({
+            where: { id: existingFee.id },
+            data: {
+              total: finalMonthlyFee,
+              status: newStatus,
+            },
+          });
+        }
       }
 
 

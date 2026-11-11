@@ -7,6 +7,30 @@ const emailField = z
   .email('Invalid email format')
   .max(255, 'Email must not exceed 255 characters');
 
+// Sri Lankan phone validation regex:
+// 1) Local 10-digit format: 0XXXXXXXXX (e.g., 07XXXXXXXX)
+// 2) International format: +94XXXXXXXXX, 0094XXXXXXXXX, or 94XXXXXXXXX
+const sriLankaPhoneRegex = /^(?:0|(?:\+?94|0094))[0-9]{9}$/;
+
+export const validateSriLankaPhone = (val: string) => {
+  const sanitized = val.replace(/[\s()-]/g, '');
+  return sriLankaPhoneRegex.test(sanitized);
+};
+
+const sriLankaPhoneField = z
+  .string()
+  .refine(validateSriLankaPhone, {
+    message: 'Invalid Sri Lankan phone number. Use 07X XXX XXXX, 0XXXXXXXXX, or +94/0094/94XXXXXXXXX',
+  });
+
+const optionalSriLankaPhoneField = z
+  .string()
+  .refine((val) => val === '' || validateSriLankaPhone(val), {
+    message: 'Invalid Sri Lankan phone number. Use 07X XXX XXXX, 0XXXXXXXXX, or +94/0094/94XXXXXXXXX',
+  })
+  .optional()
+  .or(z.literal(''));
+
 // Manager DTO
 export const createManagerSchema = z.object({
   role: z.literal('MANAGER'),
@@ -16,7 +40,7 @@ export const createManagerSchema = z.object({
   address: z.string().min(3, 'Address is required').max(500),
   email: emailField,
   password: z.string().min(1, 'Password is required').optional(),
-  phone: z.string().min(10, 'Phone number must be at least 10 digits'),
+  phone: sriLankaPhoneField,
   salary: z.number().positive('Salary must be positive').optional(),
 });
 
@@ -32,7 +56,7 @@ export const createTeacherSchema = z.object({
   subjectId: z.string().uuid('Subject ID must be a valid UUID').optional(),
   email: emailField,
   password: z.string().min(1, 'Password is required').optional(),
-  phone: z.string().min(10, 'Phone number must be at least 10 digits'),
+  phone: sriLankaPhoneField,
   salary: z.number().positive('Salary must be positive').optional(),
 });
 
@@ -55,7 +79,7 @@ export const createStudentSchema = z.object({
   alExamBatch: z.string().min(1, 'A/L exam batch is required'),
   batchId: z.string().min(1, 'Batch ID is required'),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
-  phone: z.string().regex(/^\d{10}$/, 'Phone number must be exactly 10 digits'),
+  phone: sriLankaPhoneField,
   address: z.string().min(1, 'Address is required'),
   school: z.string().min(1, 'School is required'),
   email: emailField,
@@ -64,7 +88,7 @@ export const createStudentSchema = z.object({
   parentName: z.string().min(1, 'Parent name is required'),
   parentRelation: z.string().min(1, 'Parent relation is required'),
   parentEmail: z.string().email('Invalid parent email address').optional().or(z.literal('')),
-  parentPhone: z.string().regex(/^\d{10}$/, 'Parent phone number must be exactly 10 digits').optional().or(z.literal('')),
+  parentPhone: optionalSriLankaPhoneField,
   
   selectedStreamId: z.string().uuid('Invalid stream ID'),
   selectedCourseIds: z.array(z.string().uuid()).min(1, 'Select at least one subject').max(3, 'Select no more than 3 subjects'),
@@ -80,7 +104,7 @@ export const createAdminSchema = z.object({
   fullName: z.string().min(1, 'Full name is required').max(255),
   email: emailField,
   password: z.string().min(1, 'Password is required'),
-  phone: z.string().min(10).optional(),
+  phone: optionalSriLankaPhoneField,
   accessLevel: z.number().int().min(1).default(1),
 });
 

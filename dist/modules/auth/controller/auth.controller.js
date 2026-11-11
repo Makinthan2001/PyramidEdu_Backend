@@ -49,6 +49,7 @@ exports.logout = logout;
 exports.getMe = getMe;
 exports.changePassword = changePassword;
 exports.forgotPassword = forgotPassword;
+exports.verifyOtp = verifyOtp;
 exports.resetPassword = resetPassword;
 const authService = __importStar(require("../service/auth.service"));
 const AppError_1 = require("../../../utils/AppError");
@@ -87,6 +88,7 @@ function login(req, res, next) {
                 message: 'Login successful.',
                 data: {
                     user,
+                    student: user.role === 'STUDENT' ? user : undefined,
                     accessToken: tokens.accessToken,
                     refreshToken: tokens.refreshToken,
                 },
@@ -148,7 +150,10 @@ function getMe(req, res, next) {
             const user = yield authService.getCurrentUser(userId);
             res.status(200).json({
                 success: true,
-                data: { user },
+                data: {
+                    user,
+                    student: user.role === 'STUDENT' ? user : undefined
+                },
             });
         }
         catch (error) {
@@ -177,14 +182,38 @@ function forgotPassword(req, res, next) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const dto = req.body;
-            const token = yield authService.forgotPassword(dto);
-            const responseData = {
-                message: 'If an account with that email exists, a password-reset link has been sent.',
-            };
-            if (process.env.NODE_ENV !== 'production' && token) {
-                responseData.devResetToken = token;
+            const result = yield authService.forgotPassword(dto);
+            if (!result) {
+                // Return a success message even if email doesn't exist for security/privacy
+                res.status(200).json({
+                    success: true,
+                    data: {
+                        message: 'If an account with that email exists, an OTP has been sent.',
+                        verificationToken: '',
+                    },
+                });
+                return;
             }
-            res.status(200).json({ success: true, data: responseData });
+            res.status(200).json({
+                success: true,
+                data: Object.assign({ message: 'OTP has been successfully sent to your email.', verificationToken: result.verificationToken }, (result.devOtp && { devOtp: result.devOtp })),
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    });
+}
+function verifyOtp(req, res, next) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const dto = req.body;
+            const resetToken = yield authService.verifyOtp(dto);
+            res.status(200).json({
+                success: true,
+                message: 'OTP verified successfully.',
+                data: { resetToken },
+            });
         }
         catch (error) {
             next(error);

@@ -1,5 +1,6 @@
 import prisma from '../../../config/prisma.config';
 import { AppError } from '../../../utils/AppError';
+import { PaymentService } from '../../payments/service/payment.service';
 
 export interface AnalyticsFilter {
   subjectId?: string;
@@ -114,7 +115,7 @@ export class AnalyticsReportsService {
     });
 
     const totalAttendanceCount = attendanceStats._count.id;
-    const avgAttendance = totalAttendanceCount > 0 ? (presentStats / totalAttendanceCount) * 100 : 92.5;
+    const avgAttendance = totalAttendanceCount > 0 ? (presentStats / totalAttendanceCount) * 100 : 0;
 
     // Exam Results pass rate
     const resultsStats = await prisma.result.aggregate({
@@ -135,8 +136,8 @@ export class AnalyticsReportsService {
     });
 
     const totalResultsCount = resultsStats._count.id;
-    const passRate = totalResultsCount > 0 ? (passCount / totalResultsCount) * 100 : 78.0;
-    const avgMarks = Number(resultsStats._avg.marks || 72.4);
+    const passRate = totalResultsCount > 0 ? (passCount / totalResultsCount) * 100 : 0;
+    const avgMarks = Number(resultsStats._avg.marks || 0);
 
     // Excellent/At-Risk Predictions Counts
     const excellentCount = await prisma.performancePrediction.count({
@@ -171,21 +172,21 @@ export class AnalyticsReportsService {
     ]);
 
     const recentStudents = recentStudentsRaw.map((s) => ({
-      name: s.user.fullName,
-      email: s.user.email,
+      name: s.user?.fullName || 'Unknown Student',
+      email: s.user?.email || '—',
       indexNumber: s.indexNumber || '—',
       createdAt: s.createdAt,
     }));
 
     const recentTeachers = recentTeachersRaw.map((t) => ({
-      name: t.user.fullName,
-      email: t.user.email,
+      name: t.user?.fullName || 'Unknown Teacher',
+      email: t.user?.email || '—',
       createdAt: t.createdAt,
     }));
 
     const recentManagers = recentManagersRaw.map((m) => ({
-      name: m.user.fullName,
-      email: m.user.email,
+      name: m.user?.fullName || 'Unknown Manager',
+      email: m.user?.email || '—',
       createdAt: m.createdAt,
     }));
 
@@ -298,7 +299,7 @@ export class AnalyticsReportsService {
         });
         return {
           id: student?.id || item.studentId,
-          name: student?.user.fullName || 'Unknown Student',
+          name: student?.user?.fullName || 'Unknown Student',
           indexNumber: student?.indexNumber || '—',
           avgScore: Number(item._avg.marks || 0).toFixed(1),
         };
@@ -321,7 +322,7 @@ export class AnalyticsReportsService {
         });
         return {
           id: student?.id || item.studentId,
-          name: student?.user.fullName || 'Unknown Student',
+          name: student?.user?.fullName || 'Unknown Student',
           indexNumber: student?.indexNumber || '—',
           avgScore: Number(item._avg.marks || 0).toFixed(1),
         };
@@ -373,14 +374,14 @@ export class AnalyticsReportsService {
 
         return {
           id: t.id,
-          name: t.user.fullName,
-          email: t.user.email,
-          phone: t.phone || t.user.phone || '—',
+          name: t.user?.fullName || 'Unknown Teacher',
+          email: t.user?.email || '—',
+          phone: t.phone || t.user?.phone || '—',
           subjects: t.subjectAllocations.map((sa) => sa.subject.subjectName).join(', ') || 'None',
           studentCount: enrollmentCount,
           materialsCount: t.studyMaterials.length,
           examsCreated: t.exams.length + t.quizzes.length,
-          avgStudentScore: Number(resultsAvg._avg.marks || 75.0).toFixed(1),
+          avgStudentScore: Number(resultsAvg._avg.marks || 0).toFixed(1),
         };
       })
     );
@@ -415,7 +416,7 @@ export class AnalyticsReportsService {
         });
 
         const totalResults = resultsStats._count.id;
-        const passRate = totalResults > 0 ? (passCount / totalResults) * 100 : 75.0;
+        const passRate = totalResults > 0 ? (passCount / totalResults) * 100 : 0;
 
         return {
           id: sub.id,
@@ -488,7 +489,7 @@ export class AnalyticsReportsService {
         if (rate < 75.0) {
           lowAttendanceList.push({
             id: student.id,
-            name: student.user.fullName,
+            name: student.user?.fullName || 'Unknown Student',
             indexNumber: student.indexNumber || '—',
             attendanceRate: Number(rate.toFixed(1)),
           });
@@ -520,7 +521,7 @@ export class AnalyticsReportsService {
       const totalMarks = e.results.map((r) => Number(r.marks));
       const avg = totalMarks.length > 0 ? totalMarks.reduce((a, b) => a + b, 0) / totalMarks.length : 0;
       const passCount = e.results.filter((r) => Number(r.marks) >= 50.0).length;
-      const passRate = e.results.length > 0 ? (passCount / e.results.length) * 100 : 100.0;
+      const passRate = e.results.length > 0 ? (passCount / e.results.length) * 100 : 0;
 
       return {
         id: e.id,
@@ -556,16 +557,46 @@ export class AnalyticsReportsService {
     const levelScores = await prisma.performancePrediction.groupBy({
       by: ['performanceLevel'],
       _avg: { finalScore: true },
+      _count: { id: true },
     });
 
     const averageScores = levelScores.map((l) => ({
       level: l.performanceLevel,
       score: Number(l._avg.finalScore || 0).toFixed(1),
+      count: l._count.id,
+    }));
+
+    // Total predictions count
+    const totalPredictions = await prisma.performancePrediction.count();
+
+    // Student prediction alerts with actual database records
+    const riskPredictions = await prisma.performancePrediction.findMany({
+      include: {
+        student: {
+          include: { user: true },
+        },
+      },
+      orderBy: { finalScore: 'asc' },
+      take: 25,
+    });
+
+    const studentAlerts = riskPredictions.map((rp) => ({
+      id: rp.id,
+      studentId: rp.studentId,
+      name: rp.student?.user?.fullName || 'Unknown Student',
+      indexNumber: rp.student?.indexNumber || '—',
+      finalScore: Number(rp.finalScore).toFixed(1),
+      performanceLevel: rp.performanceLevel,
+      trendStatus: rp.trendStatus,
+      recommendations: rp.recommendations || [],
+      generatedAt: rp.generatedAt,
     }));
 
     return {
       trendDistribution,
       averageScores,
+      totalPredictions,
+      studentAlerts,
     };
   }
 
@@ -573,6 +604,8 @@ export class AnalyticsReportsService {
    * GET Payments analytics, income timelines, outstanding balances
    */
   static async getPaymentAnalytics(filter: AnalyticsFilter) {
+    await PaymentService.ensureMonthlyFeesGenerated();
+
     const { start, end } = this.buildDateRange(filter);
 
     // Group payment collection amounts by month
@@ -606,15 +639,15 @@ export class AnalyticsReportsService {
         student: { include: { user: true } },
       },
       orderBy: { dueDate: 'asc' },
-      take: 10,
+      take: 50,
     });
 
     const outstandingInvoices = unpaidFees.map((f) => {
       const remaining = Number(f.total) - Number(f.paid);
       return {
         id: f.id,
-        studentName: f.student.user.fullName,
-        indexNumber: f.student.indexNumber || '—',
+        studentName: f.student?.user?.fullName || 'Unknown Student',
+        indexNumber: f.student?.indexNumber || '—',
         amountDue: remaining,
         dueDate: f.dueDate,
         status: f.status,

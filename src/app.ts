@@ -150,7 +150,7 @@ app.use('/api/v1/parent-reports', parentReportsRouter);
 app.use('/api/v1/analytics', analyticsReportsRouter);
 
 // Performance routes
-app.use('/api/v1/performance', performanceRouter);
+app.use(['/api/v1/performance', '/api/performance'], performanceRouter);
 
 // Marks routes
 app.use('/api/v1/marks', marksRouter);

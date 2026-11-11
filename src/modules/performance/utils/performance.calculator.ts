@@ -173,9 +173,7 @@ export function calculatePerformanceResult(data: {
 
   // --- Categorization ---
   let performanceLevel: PerformanceLevel = PerformanceLevel.AT_RISK;
-  if (isProvisional) {
-    performanceLevel = PerformanceLevel.AVERAGE;
-  } else if (finalScore >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
+  if (finalScore >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
     performanceLevel = PerformanceLevel.EXCELLENT;
   } else if (finalScore >= PERFORMANCE_THRESHOLDS.VERY_GOOD) {
     performanceLevel = PerformanceLevel.VERY_GOOD;
@@ -185,6 +183,9 @@ export function calculatePerformanceResult(data: {
     performanceLevel = PerformanceLevel.AVERAGE;
   } else if (finalScore >= PERFORMANCE_THRESHOLDS.NEEDS_IMPROVEMENT) {
     performanceLevel = PerformanceLevel.NEEDS_IMPROVEMENT;
+  } else {
+    // Scores below 40 (including 0%) are strictly AT_RISK
+    performanceLevel = PerformanceLevel.AT_RISK;
   }
 
   // --- Trend ---
@@ -195,13 +196,16 @@ export function calculatePerformanceResult(data: {
       trendStatus = TrendStatus.IMPROVING;
     } else if (diff <= TREND_THRESHOLDS.DECLINING_MAX) {
       trendStatus = TrendStatus.DECLINING;
+    } else if (finalScore === 0 && previousFinalScore === 0) {
+      // Continuously stuck at 0% is an urgent warning, not stable satisfactory performance
+      trendStatus = TrendStatus.DECLINING;
     }
   }
 
   // --- Recommendations ---
   const rawRecommendations: string[] = [];
 
-  if (!isProvisional && attendanceScore < RECOMMENDATION_THRESHOLDS.LOW_ATTENDANCE) {
+  if (attendanceScore < RECOMMENDATION_THRESHOLDS.LOW_ATTENDANCE || finalScore === 0) {
     rawRecommendations.push('Improve Class Attendance');
   }
   if (mcqMetrics.average !== null && mcqMetrics.average < RECOMMENDATION_THRESHOLDS.WEAK_SUBJECT_SCORE) {
@@ -212,6 +216,9 @@ export function calculatePerformanceResult(data: {
   }
   if (manualMetrics.average !== null && manualMetrics.average < RECOMMENDATION_THRESHOLDS.WEAK_SUBJECT_SCORE) {
     rawRecommendations.push('Prepare for Physical Exams');
+  }
+  if (finalScore === 0) {
+    rawRecommendations.push('Urgent: Attend Scheduled Lectures & Take Exams');
   }
 
   // Ensure unique recommendations

@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 const pdfParse = require('pdf-parse') as any;
 import prisma from '../config/prisma.config';
 import fs from 'fs';
@@ -6,8 +6,8 @@ import path from 'path';
 import crypto from 'crypto';
 import axios from 'axios';
 
-// Initialise the Gemini API
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Initialise the OpenAI API
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
 
 export interface TextChunk {
   index: number;
@@ -24,10 +24,11 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 1000
       return await fn();
     } catch (error: any) {
       attempt++;
-      if (attempt >= maxRetries || (error.status !== 503 && error.status !== 429)) {
+      const status = error?.status || error?.response?.status;
+      if (attempt >= maxRetries || (status !== 503 && status !== 429)) {
         throw error;
       }
-      console.warn(`[Gemini API] Error ${error.status}: Retrying ${attempt}/${maxRetries} in ${delayMs}ms...`);
+      console.warn(`[OpenAI API] Error ${status}: Retrying ${attempt}/${maxRetries} in ${delayMs}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       delayMs *= 2;
     }
@@ -59,24 +60,33 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   const avgCharsPerPage = text.length / numpages;
 
   if (avgCharsPerPage < 20) {
-    console.log(`[PDF Classification] IMAGE_BASED detected (${avgCharsPerPage.toFixed(1)} chars/page). Falling back to Gemini OCR...`);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    console.log(`[PDF Classification] IMAGE_BASED detected (${avgCharsPerPage.toFixed(1)} chars/page). Falling back to OpenAI Vision OCR...`);
     const prompt = "Extract all text from this document accurately. Preserve structure where possible. If it's handwriting, transcribe it to the best of your ability. Do not include any conversational filler.";
     
     try {
-      const response = await withRetry(() => model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            data: buffer.toString('base64'),
-            mimeType: 'application/pdf',
+      const base64Data = buffer.toString('base64');
+      const response = await withRetry(() => openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:application/pdf;base64,${base64Data}`,
+                },
+              },
+            ],
           },
-        },
-      ]));
-      text = response.response.text().trim();
-      console.log(`[Gemini OCR] Extracted ${text.length} characters.`);
+        ],
+        max_tokens: 4096,
+      }));
+      text = response.choices[0]?.message?.content?.trim() || text;
+      console.log(`[OpenAI Vision OCR] Extracted ${text.length} characters.`);
     } catch (error) {
-      console.error("[Gemini OCR] Fallback failed:", error);
+      console.error("[OpenAI Vision OCR] Fallback failed:", error);
     }
   } else {
     console.log(`[PDF Classification] TEXT_BASED detected (${avgCharsPerPage.toFixed(1)} chars/page).`);
@@ -117,15 +127,15 @@ export function chunkText(text: string, chunkSize = 800, overlap = 100): TextChu
 }
 
 /**
- * Generate 768-dimensional text embedding using gemini-embedding-001
+ * Generate 768-dimensional text embedding using OpenAI text-embedding-3-small
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
-  const result = await withRetry(() => model.embedContent({
-    content: { parts: [{ text }] },
-    outputDimensionality: 768,
-  } as any));
-  return result.embedding.values;
+  const result = await withRetry(() => openai.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: text,
+    dimensions: 768,
+  }));
+  return result.data[0].embedding;
 }
 
 /**
@@ -221,11 +231,11 @@ export async function querySimilarChunks(
 }
 
 /**
- * Execute full RAG grounding flow and get grounded response from Gemini
+ * Execute full RAG grounding flow and get grounded response from OpenAI
  */
 export async function generateRAGAnswer(
   question: string,
-  filters: { subjectId?: string; batchId?: string } = {}
+  filters: { subjectId?: string; batchId?: string; userRole?: string } = {}
 ): Promise<string> {
   const SIMILARITY_THRESHOLD = 0.3;
 
@@ -246,8 +256,9 @@ export async function generateRAGAnswer(
     console.log(`Similarity Scores: ${allChunks.map(c => c.similarity.toFixed(3)).join(', ')}`);
   }
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
-  let prompt = '';
+  let systemPrompt = '';
+  let userContent = '';
+  const isTeacher = filters.userRole === 'TEACHER';
 
   if (relevantChunks.length > 0) {
     // 5. RAG Prompt Construction
@@ -257,34 +268,49 @@ export async function generateRAGAnswer(
       .map((c) => `[Source: ${c.title}]\n${c.chunk_text}`)
       .join('\n\n---\n\n');
 
-    prompt = `You are PyramidEdu's educational AI assistant.
+    systemPrompt = isTeacher
+      ? `You are PyramidEdu's professional AI assistant for teachers.
+Your task is to answer the TEACHER'S QUESTION using the provided CONTEXT FROM STUDY MATERIALS.
+If the answer is present in the context, prioritize it over general knowledge.
+If the context contains the answer, reference the source material.
+Be concise, professional, and helpful.`
+      : `You are PyramidEdu's educational AI assistant.
 Your task is to answer the STUDENT QUESTION using the provided CONTEXT FROM NOTES.
 If the answer is present in the context, you must prioritize the notes over your general knowledge.
 If the context contains the answer, start your response with a phrase like "Based on the uploaded study materials," or "According to the notes,".
-Keep explanations educational and student-friendly.
+Keep explanations educational and student-friendly.`;
 
-CONTEXT FROM NOTES:
+    userContent = `CONTEXT FROM NOTES:
 ${context}
 
-STUDENT QUESTION: ${question}
-ANSWER:`;
+${isTeacher ? 'TEACHER' : 'STUDENT'} QUESTION: ${question}`;
   } else {
     // General Mode Fallback
     console.log(`Status: No relevant chunks met the threshold (${SIMILARITY_THRESHOLD}). Activating General AI Mode.`);
 
-    prompt = `You are PyramidEdu's helpful educational AI assistant.
-Answer the STUDENT QUESTION using your general knowledge. Behave as a helpful and friendly assistant.
-Support casual conversations, language requests, coding questions, and general educational queries.
+    systemPrompt = isTeacher
+      ? `You are PyramidEdu's professional AI teaching assistant.
+Answer the teacher's question using your knowledge. Help with class management, teaching strategies, curriculum planning, and general professional queries.
+Be concise and professional.`
+      : `You are PyramidEdu's friendly educational AI assistant for students.
+Answer the student's question using your general knowledge. Behave as a helpful and friendly tutor.
+Support casual conversations, language requests, coding questions, and general educational queries.`;
 
-STUDENT QUESTION: ${question}
-ANSWER:`;
+    userContent = `${isTeacher ? 'TEACHER' : 'STUDENT'} QUESTION: ${question}`;
   }
 
-  // 6 & 7. Gemini Answer Generation
-  const result = await withRetry(() => model.generateContent(prompt));
+  // 6 & 7. OpenAI Answer Generation
+  const result = await withRetry(() => openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userContent },
+    ],
+    max_tokens: 2048,
+  }));
   console.log(`--- End Processing ---\n`);
 
-  return result.response.text();
+  return result.choices[0]?.message?.content?.trim() || 'I could not generate a response.';
 }
 
 /**

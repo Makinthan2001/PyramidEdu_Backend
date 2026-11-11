@@ -142,6 +142,11 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
     const userId = req.params.id as string;
     const dto: UpdateUserDto = req.body;
 
+    // Disallow changing user email in user management
+    if (dto.email !== undefined) {
+      delete (dto as any).email;
+    }
+
     const user = await UsersService.updateUser(userId, dto);
 
     res.status(200).json({

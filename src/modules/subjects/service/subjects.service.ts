@@ -299,10 +299,10 @@ async function getActiveEnrollmentCountMap(subjectIds: string[]) {
 }
 
 export class SubjectsService {
-  static async getStreams() {
+  static async getStreams(activeOnly?: boolean) {
     return prisma.stream.findMany({
-      where: { isActive: true },
-      orderBy: { streamName: 'asc' },
+      where: activeOnly ? { isActive: true } : undefined,
+      orderBy: [{ isActive: 'desc' }, { streamName: 'asc' }],
       include: {
         batches: true,
       },
@@ -311,10 +311,17 @@ export class SubjectsService {
 
   static async getAvailableSubjects() {
     const subjects = await prisma.subject.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        streams: {
+          some: { isActive: true },
+        },
+      },
       orderBy: { subjectName: 'asc' },
       include: {
-        streams: true,
+        streams: {
+          where: { isActive: true },
+        },
       },
     });
 
@@ -322,7 +329,7 @@ export class SubjectsService {
       id: sub.id,
       name: sub.subjectName,
       streamName: sub.streams[0]?.streamName ?? '',
-      streams: sub.streams.map(s => ({ id: s.id, name: s.streamName, streamName: s.streamName })),
+      streams: sub.streams.map((s) => ({ id: s.id, name: s.streamName, streamName: s.streamName })),
       feePerMonth: decimalToNumber(sub.feeAmount),
     }));
   }
@@ -331,6 +338,7 @@ export class SubjectsService {
     const stream = await prisma.stream.create({
       data: {
         streamName: dto.name,
+        isActive: dto.isActive !== undefined ? dto.isActive : true,
         batches: dto.batchIds && dto.batchIds.length > 0 ? {
           connect: dto.batchIds.map(id => ({ id }))
         } : undefined,
@@ -354,11 +362,12 @@ export class SubjectsService {
     return stream;
   }
 
-  static async updateStream(streamId: string, streamName: string, batchIds?: string[]) {
-    return prisma.stream.update({
+  static async updateStream(streamId: string, streamName?: string, batchIds?: string[], isActive?: boolean) {
+    const stream = await prisma.stream.update({
       where: { id: streamId },
       data: { 
-        streamName,
+        streamName: streamName !== undefined ? streamName : undefined,
+        isActive: isActive !== undefined ? isActive : undefined,
         batches: batchIds ? {
           set: batchIds.map(id => ({ id }))
         } : undefined
@@ -367,6 +376,53 @@ export class SubjectsService {
         batches: true
       }
     });
+
+    // If stream active status is changed, automatically update related subjects
+    if (isActive === false) {
+      // Disabling stream: automatically restrict / deactivate all subjects linked to this stream
+      const relatedSubjects = await prisma.subject.findMany({
+        where: {
+          streams: {
+            some: { id: streamId }
+          }
+        },
+        select: { id: true }
+      });
+
+      if (relatedSubjects.length > 0) {
+        await prisma.subject.updateMany({
+          where: {
+            id: { in: relatedSubjects.map(s => s.id) }
+          },
+          data: {
+            isActive: false
+          }
+        });
+      }
+    } else if (isActive === true) {
+      // Enabling stream: automatically re-activate subjects linked to this stream
+      const relatedSubjects = await prisma.subject.findMany({
+        where: {
+          streams: {
+            some: { id: streamId }
+          }
+        },
+        select: { id: true }
+      });
+
+      if (relatedSubjects.length > 0) {
+        await prisma.subject.updateMany({
+          where: {
+            id: { in: relatedSubjects.map(s => s.id) }
+          },
+          data: {
+            isActive: true
+          }
+        });
+      }
+    }
+
+    return stream;
   }
 
   static async createSubject(dto: CreateSubjectDto, actor?: { userId?: string }) {

@@ -37,6 +37,19 @@ class ManagerController {
             }
         });
     }
+    static getDashboardData(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                // const { id } = req.param/s;
+                // const data = await ManagerService.getRegisteredStudents();
+                const data = {};
+                res.status(200).json({ success: true, data });
+            }
+            catch (error) {
+                next(error);
+            }
+        });
+    }
     static updatePaymentStatus(req, res, next) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
@@ -72,7 +85,14 @@ class ManagerController {
     static getApprovedStudents(req, res, next) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const data = yield manager_service_1.ManagerService.getApprovedStudents();
+                const filters = {
+                    search: req.query.search,
+                    indexNumber: req.query.indexNumber,
+                    batchId: req.query.batchId,
+                    subjectId: req.query.subjectId,
+                    status: req.query.status,
+                };
+                const data = yield manager_service_1.ManagerService.getApprovedStudents(filters);
                 res.status(200).json({ success: true, data });
             }
             catch (error) {
@@ -86,6 +106,51 @@ class ManagerController {
                 const { id } = req.params;
                 yield manager_service_1.ManagerService.toggleStudentStatus(id);
                 res.status(200).json({ success: true, message: 'Student status toggled successfully.' });
+            }
+            catch (error) {
+                next(error);
+            }
+        });
+    }
+    static updateMonthlyFeeStatus(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { id } = req.params;
+                const { status } = req.body;
+                if (!status || !['PAID', 'UNPAID'].includes(status)) {
+                    return res.status(400).json({ success: false, message: 'Invalid status provided.' });
+                }
+                yield manager_service_1.ManagerService.updateMonthlyFeeStatus(id, status);
+                res.status(200).json({ success: true, message: 'Monthly fee status updated successfully.' });
+            }
+            catch (error) {
+                next(error);
+            }
+        });
+    }
+    static getFeeManagementData(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const filters = {
+                    search: req.query.search,
+                    indexNumber: req.query.indexNumber,
+                    status: req.query.status,
+                    method: req.query.method,
+                };
+                const data = yield manager_service_1.ManagerService.getFeeManagementData(filters);
+                res.status(200).json({ success: true, data });
+            }
+            catch (error) {
+                next(error);
+            }
+        });
+    }
+    static getStudentPaymentHistory(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { id } = req.params;
+                const data = yield manager_service_1.ManagerService.getStudentPaymentHistory(id);
+                res.status(200).json({ success: true, data });
             }
             catch (error) {
                 next(error);

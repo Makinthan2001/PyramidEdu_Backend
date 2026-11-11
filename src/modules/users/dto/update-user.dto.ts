@@ -14,15 +14,27 @@ const optionalString = z
   .nullable()
   .optional();
 
+// Sri Lankan phone validation regex:
+// 1) Local 10-digit format: 0XXXXXXXXX (e.g., 07XXXXXXXX)
+// 2) International format: +94XXXXXXXXX, 0094XXXXXXXXX, or 94XXXXXXXXX
+const sriLankaPhoneRegex = /^(?:0|(?:\+?94|0094))[0-9]{9}$/;
+
+const validateSriLankaPhone = (val: string) => {
+  const sanitized = val.replace(/[\s()-]/g, '');
+  return sriLankaPhoneRegex.test(sanitized);
+};
+
 // Update user DTO - flexible for all role types
 export const updateUserSchema = z.object({
   // Common optional fields
   email: emailField,
   phoneNumber: z
     .string()
-    .min(10, 'Phone number must be at least 10 digits')
+    .refine((val) => val === '' || validateSriLankaPhone(val), {
+      message: 'Invalid Sri Lankan phone number. Use 07X XXX XXXX, 0XXXXXXXXX, or +94/0094/94XXXXXXXXX',
+    })
     .or(z.literal(''))
-    .transform((val) => (val === '' ? null : val))
+    .transform((val) => (val === '' ? null : (val ? val.replace(/[\s()-]/g, '') : val)))
     .nullable()
     .optional(),
   
@@ -54,9 +66,11 @@ export const updateUserSchema = z.object({
   parentName: optionalString,
   parentPhone: z
     .string()
-    .min(10)
+    .refine((val) => val === '' || validateSriLankaPhone(val), {
+      message: 'Invalid Sri Lankan phone number. Use 07X XXX XXXX, 0XXXXXXXXX, or +94/0094/94XXXXXXXXX',
+    })
     .or(z.literal(''))
-    .transform((val) => (val === '' ? null : val))
+    .transform((val) => (val === '' ? null : (val ? val.replace(/[\s()-]/g, '') : val)))
     .nullable()
     .optional(),
   parentEmail: z

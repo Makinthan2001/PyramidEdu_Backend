@@ -5,8 +5,30 @@ import { hashPassword } from '../../../utils/password.util';
 import { Role, UserStatus, type Prisma } from '@prisma/client';
 import type { InitiateRegistrationDto, VerifyOtpDto } from '../dto';
 import { sendEmail } from '../../../utils/email.util';
+import { calculateDiscountedFee } from '../../../utils/fee-calculator.util';
 
 export class StudentService {
+  static async checkAvailability(query: { nic?: string; email?: string }) {
+    let nicAvailable = true;
+    let emailAvailable = true;
+
+    if (query.nic && query.nic.trim()) {
+      const existingStudent = await prisma.student.findUnique({
+        where: { nic: query.nic.trim() },
+      });
+      nicAvailable = !existingStudent;
+    }
+
+    if (query.email && query.email.trim()) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: query.email.trim().toLowerCase() },
+      });
+      emailAvailable = !existingUser;
+    }
+
+    return { nicAvailable, emailAvailable };
+  }
+
   static async initiateRegistration(dto: InitiateRegistrationDto) {
     const existingUser = await prisma.user.findUnique({
       where: { email: dto.email },
@@ -209,6 +231,7 @@ export class StudentService {
         select: { feeAmount: true }
       });
       const totalFeeAmount = subjects.reduce((sum, s) => sum + Number(s.feeAmount), 0);
+      const discountedFeeAmount = calculateDiscountedFee(totalFeeAmount, (regData as any).freeCardType);
 
       // Create Student with approvalStatus = PENDING
       const student = await tx.student.create({
@@ -228,7 +251,8 @@ export class StudentService {
           batchId: regData.batchId || null,
           approvalStatus: 'PENDING',
           paymentStatus: 'PENDING',
-          totalFeeAmount: totalFeeAmount,
+          freeCardType: ((regData as any).freeCardType as any) || 'NONE',
+          totalFeeAmount: discountedFeeAmount,
           feeEffectiveDate: new Date(),
           lastFeeUpdateDate: new Date(),
         },

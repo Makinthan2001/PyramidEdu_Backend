@@ -48,7 +48,8 @@ export async function getSubjects(req: Request, res: Response, next: NextFunctio
 
 export async function getStreams(req: Request, res: Response, next: NextFunction) {
   try {
-    const streams = await SubjectsService.getStreams();
+    const activeOnly = req.query.activeOnly === 'true';
+    const streams = await SubjectsService.getStreams(activeOnly);
 
     res.status(200).json({
       success: true,
@@ -118,14 +119,19 @@ export async function createStream(req: Request, res: Response, next: NextFuncti
 export async function updateStream(req: Request, res: Response, next: NextFunction) {
   try {
     const streamId = req.params.id as string;
-    const { name, batchIds } = req.body as { name: string, batchIds?: string[] };
+    const { name, batchIds, isActive } = req.body as { name?: string; batchIds?: string[]; isActive?: boolean };
 
-    if (!name?.trim()) {
-      res.status(400).json({ success: false, message: 'Stream name is required' });
+    if (name !== undefined && !name.trim()) {
+      res.status(400).json({ success: false, message: 'Stream name cannot be empty' });
       return;
     }
 
-    const stream = await SubjectsService.updateStream(streamId, name.trim(), batchIds);
+    const stream = await SubjectsService.updateStream(
+      streamId,
+      name ? name.trim() : undefined,
+      batchIds,
+      typeof isActive === 'boolean' ? isActive : undefined
+    );
 
     res.status(200).json({
       success: true,

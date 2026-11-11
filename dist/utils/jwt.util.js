@@ -9,6 +9,8 @@ exports.generateRefreshToken = generateRefreshToken;
 exports.verifyRefreshToken = verifyRefreshToken;
 exports.generateResetToken = generateResetToken;
 exports.verifyResetToken = verifyResetToken;
+exports.generateOtpToken = generateOtpToken;
+exports.verifyOtpToken = verifyOtpToken;
 exports.expiryStringToDate = expiryStringToDate;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const AppError_1 = require("./AppError");
@@ -73,6 +75,26 @@ function verifyResetToken(token) {
             throw new AppError_1.AppError('Password-reset link has expired. Please request a new one.', 400);
         }
         throw new AppError_1.AppError('Invalid password-reset token.', 400);
+    }
+}
+function generateOtpToken(email, otp) {
+    return jsonwebtoken_1.default.sign({ email, otp, purpose: 'otp_verification' }, requireSecret(RESET_SECRET, 'JWT_RESET_SECRET'), { expiresIn: '5m' });
+}
+function verifyOtpToken(token) {
+    try {
+        const payload = jsonwebtoken_1.default.verify(token, requireSecret(RESET_SECRET, 'JWT_RESET_SECRET'));
+        if (payload.purpose !== 'otp_verification') {
+            throw new AppError_1.AppError('Invalid token purpose.', 400);
+        }
+        return { email: payload.email, otp: payload.otp };
+    }
+    catch (error) {
+        if (error instanceof AppError_1.AppError)
+            throw error;
+        if (error.name === 'TokenExpiredError') {
+            throw new AppError_1.AppError('OTP has expired. Please request a new one.', 400);
+        }
+        throw new AppError_1.AppError('Invalid OTP verification token.', 400);
     }
 }
 function expiryStringToDate(expiry) {
